@@ -13,6 +13,9 @@ __pycache__/
 # Flatten-sync export output
 project-export-files/
 
+# Local copies of references (make refs-fetch); never committed
+.references/
+
 # Editors and OS
 .vscode/
 .idea/

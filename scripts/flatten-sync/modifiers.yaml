@@ -40,6 +40,7 @@ modifiers:
       - .vscode
       - .cache
       - _data
+      - .references
     note: "Development environment directories and lab runtime artifacts."
 
   generated-files:

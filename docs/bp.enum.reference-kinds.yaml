@@ -1,0 +1,10 @@
+# docs/bp.enum.reference-kinds.yaml
+#
+# What kind of source a reference is. Used by bp.schema.references.yaml.
+
+values:
+  paper: A journal article or preprint.
+  slides: A slide deck.
+  notebook: A Jupyter notebook or a set of them.
+  website: A web page.
+  docs: Software documentation or a vendor page.

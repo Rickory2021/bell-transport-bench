@@ -23,6 +23,9 @@ help:
 	@echo "  Benchmark:"
 	@echo "    make test                        Run the bellbench test suite"
 	@echo ""
+	@echo "  References:"
+	@echo "    make refs-fetch                  Download local copies into .references/ (gitignored)"
+	@echo ""
 	@echo "  Project sync:"
 	@echo "    make project-export              Export to Claude Project (default profile)"
 	@echo "    make project-export PROFILE=x    Export with named profile"
@@ -52,6 +55,13 @@ bp-setup:
 
 test:
 	uv run --group dev pytest -q
+
+# -- References ----------------------------------------------------------
+
+.PHONY: refs-fetch
+
+refs-fetch:
+	uv run python scripts/fetch_refs.py
 
 # -- Project sync --------------------------------------------------------
 

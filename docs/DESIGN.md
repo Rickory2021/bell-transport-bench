@@ -5,9 +5,7 @@ The design decisions behind bell-transport-bench, and why each was made. When a 
 
 ## The problem
 
-The quanTA challenge asks for a verified Bell pair |Φ+⟩ between two fixed ports on three processor models (2016-era, contemporary IBM, hyperbolic-inspired), an ideal and a noisy baseline, and one justified error-detection strategy, with fidelity compared against circuit cost and discarded shots. Fidelity comes from three correlators: F = [1 + ⟨XX⟩ − ⟨YY⟩ + ⟨ZZ⟩] / 4.
-
-The core benchmark is nine cases: three models by {ideal, noisy, noisy + protection}. Everything else is an optional study, reported separately.
+The task is stated once, in [`CHALLENGE.md`](CHALLENGE.md). Sources cited below by id are in [`bp.data.references.yaml`](bp.data.references.yaml).
 
 ## 1. Logic in Python, the notebook compiled from it
 
@@ -33,7 +31,7 @@ The code also accepts custom topologies. The contemporary slide drawing (a 9-nod
 
 **Framing:** the 13-node graph is not a hyperbolic {p,q} patch (its curvature is flat or positive everywhere), so results are presented as effects of port distance, disjoint paths and degree in one finite model, never as a hyperbolic advantage. A true {7,3} patch may run as an optional study.
 
-**Why:** the challenge says to use its definitions; our architecture research found the T graph matches IBM fake backends and the other two drawings are schematics.
+**Why:** the challenge says to use its definitions; our architecture research found the T graph matches IBM fake backends and the other two drawings are schematics. Sources: `quanta-challenge-deck`, `johnstun-2021-ibm-noise`, `pokharel-2018-dynamical-decoupling`, `kollar-2019-hyperbolic-cqed`, `rayan-2026-rethinking-circuits`, `chamberland-2020-heavy-hex`.
 
 ## 4. Noise model
 
@@ -47,7 +45,7 @@ The team's own model, built as selectable, composable profiles: channels attache
 
 Every circuit is scheduled before noise is applied, so idle time, measurement and reset cost what they would on hardware. Biased-noise and replacement-gate profiles are optional and stated as assumptions. A same-noise run across all three graphs separates connectivity from noise.
 
-**Why:** Qiskit Aer's `NoiseModel.from_backend` covers only gate error, readout flips and decay on explicit delays (our noise research). Without scheduling, measurement-heavy strategies look free.
+**Why:** Qiskit Aer's `NoiseModel.from_backend` covers only gate error, readout flips and decay on explicit delays (our noise research). Without scheduling, measurement-heavy strategies look free. Sources: `qiskit-aer-noise-docs`, `replacement-type-gates`.
 
 ## 5. Protection as building blocks
 
@@ -55,7 +53,7 @@ Protection is built from composable blocks: transport, path selector, check type
 
 It is always called error detection with postselection, never fault tolerance or error correction.
 
-**Why:** choosing the strategy before the benchmark exists gets the order backwards. The open question worth testing (our protection research found no prior work on it) is whether spare disjoint paths let a pair be checked without mid-circuit measurement.
+**Why:** choosing the strategy before the benchmark exists gets the order backwards. The open question worth testing (our protection research found no prior work on it) is whether spare disjoint paths let a pair be checked without mid-circuit measurement. Sources: `smith-2026-error-detected-primitives`, `baumer-2024-long-range-entanglement`, `liao-2025-error-detected-entanglement`, `andersen-2019-parity-stabilization`, `chao-reichardt-2018-flag-qubits`, `siddhu-2025-distillation`.
 
 ## 6. Metrics and reporting
 
@@ -64,7 +62,7 @@ It is always called error detection with postselection, never fault tolerance or
 - **Recorded per case:** F raw and F postselected with uncertainty, p with a Wilson interval, raw and accepted shots per basis, and the uncertainty method. Shots scale with 1/p.
 - **No readout mitigation** in the core benchmark. Aer runs use the standard `measure`.
 
-**Why:** this is how the field reports postselected results (our protection research), and it keeps p well defined.
+**Why:** this is how the field reports postselected results (our protection research), and it keeps p well defined. Source: `smith-2026-error-detected-primitives`.
 
 ## 7. Repo and tooling
 
@@ -74,7 +72,14 @@ It is always called error detection with postselection, never fault tolerance or
 
 **Why:** 3.12 is the overlap of what Qiskit, Aer, IBM Runtime and blueprint-render support, and what Colab runs. The scripts were pruned so nothing unrelated to this project enters its history.
 
+## 8. Compilation
+
+Circuits are written on physical qubits and compiled at optimisation level 1. From level 2 up, Qiskit's ElidePermutations pass deletes explicit SWAPs and relabels the outputs instead, so the pair would never physically reach the ports; every result records whether it did. Routing that relies on SABRE is run over several seeds, since the heuristic's results vary by seed.
+
+**Why:** the benchmark measures the cost of moving the pair, so the compiler must not optimise the move away. Source: `fallfest-compilation-deck`.
+
 ## Change log
 
 - 2026-11-11: initial decisions 1 to 7.
 - 2026-11-11: research is folded into this file and the README, citing original sources; reports are not stored in the repo.
+- 2026-11-11: the task moved to CHALLENGE.md; sources became `bp.data.references.yaml`; section 8 (compilation) added.

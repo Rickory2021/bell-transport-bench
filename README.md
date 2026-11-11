@@ -5,15 +5,16 @@ A benchmark for creating a Bell pair between two distant qubits and protecting i
 
 **The question:** given a coupling graph, two fixed ports and a noise model, how well can we create |Φ+⟩ between the ports, what does error detection buy, and what does it cost in gates, ancillas and discarded shots?
 
-The core benchmark is the challenge's nine cases: three processor models (2016-era, contemporary IBM, hyperbolic-inspired) by {ideal, noisy, noisy + protection}. Sweeps, alternative noise profiles and extra graphs are optional studies, reported separately. The design decisions and their reasons are in [`docs/DESIGN.md`](docs/DESIGN.md).
+The full task is in [`docs/CHALLENGE.md`](docs/CHALLENGE.md): three processor models, nine core cases, and what to report. The design decisions and their reasons are in [`docs/DESIGN.md`](docs/DESIGN.md), and every source we rely on is in [`docs/bp.data.references.yaml`](docs/bp.data.references.yaml).
 
 ## Quick start
 
 Requires [uv](https://docs.astral.sh/uv/). uv installs Python 3.12 if it is missing.
 
 ```bash
-make setup     # uv sync plus system deps for blueprint-render
+make setup       # uv sync plus system deps for blueprint-render
 make test
+make refs-fetch  # optional: local copies of every reference
 ```
 
 ## Layout
@@ -23,7 +24,7 @@ make test
 | `src/bellbench/` | All benchmark logic: processors, noise, transports, checks, measurement, the runner |
 | `config/` | Typed configs: processor models, noise profiles, run configs |
 | `notebooks/` | Tutorials and the generated submission notebook; narrative and plots only |
-| `docs/` | `DESIGN.md`: the design decisions and why they were made |
+| `docs/` | `CHALLENGE.md` (the task), `DESIGN.md` (decisions and reasons), and the references data |
 | `scripts/` | blueprint-render (validates and renders typed YAML) and flatten-sync (exports the repo for Claude Projects) |
 | `tests/` | pytest suite |
 
@@ -35,7 +36,7 @@ Some of these directories arrive in later commits.
 
 **Configs are typed data.** Processor models, noise profiles and run configs are YAML files validated by schemas, so every assumption is a reviewable file with its source, and every result traces to a config, a seed and pinned package versions.
 
-**Research is folded in, not stored.** Findings from research go into `docs/DESIGN.md`, this README or the files they shape, citing the original papers and docs.
+**Sources are data, not copies.** Every paper, slide deck and doc we rely on is an entry in `docs/bp.data.references.yaml`: its link, an archive snapshot where the original may disappear, a summary in our words, and each claim we take from it with where it appears and which file uses it. Nothing is copied into the repo. `make refs-fetch` downloads local copies into the gitignored `.references/` folder. Entries marked `checked: false` came from secondary accounts and must be confirmed against the original before they reach the submission.
 
 ### File naming
 

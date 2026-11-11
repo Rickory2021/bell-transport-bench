@@ -1,0 +1,9 @@
+# docs/bp.enum.redistribution.yaml
+#
+# Whether a source may be copied into this public repo. Used by
+# bp.schema.references.yaml. No reference is copied today; the field
+# records what would be allowed.
+
+values:
+  link-only: Licence unknown or restrictive. Link to it; never commit a copy.
+  open-license: Published under an open licence such as CC BY. A copy with attribution would be allowed.

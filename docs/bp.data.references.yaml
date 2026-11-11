@@ -1,0 +1,403 @@
+# docs/bp.data.references.yaml
+#
+# Every source the project relies on: links, a summary in our own words,
+# and the specific claims we take from it. Validated by
+# bp.schema.references.yaml. Copies are never committed; run
+# `make refs-fetch` to download the ones with a `download` link into
+# the gitignored .references/ folder.
+#
+# checked: false means the takeaway came from a secondary account (our
+# research reports) and must be confirmed against the original before
+# it appears in the submission notebook or the video.
+
+references:
+
+  # -- Festival material (link + snapshot) ----------------------------------
+
+  - id: quanta-challenge-deck
+    title: "Geometry-aware quantum cloud challenge: hackathon overview"
+    authors: [Steven Rayan]
+    year: 2026
+    kind: slides
+    url: https://neerpatel125.github.io/UCF-Qiskit-Fall-Fest/assets/Hackathon.zip
+    download: https://neerpatel125.github.io/UCF-Qiskit-Fall-Fest/assets/Hackathon.zip
+    snapshot: https://web.archive.org/web/2026/https://neerpatel125.github.io/UCF-Qiskit-Fall-Fest/assets/Hackathon.zip
+    redistribution: link-only
+    checked: true
+    summary: >-
+      The challenge from quanTA (University of Saskatchewan): create a verified Bell pair
+      between two fixed ports on a 2016-era, a contemporary IBM-style and a hyperbolic-inspired
+      processor model, then compare an ideal baseline, a noisy baseline and one error-detection
+      strategy against circuit cost and discarded shots. The 14-slide deck sits inside the zip
+      with the starter notebook.
+    takeaways:
+      - claim: "The task, the three processor models, the nine core cases, the protection options, the rules, the required measurements, the submission materials and the rubric weights."
+        locator: "Slides 2 to 14"
+        used_in: [docs/CHALLENGE.md]
+      - claim: "Port positions and graph shapes, given as drawings only: a T-shaped five-qubit graph, a 9-node schematic, and a 13-node graph."
+        locator: "Slides 2 and 4"
+        used_in: [docs/CHALLENGE.md, docs/DESIGN.md]
+
+  - id: bell-fidelity-starter
+    title: "Bell-State Fidelity with Qiskit (starter notebook)"
+    authors: [UCF Qiskit Fall Fest organisers]
+    year: 2026
+    kind: notebook
+    url: https://neerpatel125.github.io/UCF-Qiskit-Fall-Fest/assets/Hackathon.zip
+    download: https://neerpatel125.github.io/UCF-Qiskit-Fall-Fest/assets/Hackathon.zip
+    snapshot: https://web.archive.org/web/2026/https://neerpatel125.github.io/UCF-Qiskit-Fall-Fest/assets/Hackathon.zip
+    redistribution: link-only
+    checked: true
+    summary: >-
+      A two-qubit notebook that prepares the Bell state, measures it in the XX, YY and ZZ bases,
+      and computes the fidelity from the three correlators. It defines the verification
+      procedure every team uses.
+    takeaways:
+      - claim: "Basis changes before measurement: none for ZZ; H on both qubits for XX; S-dagger then H on both qubits for YY."
+        locator: "Section 1"
+        used_in: [docs/CHALLENGE.md]
+      - claim: "Correlator per basis: P(00) + P(11) - P(01) - P(10); fidelity F = [1 + <XX> - <YY> + <ZZ>] / 4, ideally 1."
+        locator: "Section 3"
+        used_in: [docs/CHALLENGE.md]
+
+  - id: fallfest-site
+    title: "IBM Qiskit Fall Fest 2026, University of Central Florida"
+    authors: [UCF Qiskit Fall Fest organisers]
+    year: 2026
+    kind: website
+    url: https://neerpatel125.github.io/UCF-Qiskit-Fall-Fest/
+    download: null
+    snapshot: https://web.archive.org/web/2026/https://neerpatel125.github.io/UCF-Qiskit-Fall-Fest/
+    redistribution: link-only
+    checked: true
+    summary: >-
+      The festival page: schedule for November 9 to 16, 2026, links to the slides, notebooks and
+      challenge files, and the submission instructions.
+    takeaways:
+      - claim: "Submissions are emailed to the organiser with a video presentation of at most 15 minutes; groups of up to 5 members."
+        locator: "Program section, Quantum hackathon"
+        used_in: [docs/CHALLENGE.md]
+
+  - id: fallfest-intro-deck
+    title: "Quantum computing: an introduction for the curious, from postulates to circuits"
+    authors: [Sumeet Shirgure]
+    year: 2026
+    kind: slides
+    url: https://neerpatel125.github.io/UCF-Qiskit-Fall-Fest/assets/introduction-to-quantum-computing.pdf
+    download: https://neerpatel125.github.io/UCF-Qiskit-Fall-Fest/assets/introduction-to-quantum-computing.pdf
+    snapshot: https://web.archive.org/web/2026/https://neerpatel125.github.io/UCF-Qiskit-Fall-Fest/assets/introduction-to-quantum-computing.pdf
+    redistribution: link-only
+    checked: true
+    summary: >-
+      The festival's 55-slide introductory lecture: origins, complex linear algebra, the
+      postulates of quantum mechanics, and qubits and hardware.
+    takeaways:
+      - claim: "Background level the festival assumed: postulates, linear algebra and qubit hardware; a guide for where the tutorials should start."
+        locator: "Roadmap slide and sections 01 to 04"
+        used_in: ["notebooks/ (planned tutorials)"]
+
+  - id: fallfest-compilation-deck
+    title: "How Qiskit 2.6 compiles quantum programs for IBM hardware"
+    authors: [UCF Qiskit Fall Fest organisers]
+    year: 2026
+    kind: slides
+    url: https://neerpatel125.github.io/UCF-Qiskit-Fall-Fest/assets/qiskit_compilation_ibm_fall_fest.pdf
+    download: https://neerpatel125.github.io/UCF-Qiskit-Fall-Fest/assets/qiskit_compilation_ibm_fall_fest.pdf
+    snapshot: https://web.archive.org/web/2026/https://neerpatel125.github.io/UCF-Qiskit-Fall-Fest/assets/qiskit_compilation_ibm_fall_fest.pdf
+    redistribution: link-only
+    checked: true
+    summary: >-
+      The festival's compilation lecture: the six transpiler stages (init, layout, routing,
+      translation, optimisation, scheduling), IBM device families and native gates, the SABRE
+      routing heuristic, and what each optimisation level runs, read from the Qiskit 2.6.2 source.
+    takeaways:
+      - claim: "At optimisation levels 2 and 3, the ElidePermutations pass deletes SWAPs and permutations before layout and records them as an output relabelling instead."
+        locator: "Slides 22 and 23"
+        used_in: [docs/DESIGN.md]
+      - claim: "A SWAP costs three two-qubit gates on every IBM family, and SABRE is a seeded heuristic: one 15-qubit GHZ circuit varied in depth from 253 to 321 over 100 seeds."
+        locator: "Slides 15 to 18"
+        used_in: [docs/DESIGN.md]
+      - claim: "Heron is heavy-hex with a native CZ; single-qubit natives are RZ, SX and X."
+        locator: "Slide 6"
+        used_in: [docs/DESIGN.md]
+
+  - id: sqd-notebooks
+    title: "Sample, Then Diagonalize; Molecules as Bitstrings; The Full SQD Pipeline (lab notebooks)"
+    authors: [UCF Qiskit Fall Fest organisers]
+    year: 2026
+    kind: notebook
+    url: https://neerpatel125.github.io/UCF-Qiskit-Fall-Fest/assets/notebooks.zip
+    download: https://neerpatel125.github.io/UCF-Qiskit-Fall-Fest/assets/notebooks.zip
+    snapshot: https://web.archive.org/web/2026/https://neerpatel125.github.io/UCF-Qiskit-Fall-Fest/assets/notebooks.zip
+    redistribution: link-only
+    checked: true
+    summary: >-
+      Three lab notebooks on sample-based quantum diagonalisation, written as guided exercises
+      with self-checks, fill-in cells and pinned package versions in a Colab install cell.
+    takeaways:
+      - claim: "A tutorial style to follow: short numbered sections, self-check cells, 'your turn' exercises, and a commented pip install cell with exact versions for Colab."
+        locator: "Notebook 01, opening cells and section 3"
+        used_in: ["notebooks/ (planned tutorials)"]
+
+  # -- Papers in hand (read in full) ------------------------------------------
+
+  - id: replacement-type-gates
+    title: "Replacement-Type Quantum Gates"
+    authors: [Florian Ginzel, Javad Kazemi, Valentin Torggler, Wolfgang Lechner]
+    year: 2025
+    kind: paper
+    url: https://arxiv.org/abs/2508.00437v3
+    download: https://arxiv.org/pdf/2508.00437v3
+    snapshot: null
+    redistribution: link-only
+    checked: true
+    summary: >-
+      Proposes gates that never rotate the qubit: candidate qubits are prepared in the states the
+      gate should produce, the input qubit decides which candidate moves to the output site, and
+      the rest are measured away. This keeps a qubit's natural bias toward phase errors through
+      the gate, with spin-qubit and neutral-atom realisations.
+    takeaways:
+      - claim: "A noise-bias-preserving CNOT is impossible on a strictly two-level system; bias-preserving gates need a larger state space."
+        locator: "Sec. I, citing its reference 15"
+        used_in: [docs/DESIGN.md]
+      - claim: "Simulated rearrangement fidelities with realistic spin-qubit parameters: about 98.9% for X and 92.6% for CNOT, dominated by phase errors."
+        locator: "Fig. 7"
+        used_in: [docs/DESIGN.md]
+      - claim: "The XZZX surface code tolerates about 7.8% error at a noise bias of 100, which is why a lower-fidelity but strongly biased gate can still be useful."
+        locator: "Sec. III.D"
+        used_in: [docs/DESIGN.md]
+
+  - id: johnstun-2021-ibm-noise
+    title: "Understanding and compensating for noise on IBM quantum computers"
+    authors: [Scott Johnstun, Jean-François Van Huele]
+    year: 2021
+    kind: paper
+    url: https://doi.org/10.1119/10.0006204
+    download: null
+    snapshot: null
+    redistribution: link-only
+    checked: true
+    summary: >-
+      An American Journal of Physics teaching paper that runs Simon's algorithm on IBM devices and
+      shows how transpilation onto limited connectivity adds CNOTs that dominate the error.
+    takeaways:
+      - claim: "ibmq_london had the same T-shaped five-qubit graph as our 2016 model, with CNOT errors between about 0.7% and 2.2% and single-qubit errors around 0.04%."
+        locator: "Fig. 1(a)"
+        used_in: [docs/DESIGN.md]
+      - claim: "Routing cost dominates: for n = 6 the transpiler grew 11 CNOTs to 68, cutting the chance of no CNOT error from about 98% to about 32% even at the best per-gate rate."
+        locator: "Sec. V.C"
+        used_in: [docs/DESIGN.md]
+
+  # -- Papers from our research (checked: false until read in full) -----------
+
+  - id: smith-2026-error-detected-primitives
+    title: "Resilience Beyond the Light Cone: Error-Detected Primitives for Practical Dynamic Circuits"
+    authors: [Kevin C. Smith, Bibek Pokharel, Satvik Maurya, Maika Takita]
+    year: 2026
+    kind: paper
+    url: https://arxiv.org/abs/2609.08925v1
+    download: https://arxiv.org/pdf/2609.08925v1
+    snapshot: null
+    redistribution: link-only
+    checked: false
+    summary: >-
+      IBM preprint that adds low-overhead parity checks to constant-depth dynamic circuits and
+      postselects on them, run on the Heron r3 device ibm_boston.
+    takeaways:
+      - claim: "An error-detected Bell pair across a 100-qubit chain reached F = 0.59 ± 0.02 after postselection, against 0.39 without detection, at an acceptance of about 1%."
+        locator: "Abstract; Sec. IV.A"
+        used_in: [docs/DESIGN.md]
+      - claim: "Reports raw and postselected fidelity side by side with the acceptance rate, from the same XX, YY and ZZ formula as the challenge."
+        locator: "Sec. IV; appendix shot counts"
+        used_in: [docs/DESIGN.md]
+      - claim: "Dephasing errors are not detected by its checks; surplus edges in a 2D fusion graph each close a cycle whose parity can serve as a consistency check (theory only)."
+        locator: "Sec. II; Appendix B"
+        used_in: [docs/DESIGN.md]
+
+  - id: baumer-2024-long-range-entanglement
+    title: "Efficient Long-Range Entanglement using Dynamic Circuits"
+    authors: [Elisa Bäumer, Vinay Tripathi, Derek S. Wang, Patrick Rall, Edward H. Chen, Swarnadeep Majumder, Alireza Seif, Zlatko K. Minev]
+    year: 2024
+    kind: paper
+    url: https://arxiv.org/abs/2308.13065
+    download: https://arxiv.org/pdf/2308.13065
+    snapshot: null
+    redistribution: link-only
+    checked: false
+    summary: >-
+      Teleports a CNOT across up to 101 qubits on IBM hardware with mid-circuit measurement and
+      feedforward, and compares it with unitary versions. PRX Quantum 5, 030339 (2024).
+    takeaways:
+      - claim: "For fewer than about 10 qubits the unitary implementation gives the best fidelity; dynamic circuits win at long range only when measurement error is below about three CNOT errors."
+        locator: "Results and error-budget section"
+        used_in: [docs/DESIGN.md]
+
+  - id: liao-2025-error-detected-entanglement
+    title: "Achieving computational gains with quantum error-correction primitives: Generation of long-range entanglement enhanced by error detection"
+    authors: [Haoran Liao, Gavin S. Hartnett, Ashish Kakkar, Adrian Tan, Michael Hush, Pranav S. Mundada, Michael J. Biercuk, Yuval Baum]
+    year: 2025
+    kind: paper
+    url: https://arxiv.org/abs/2411.14638
+    download: https://arxiv.org/pdf/2411.14638
+    snapshot: null
+    redistribution: link-only
+    checked: false
+    summary: >-
+      Builds long-range entanglement unitarily and uses the disentangled qubits as error flags
+      for postselection, on ibm_fez. PRX Quantum 6, 020331 (2025).
+    takeaways:
+      - claim: "Reading the vacated qubits as flags (any non-zero readout signals an error) is the published form of our vacancy check, and costs no extra gates."
+        locator: "Protocol section"
+        used_in: [docs/DESIGN.md]
+      - claim: "Z-basis flag checks catch bit flips but barely improve coherence, because they cannot see Z errors."
+        locator: "Results discussion"
+        used_in: [docs/DESIGN.md]
+
+  - id: andersen-2019-parity-stabilization
+    title: "Entanglement stabilization using ancilla-based parity detection and real-time feedback in superconducting circuits"
+    authors: [Christian Kraglund Andersen, Ants Remm, Stefania Lazar, Sebastian Krinner, Johannes Heinsoo, Jean-Claude Besse, Mihai Gabureac, Andreas Wallraff, Christopher Eichler]
+    year: 2019
+    kind: paper
+    url: https://arxiv.org/abs/1902.06946
+    download: https://arxiv.org/pdf/1902.06946
+    snapshot: null
+    redistribution: link-only
+    checked: false
+    summary: >-
+      Repeatedly measures the ZZ and XX parities of a Bell pair with one ancilla and corrects with
+      feedback. npj Quantum Information 5, 69 (2019).
+    takeaways:
+      - claim: "Measuring ZZ alone lets <XX> decay; both checks are needed to protect the pair."
+        locator: "Main text"
+        used_in: [docs/DESIGN.md]
+
+  - id: chao-reichardt-2018-flag-qubits
+    title: "Quantum error correction with only two extra qubits"
+    authors: [Rui Chao, Ben W. Reichardt]
+    year: 2018
+    kind: paper
+    url: https://arxiv.org/abs/1705.02329
+    download: https://arxiv.org/pdf/1705.02329
+    snapshot: null
+    redistribution: link-only
+    checked: false
+    summary: >-
+      Introduces flag qubits: an extra ancilla that catches the ancilla faults that would spread
+      into correlated errors on the data. PRL 121, 050502 (2018).
+    takeaways:
+      - claim: "A flagged parity check costs one extra ancilla and two extra two-qubit gates, and catches a fault on the check ancilla that would otherwise reach a data qubit."
+        locator: "Main construction"
+        used_in: [docs/DESIGN.md]
+
+  - id: siddhu-2025-distillation
+    title: "Basic entanglement distillation with realistic noise"
+    authors: [Vikesh Siddhu, Dina Winston, David C. McKay, Ali Javadi-Abhari]
+    year: 2025
+    kind: paper
+    url: https://arxiv.org/abs/2504.06175
+    download: https://arxiv.org/pdf/2504.06175
+    snapshot: null
+    redistribution: link-only
+    checked: false
+    summary: >-
+      Runs two- and three-pair distillation protocols on IBM hardware and in simulation.
+      Physical Review Research 7, 043069 (2025).
+    takeaways:
+      - claim: "Distillation improved mainly deliberately degraded pairs; high-fidelity pairs did not improve, so a second pair on a spare path is unlikely to pay off at our 2 to 4 hops."
+        locator: "Hardware results"
+        used_in: [docs/DESIGN.md]
+
+  - id: chamberland-2020-heavy-hex
+    title: "Topological and subsystem codes on low-degree graphs with flag qubits"
+    authors: [Christopher Chamberland, Guanyu Zhu, Theodore J. Yoder, Jared B. Hertzberg, Andrew W. Cross]
+    year: 2020
+    kind: paper
+    url: https://arxiv.org/abs/1907.09528
+    download: https://arxiv.org/pdf/1907.09528
+    snapshot: null
+    redistribution: link-only
+    checked: false
+    summary: >-
+      The design paper behind IBM's heavy-hex lattice. Physical Review X 10, 011022 (2020).
+    takeaways:
+      - claim: "Low qubit degree (average 12/5 on heavy-hex) cuts frequency collisions by nearly an order of magnitude against degree-4 layouts; higher degree has a real hardware cost that a circuit-level model does not price."
+        locator: "Frequency-collision analysis"
+        used_in: [docs/DESIGN.md]
+
+  - id: kollar-2019-hyperbolic-cqed
+    title: "Hyperbolic lattices in circuit quantum electrodynamics"
+    authors: [Alicia J. Kollár, Mattias Fitzpatrick, Andrew A. Houck]
+    year: 2019
+    kind: paper
+    url: https://arxiv.org/abs/1802.09549
+    download: https://arxiv.org/pdf/1802.09549
+    snapshot: null
+    redistribution: link-only
+    checked: false
+    summary: >-
+      Builds the first hyperbolic lattice in a superconducting circuit, from coupled microwave
+      resonators rather than qubits. Nature 571, 45 (2019).
+    takeaways:
+      - claim: "Hyperbolic lattices have been realised on chip as resonator networks, not qubit processors, so the hyperbolic model stays hypothetical."
+        locator: "Abstract"
+        used_in: [docs/DESIGN.md]
+
+  - id: rayan-2026-rethinking-circuits
+    title: "Rethinking Quantum Circuits"
+    authors: [Steven Rayan]
+    year: 2026
+    kind: paper
+    url: https://arxiv.org/abs/2608.19370
+    download: https://arxiv.org/pdf/2608.19370
+    snapshot: null
+    redistribution: link-only
+    checked: false
+    summary: >-
+      Lecture notes that treat circuits as compositions, ZX diagrams, protected processes and
+      finally geometric objects whose connectivity is a design parameter, ending with hyperbolic
+      codes. The closest published statement of the challenge's framing.
+    takeaways:
+      - claim: "Connectivity, topology and boundary data are treated as physical design parameters; the challenge asks what that means for routing and error detection."
+        locator: "Introduction and final chapters"
+        used_in: [docs/DESIGN.md]
+
+  - id: pokharel-2018-dynamical-decoupling
+    title: "Demonstration of fidelity improvement using dynamical decoupling with superconducting qubits"
+    authors: [Bibek Pokharel, Namit Anand, Benjamin Fortman, Daniel A. Lidar]
+    year: 2018
+    kind: paper
+    url: https://arxiv.org/abs/1807.08768
+    download: https://arxiv.org/pdf/1807.08768
+    snapshot: null
+    redistribution: link-only
+    checked: false
+    summary: >-
+      A dynamical-decoupling study on IBM cloud devices that publishes a calibration snapshot of
+      the five-qubit ibmqx4 chip from June 2018.
+    takeaways:
+      - claim: "ibmqx4 calibration on 21 June 2018: mean T1 48.4 µs, mean T2 34.0 µs, single-qubit error 1.6e-3, readout error about 6.5%, mean CNOT error about 5.6%. Source of our 2016 noise profile."
+        locator: "Device-properties table"
+        used_in: [docs/DESIGN.md]
+
+  # -- Software documentation -------------------------------------------------
+
+  - id: qiskit-aer-noise-docs
+    title: "Qiskit Aer noise models (qiskit_aer.noise): NoiseModel.from_backend and RelaxationNoisePass"
+    authors: [Qiskit Aer developers]
+    year: 2026
+    kind: docs
+    url: https://qiskit.github.io/qiskit-aer/apidocs/aer_noise.html
+    download: null
+    snapshot: null
+    redistribution: link-only
+    checked: true
+    summary: >-
+      Reference documentation for building Aer noise models from errors, from device properties,
+      and through transpiler passes.
+    takeaways:
+      - claim: "NoiseModel.from_backend builds a depolarising error followed by thermal relaxation over each gate's duration, plus per-qubit readout errors; nothing else."
+        locator: "NoiseModel.from_backend"
+        used_in: [docs/DESIGN.md]
+      - claim: "RelaxationNoisePass skips instructions without a duration, so circuits must be scheduled before idle decoherence appears."
+        locator: "RelaxationNoisePass; relaxation_noise_pass source"
+        used_in: [docs/DESIGN.md]

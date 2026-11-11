@@ -1,0 +1,91 @@
+# docs/bp.schema.references.yaml
+#
+# Validates docs/bp.data.references.yaml: every source the project
+# relies on, with links, a summary in our own words, and the specific
+# claims we take from it. Copies of sources are never committed;
+# `make refs-fetch` downloads the ones with a `download` link into
+# the gitignored .references/ folder.
+
+$schema: "https://json-schema.org/draft/2020-12/schema"
+title: References
+description: Sources the project relies on and what it takes from each.
+
+type: object
+required: [references]
+additionalProperties: false
+
+$defs:
+  text:
+    type: string
+    minLength: 1
+  url:
+    type: string
+    pattern: '^https?://'
+
+properties:
+  references:
+    type: array
+    minItems: 1
+    items:
+      type: object
+      required: [id, title, authors, year, kind, url, redistribution, checked, summary, takeaways]
+      additionalProperties: false
+      properties:
+        id:
+          description: Short slug, unique, cited from other files.
+          type: string
+          pattern: '^[a-z0-9][a-z0-9-]*$'
+        title: {$ref: "#/$defs/text"}
+        authors:
+          type: array
+          minItems: 1
+          items: {$ref: "#/$defs/text"}
+        year:
+          description: Four-digit year. The loader reads bare years as strings.
+          type: string
+          pattern: '^\d{4}$'
+        kind:
+          $ref: "bp:docs/bp.enum.reference-kinds.yaml"
+        url:
+          description: Canonical link. Versioned for arXiv (absNNNN.NNNNNvN), DOI when one exists.
+          $ref: "#/$defs/url"
+        download:
+          description: Direct file link for make refs-fetch, or null when none is freely available.
+          oneOf:
+            - $ref: "#/$defs/url"
+            - type: "null"
+        snapshot:
+          description: Wayback Machine link for material that may disappear (festival files), or null.
+          oneOf:
+            - $ref: "#/$defs/url"
+            - type: "null"
+        redistribution:
+          $ref: "bp:docs/bp.enum.redistribution.yaml"
+        checked:
+          description: >-
+            true when a team member has read the original and confirmed every takeaway against
+            it; false when a takeaway comes from a secondary account, such as our research
+            reports, and still needs checking before it goes into the submission.
+          type: boolean
+        summary:
+          description: Two or three sentences in our own words.
+          $ref: "#/$defs/text"
+        takeaways:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required: [claim, locator, used_in]
+            additionalProperties: false
+            properties:
+              claim:
+                description: What we take from the source, paraphrased; short quotes only.
+                $ref: "#/$defs/text"
+              locator:
+                description: Where in the original, such as a section, figure, slide or page.
+                $ref: "#/$defs/text"
+              used_in:
+                description: Repo files that rely on this claim.
+                type: array
+                minItems: 1
+                items: {$ref: "#/$defs/text"}
