@@ -1,0 +1,23 @@
+# scripts/blueprint-render/tests/fixtures/bp.schema.widget.yaml
+#
+# Minimal schema for testing validation. Includes a bp: $ref to
+# test-enums/bp.enum.colors.yaml for enum resolution testing.
+
+$schema: "https://json-schema.org/draft/2020-12/schema"
+title: Widget
+description: Minimal test schema.
+
+type: object
+required: [name, color, year]
+additionalProperties: false
+
+properties:
+  name:
+    type: string
+  color:
+    $ref: "bp:test-enums/bp.enum.colors.yaml"
+  year:
+    type: string
+    pattern: '^\d{4}$'
+  count:
+    type: integer

@@ -1,0 +1,9 @@
+# scripts/blueprint-render/tests/fixtures/bp.data.widget.dates.yaml
+#
+# Tests PyYAML bare-year coercion. The unquoted 2024 loads as
+# int; date normalization must convert it to "2024" before the
+# schema's type: string + pattern check runs.
+
+name: Date Widget
+color: blue
+year: 2024

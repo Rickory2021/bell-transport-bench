@@ -1,0 +1,12 @@
+# scripts/blueprint-render/tests/fixtures/bp.process.widget.bad.yaml
+#
+# Test fixture: process file missing required keys (emit, output).
+
+vars:
+  $schema: "https://json-schema.org/draft/2020-12/schema"
+  type: object
+  properties:
+    title: {type: string}
+
+map:
+  widget.title: {var: title}

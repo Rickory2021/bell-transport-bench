@@ -1,0 +1,96 @@
+# scripts/flatten-sync/modifiers.yaml
+#
+# Modifier library for the flatten export script.
+# Committed and shared. Plain .yaml -- no personal variant needed.
+#
+# Modifiers are named patterns. They define WHAT to match, not what
+# to do with it. Profiles decide the direction (include or exclude).
+#
+# `silent: true` means exclude from _CONTEXT.yaml manifest when excluded.
+#                 Does not auto-activate -- profiles control activation.
+#
+# Modifier fields:
+#   dirs:      directory names to match (at any depth)
+#   files:     specific filenames to match (at any depth)
+#   patterns:  regex patterns to match (against relative path)
+#   condition: prune by a value read from a probe file (see README,
+#              Condition Modifiers); cannot be combined with dirs, files,
+#              or patterns
+#   silent:    suppress from _CONTEXT.yaml manifest (default: false)
+#   note:      shown in discover + manifest
+
+modifiers:
+
+  # -- Silent (suppressed from manifest) --------------------------------
+
+  dev-env:
+    silent: true
+    files:
+     - uv.lock
+    dirs:
+      - .git
+      - __pycache__
+      - .pytest_cache
+      - .mypy_cache
+      - .ruff_cache
+      - .venv
+      - venv
+      - .uv
+      - .idea
+      - .vscode
+      - .cache
+      - _data
+    note: "Development environment directories and lab runtime artifacts."
+
+  generated-files:
+    silent: true
+    files:
+      - .DS_Store
+      - Thumbs.db
+    patterns:
+      - '\.pyc$'
+      - '\.pyo$'
+      - '\.log$'
+      - '\.sw.$'
+    note: "OS, editor, and Python-generated files."
+
+  build-output:
+    silent: true
+    dirs:
+      - project-export-files
+      - render-out
+    note: "Flatten export output directory and render output directory."
+
+  active-configs:
+    silent: true
+    patterns:
+      - '\.config\.yaml$'
+    note: "Personal config files (gitignored)."
+
+  secrets:
+    silent: true
+    patterns:
+      - '\.env$'
+      - '\.env\.local$'
+    note: "Environment files with credentials."
+
+  script-data:
+    silent: true
+    dirs:
+      - processed
+    note: "Watcher processed files directory."
+
+  binary-assets:
+    silent: false
+    patterns:
+      - '\.ttf$'
+      - '\.otf$'
+      - '\.woff2?$'
+      - '\.pdf$'
+    note: "Binary fonts and rendered PDFs. AI platforms cannot process them as-is (Project Knowledge converts PDFs to page-image zips); manifest tracks their paths for context."
+
+  # -- Toggleable (profiles decide direction) -------------------------
+
+  scripts:
+    dirs: [scripts]
+    note: "blueprint-render and flatten-sync tooling."

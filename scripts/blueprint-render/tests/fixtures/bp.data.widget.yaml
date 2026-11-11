@@ -1,0 +1,9 @@
+# scripts/blueprint-render/tests/fixtures/bp.data.widget.yaml
+#
+# Valid data matching bp.schema.widget. All fields present,
+# enum value valid, year quoted.
+
+name: Test Widget
+color: red
+year: "2024"
+count: 42

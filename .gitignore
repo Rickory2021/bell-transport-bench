@@ -1,0 +1,20 @@
+# .gitignore
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.pytest_cache/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Flatten-sync export output
+project-export-files/
+
+# Editors and OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

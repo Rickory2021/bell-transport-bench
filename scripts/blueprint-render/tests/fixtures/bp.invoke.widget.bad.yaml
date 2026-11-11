@@ -1,0 +1,8 @@
+# scripts/blueprint-render/tests/fixtures/bp.invoke.widget.bad.yaml
+#
+# Test fixture: invoke with contract violations.
+# title is wrong type (integer, not string).
+# unknown_field is not in vars (additionalProperties: false).
+
+title: 42
+unknown_field: true

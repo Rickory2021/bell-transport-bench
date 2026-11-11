@@ -1,0 +1,9 @@
+# scripts/blueprint-render/tests/fixtures/bp.invoke.widget.with-import.yaml
+#
+# Test fixture: invoke with valid import structure.
+
+import:
+  - {profile: personal}
+
+title: "profile:personal.title"
+color: null

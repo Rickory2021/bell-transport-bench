@@ -1,0 +1,4 @@
+# scripts/blueprint-render/.gitignore
+
+# Personal configs (identity data, stem names)
+profiles/*.config.yaml

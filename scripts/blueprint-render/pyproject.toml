@@ -1,0 +1,16 @@
+# scripts/blueprint-render/pyproject.toml
+
+[project]
+name = "blueprint-render"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "pyyaml",
+    "jsonschema>=4.20",
+    "referencing",
+    "jinja2",
+    "weasyprint>=60",
+]
+
+[dependency-groups]
+dev = ["pytest"]

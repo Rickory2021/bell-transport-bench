@@ -1,0 +1,9 @@
+# scripts/blueprint-render/tests/fixtures/bp.data.widget.bad.yaml
+#
+# Seeded validation errors for testing failure detection.
+# 1. color "purple" is not in bp.enum.colors (red, green, blue)
+# 2. required field "year" is missing
+
+name: Bad Widget
+color: purple
+count: 42

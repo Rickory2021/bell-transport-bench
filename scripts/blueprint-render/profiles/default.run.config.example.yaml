@@ -1,0 +1,22 @@
+# scripts/blueprint-render/profiles/default.run.config.example.yaml
+#
+# Engine config for blueprint-render. Copy to default.run.config.yaml
+# to customise locally. Personal configs are gitignored.
+#
+# Resolution: default.run.config.yaml > default.run.config.example.yaml
+
+verify:
+  pdftotext: false
+
+# --- output (additive copies) ------------------------------------
+# Adjacent output always happens (bp.output naming).
+# This section adds named copies to a single directory.
+# Each stem entry maps one invoke path to one filename.
+# _RENDER.yaml is auto-generated in the output directory to
+# track what was produced, from which invoke, and when.
+
+output:
+  directory: render-out
+  stems:
+    - invoke: notebooks/bp.invoke.notebook.submission.yaml
+      stem: bell-transport-bench-submission

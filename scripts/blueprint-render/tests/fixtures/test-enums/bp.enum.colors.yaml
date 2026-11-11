@@ -1,0 +1,9 @@
+# scripts/blueprint-render/tests/fixtures/test-enums/bp.enum.colors.yaml
+#
+# Valid enum for testing bp: $ref resolution.
+# Referenced by bp.schema.widget.yaml.
+
+values:
+  red: Primary color.
+  green: Primary color.
+  blue: Primary color.

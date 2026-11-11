@@ -1,0 +1,23 @@
+# scripts/flatten-sync/profiles/default.watch.config.example.yaml
+#
+# Watch profile for auto-placing downloaded project files into the repo.
+# Copy to default.watch.config.yaml and adjust for your environment.
+#
+# Resolution: default.watch.config.yaml (yours) > default.watch.config.example.yaml
+
+source:
+  windows_user: auto            # "auto" detects via cmd.exe; or set explicitly
+  # directory: /custom/path     # override to watch a non-Downloads folder
+
+target:
+  repo: ~/bell-transport-bench  # absolute or ~-relative path to repo root
+
+cleanup:
+  mode: move                    # "delete" removes from source after placement
+  move_to: processed            # relative to flatten-sync/ dir (gitignored)
+
+polling:
+  interval: 1.5                 # seconds between directory scans
+  stable_wait: 0.5              # seconds between file-size stability checks
+  stable_retries: 6             # max checks before giving up (~3s total)
+  repo_map_refresh: 30          # seconds between full repo tree re-index

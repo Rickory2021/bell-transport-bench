@@ -1,0 +1,9 @@
+# scripts/blueprint-render/tests/fixtures/bp.enum.bad-extra-key.yaml
+#
+# Invalid enum: has an extra top-level key besides "values".
+# Canonical form requires exactly one top-level key named "values".
+
+values:
+  red: Primary color.
+  green: Primary color.
+description: This key should not be here.

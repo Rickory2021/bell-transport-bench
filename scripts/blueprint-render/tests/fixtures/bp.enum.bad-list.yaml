@@ -1,0 +1,10 @@
+# scripts/blueprint-render/tests/fixtures/bp.enum.bad-list.yaml
+#
+# Invalid enum: values is a list instead of a map.
+# Canonical form requires values to be a map where keys are
+# the legal values and bodies are documentation.
+
+values:
+  - red
+  - green
+  - blue

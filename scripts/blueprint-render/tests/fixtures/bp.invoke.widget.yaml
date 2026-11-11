@@ -1,0 +1,6 @@
+# scripts/blueprint-render/tests/fixtures/bp.invoke.widget.yaml
+#
+# Test fixture: valid invoke matching bp.process.widget vars.
+
+title: "Test Widget"
+color: blue

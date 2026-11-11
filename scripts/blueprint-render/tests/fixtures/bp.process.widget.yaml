@@ -1,0 +1,23 @@
+# scripts/blueprint-render/tests/fixtures/bp.process.widget.yaml
+#
+# Test fixture: valid process file.
+
+vars:
+  $schema: "https://json-schema.org/draft/2020-12/schema"
+  type: object
+  additionalProperties: false
+  required: [title]
+  properties:
+    title: {type: string}
+    color: {type: [string, "null"]}
+    count: {type: [integer, "null"]}
+
+map:
+  widget.title: {var: title}
+  widget.color: {var: color}
+
+emit:
+  yaml:
+    render: scripts/blueprint-render/renderers/yaml.py
+
+output: adjacent
