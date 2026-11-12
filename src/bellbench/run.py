@@ -4,10 +4,11 @@
 A run (docs/DESIGN.md, section 5) reads its circuit file and builds a
 NoiseControl for the circuit's processor, then compiles the three basis
 circuits once under its transpiler seed, takes the cost before scheduling,
-schedules, simulates ideal and noisy, and processes the shots as the circuit
-file's analysis says. `postselect` keeps a shot only when every check and flag
-bit is 0; with no checks, it keeps every shot. `correct` is a hook that raises
-until a decoder is built (D-54).
+schedules, simulates ideal and noisy, and reads the shots with the analysis the
+circuit file names (src/bellbench/analysis.py), which returns the port counts
+over all shots and over the shots kept. Every number after that is computed
+here the same way for every strategy: F raw from all shots, F from the kept
+ones, the acceptance and its Wilson interval, and the shots per basis.
 
 A run stops before simulating when its circuit resets or measures before the
 end while the matching conditional channel is unset, so neither is ever
@@ -48,11 +49,11 @@ import yaml
 from qiskit import qasm3
 
 from bellbench import configs
+from bellbench.analysis import PortCounts, read_shots
 from bellbench.circuits import circuit_to_qasm, load_circuit
 from bellbench.fidelity import BASES, fidelity_from_counts
 from bellbench.noise import NoiseControl
 from bellbench.pipeline import (
-    PORT_REGISTER,
     basis_circuits,
     compile_bases,
     cost,
@@ -109,8 +110,6 @@ class CircuitRun:
         if diagrams not in DIAGRAMS:
             raise ValueError(f"diagrams is one of {', '.join(DIAGRAMS)}; got {diagrams!r}")
         self.circuit = load_circuit(circuit)
-        if self.circuit.analysis == "correct":
-            raise NotImplementedError(f"circuit {circuit!r}: analysis correct is a hook until a decoder is built (D-54)")
         self.nc = NoiseControl(self.circuit.processor, noise, scale, overrides, conditional)
         _check_conditional_channels(self.circuit, self.nc)
         self.shots, self.base_seed, self.diagrams = shots, base_seed, diagrams
@@ -130,7 +129,7 @@ class CircuitRun:
     # -- Running ---------------------------------------------------------------
 
     def run(self, methods: dict[str, str] | None = None) -> "CircuitRun":
-        """Compile, cost, schedule, simulate ideal and noisy, and analyse; `methods` repeats a recorded run's."""
+        """Compile, cost, schedule, simulate ideal and noisy, and read the shots; `methods` repeats a recorded run's."""
         circuits = basis_circuits(self.circuit.circuit, self.nc.ports)
         self.compiled = compile_bases(circuits, self.nc, self.seeds["transpile"])
         self.cost = cost(self.compiled, self.nc.ports)
@@ -140,13 +139,18 @@ class CircuitRun:
             method = (methods or {}).get(name, "automatic")
             sim = simulate(scheduled, noise_model, self.shots, self.seeds[name], method)
             self.simulations[name] = sim
-            self.analysis[name] = analyse(sim, self.registers)
+            self.analysis[name] = Analysis(read_shots(self.circuit.analysis, sim.raw, self.layout, self.shots))
         return self
 
     @property
     def registers(self) -> list[str]:
         """The compiled circuits' classical registers, in order; the port register is last."""
-        return [r.name for r in self.compiled["ZZ"].compiled.cregs]
+        return [name for name, _ in self.layout]
+
+    @property
+    def layout(self) -> list[tuple[str, int]]:
+        """Each of the compiled circuits' classical registers with its size, in order; the port register is last."""
+        return [(r.name, r.size) for r in self.compiled["ZZ"].compiled.cregs]
 
     # -- Records -----------------------------------------------------------------
 
@@ -246,13 +250,14 @@ class CircuitRun:
 
 
 class Analysis:
-    """One simulation's shots processed by postselection: F raw and after, with acceptance and its interval."""
+    """One simulation's port counts, scored: F over all shots and over kept ones, the acceptance and its interval."""
 
-    def __init__(self, raw_port, accepted_port, raw_shots, accepted_shots):
-        self.raw = fidelity_from_counts(raw_port)
-        self.accepted = fidelity_from_counts(accepted_port)
-        self.raw_shots, self.accepted_shots = raw_shots, accepted_shots
-        kept, total = sum(accepted_shots.values()), sum(raw_shots.values())
+    def __init__(self, ports: PortCounts):
+        self.raw = fidelity_from_counts(ports.all)
+        self.accepted = fidelity_from_counts(ports.kept)
+        self.raw_shots = {b: sum(ports.all[b].values()) for b in BASES}
+        self.accepted_shots = {b: sum(ports.kept[b].values()) for b in BASES}
+        kept, total = sum(self.accepted_shots.values()), sum(self.raw_shots.values())
         self.acceptance = kept / total
         self.interval = wilson_interval(kept, total)
 
@@ -273,22 +278,6 @@ class Analysis:
             row[f"shots_raw_{b}"] = self.raw_shots[b]
             row[f"shots_accepted_{b}"] = self.accepted_shots[b]
         return row
-
-
-def analyse(sim, registers: list[str]) -> Analysis:
-    """Postselect each basis's shots: keep a shot when every register other than the ports reads all 0."""
-    raw_port, accepted_port, raw_shots, accepted_shots = {}, {}, {}, {}
-    for basis in BASES:
-        raw_port[basis], accepted_port[basis] = {}, {}
-        for key, n in sim.raw[basis].items():
-            bits = dict(zip(reversed(registers), key.split(" ")))
-            port = bits[PORT_REGISTER]
-            raw_port[basis][port] = raw_port[basis].get(port, 0) + n
-            if all(set(b) == {"0"} for r, b in bits.items() if r != PORT_REGISTER):
-                accepted_port[basis][port] = accepted_port[basis].get(port, 0) + n
-        raw_shots[basis] = sum(raw_port[basis].values())
-        accepted_shots[basis] = sum(accepted_port[basis].values())
-    return Analysis(raw_port, accepted_port, raw_shots, accepted_shots)
 
 
 def wilson_interval(kept: int, total: int, z: float = WILSON_Z) -> tuple[float, float]:

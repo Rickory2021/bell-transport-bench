@@ -3,7 +3,8 @@
 
 A circuit file, config/circuit/bp.data.circuit.<name>.yaml, holds one written
 circuit on one processor model's physical qubits: its gates as OpenQASM 3, the
-analysis that processes its shots, and notes saying how it was built
+analysis that reads its shots (a name from src/bellbench/analysis.py's registry,
+with its settings), and notes saying how it was built
 (docs/DESIGN.md, section 2). A run reads the gates as written; nothing
 regenerates them from a transport's name, so the file shows exactly what runs.
 
@@ -21,7 +22,7 @@ Run as a module, this writes the three core baseline circuit files.
 """
 
 import re
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -32,6 +33,8 @@ from qiskit import QuantumCircuit, qasm3
 from qiskit.qasm3 import QASM3ImporterError
 
 from bellbench import configs
+from bellbench.analysis import check_analysis
+from bellbench.pipeline import PORT_REGISTER
 
 # The roles a written circuit's classical registers take; a run adds "port". A check's bits flag an error, a
 # flag's bits catch a fault in a check, and frame_z or frame_x bits say a Z or an X is owed on the first port.
@@ -47,7 +50,7 @@ class CircuitFile:
     name: str
     label: str
     processor: str
-    analysis: str
+    analysis: dict
     notes: str
     circuit: QuantumCircuit
     record: dict
@@ -58,6 +61,10 @@ def load_circuit(name: str) -> CircuitFile:
     data, record = configs.load_recorded("circuit", name)
     num_qubits = len(configs.load_processor(data["processor"])["qubits"])
     circuit = circuit_from_qasm(data["circuit"], num_qubits, record["path"])
+    try:
+        check_analysis(data["analysis"], [(r.name, r.size) for r in circuit.cregs] + [(PORT_REGISTER, 2)])
+    except ValueError as e:
+        raise ValueError(f"{record['path']}: $.analysis: {e}") from None
     return CircuitFile(
         data["name"], data["label"], data["processor"], data["analysis"], data["notes"], circuit, record
     )
@@ -92,10 +99,13 @@ def save_circuit(
     processor: str,
     circuit: QuantumCircuit,
     notes: str,
-    analysis: str = "postselect",
+    analysis: Mapping | None = None,
     overwrite: bool = False,
 ) -> Path:
-    """Write `circuit` as the circuit file `name`, then load it back so a bad file never stays on disk."""
+    """Write `circuit` as the circuit file `name`, then load it back so a bad file never stays on disk.
+
+    `analysis` is `{name, settings}` from the registry in analysis.py; by default postselect.
+    """
     path = configs.config_folder("circuit") / configs.file_name("circuit", name)
     if path.exists() and not overwrite:
         raise FileExistsError(f"{configs.repo_path(path)} exists; pass overwrite=True to replace it")
@@ -103,7 +113,7 @@ def save_circuit(
         "name": name,
         "label": label,
         "processor": processor,
-        "analysis": analysis,
+        "analysis": dict(analysis) if analysis is not None else {"name": "postselect"},
         "notes": notes,
         "circuit": circuit_to_qasm(circuit),
     }

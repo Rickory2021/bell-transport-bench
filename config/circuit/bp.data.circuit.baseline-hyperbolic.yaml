@@ -3,7 +3,8 @@
 name: baseline-hyperbolic
 label: Baseline, Hyperbolic-inspired model
 processor: hyperbolic
-analysis: postselect
+analysis:
+  name: postselect
 notes: >-
   The baseline transport (swap_chain in src/bellbench/circuits.py), the organisers'
   recipe: H on the first port, explicit SWAPs out along the path [0, 1, 9, 12], the

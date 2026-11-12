@@ -17,6 +17,7 @@ import yaml
 from qiskit import ClassicalRegister
 
 from bellbench import run as run_module
+from bellbench.analysis import read_shots
 from bellbench.circuits import save_circuit, swap_chain
 from bellbench.pipeline import Simulation
 from bellbench.run import (
@@ -24,8 +25,8 @@ from bellbench.run import (
     RESULT_FILE,
     SIMULATION_COLUMNS,
     CircuitRun,
+    Analysis,
     _write_csv,
-    analyse,
     rerun,
     wilson_interval,
 )
@@ -63,8 +64,9 @@ def test_seeds_repeat_for_the_same_labels_and_differ_otherwise():
 def test_postselection_keeps_shots_whose_checks_read_zero():
     # Keys as Qiskit writes them: the last register first, so "port check".
     raw = {"00 0": 40, "11 0": 40, "01 1": 15, "11 1": 5}
-    sim = Simulation({}, {}, {}, 100, {b: dict(raw) for b in ("XX", "YY", "ZZ")})
-    analysis = analyse(sim, ["check", "port"])
+    by_basis = {b: dict(raw) for b in ("XX", "YY", "ZZ")}
+    ports = read_shots({"name": "postselect"}, by_basis, [("check", 1), ("port", 2)], 100)
+    analysis = Analysis(ports)
     assert analysis.accepted_shots == {"XX": 80, "YY": 80, "ZZ": 80}
     assert analysis.raw_shots == {"XX": 100, "YY": 100, "ZZ": 100}
     assert analysis.acceptance == pytest.approx(0.8)
@@ -97,10 +99,10 @@ def test_a_conditional_operation_with_its_channel_unset_stops(config_copy, opera
         CircuitRun("checked", "boston-2026")
 
 
-def test_correct_analysis_is_a_hook(config_copy):
-    save_circuit("corrected", "Corrected", "ibm2016", swap_chain("ibm2016"), "A test circuit.", analysis="correct")
-    with pytest.raises(NotImplementedError, match="decoder"):
-        CircuitRun("corrected", "boston-2026")
+def test_an_analysis_the_registry_lacks_is_refused(config_copy):
+    with pytest.raises(ValueError, match=r"\$\.analysis: no analysis named 'correct'; known: postselect, parity"):
+        circuit = swap_chain("ibm2016")
+        save_circuit("corrected", "Corrected", "ibm2016", circuit, "A test.", analysis={"name": "correct"})
 
 
 # -- Run folders and reruns ------------------------------------------------------------
@@ -128,14 +130,14 @@ def test_run_folder_csv_headers_are_the_declared_columns(folder, name, columns):
     assert tuple(raw.decode("utf-8").split("\n", 1)[0].split(",")) == columns
 
 
-def test_counts_have_a_column_for_every_role():
-    # Keys as Qiskit writes them: the last register first, so "port check".
-    raw = {b: {"01 1": 1} for b in ("XX", "YY", "ZZ")}
-    sims = {name: Simulation({}, {}, {}, 1, raw) for name in ("ideal", "noisy")}
-    rows = CircuitRun.count_rows(SimpleNamespace(simulations=sims, registers=["check", "port"]))
-    assert len(rows) == 6
+def test_counts_hold_the_full_outcome_key():
+    # Keys as Qiskit writes them: the last register first, so "port frame_z check_zz".
+    raw = {b: {"01 0 1": 3, "10 1 0": 2} for b in ("XX", "YY", "ZZ")}
+    sims = {name: Simulation({}, {}, {}, 5, raw) for name in ("ideal", "noisy")}
+    rows = CircuitRun.count_rows(SimpleNamespace(simulations=sims))
+    assert len(rows) == 12
     assert all(tuple(r) == COUNT_COLUMNS for r in rows)
-    assert {(r["check"], r["flag"], r["port"]) for r in rows} == {("1", "", "01")}
+    assert {(r["outcome"], r["count"]) for r in rows} == {("01 0 1", 3), ("10 1 0", 2)}
 
 
 def test_a_row_that_does_not_fit_the_declared_columns_raises(tmp_path):

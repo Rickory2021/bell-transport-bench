@@ -36,8 +36,15 @@ properties:
     description: The name of the processor file whose physical qubits the gates act on.
     $ref: "#/$defs/slug"
   analysis:
-    description: "How a run processes the shots: postselect discards a shot whose check or flag bits are not all 0; correct is a hook that raises until a decoder is built."
-    enum: [postselect, correct]
+    description: >-
+      How a run reads the shots: the name of an analysis in the registry in src/bellbench/analysis.py, which
+      checks its settings when the file loads. postselect takes none; parity takes checks, frame_z and frame_x.
+    type: object
+    required: [name]
+    additionalProperties: false
+    properties:
+      name: {$ref: "#/$defs/slug"}
+      settings: {type: object}
   notes:
     description: Free text saying how the circuit was built (the transport, the path, the checks) and anything a reader should know.
     $ref: "#/$defs/text"

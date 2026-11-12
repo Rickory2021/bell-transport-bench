@@ -3,7 +3,8 @@
 name: baseline-ibm2016
 label: Baseline, 2016-inspired reference
 processor: ibm2016
-analysis: postselect
+analysis:
+  name: postselect
 notes: >-
   The baseline transport (swap_chain in src/bellbench/circuits.py), the organisers'
   recipe: H on the first port, explicit SWAPs out along the path [0, 3, 4], the lexicographically
