@@ -333,10 +333,12 @@ def test_a_kind_the_schema_lacks_is_refused_when_the_profile_loads(config_copy):
 
 
 @pytest.mark.parametrize("noise", ["boston-2026", "organiser-cx2"])
-def test_the_mid_circuit_channel_is_a_bit_flip_on_its_marker(noise):
+@pytest.mark.parametrize("scale", [1, 2])
+def test_the_mid_circuit_channel_is_a_bit_flip_on_its_marker(noise, scale):
+    """The flip has the probability given, at any scale: a noise sweep scales the profile, never this channel."""
     from qiskit_aer.noise import pauli_error
 
-    nc = NoiseControl("ibm2016", noise, conditional={"mid_circuit_measurement_error": 0.2})
+    nc = NoiseControl("ibm2016", noise, scale=scale, conditional={"mid_circuit_measurement_error": 0.2})
     errors = nc.noise_model._local_quantum_errors[noise_module.MID_CIRCUIT_LABEL]
     assert set(errors) == {(q,) for q in range(nc.num_qubits)}
     assert all(_same_channel(e, pauli_error([("X", 0.2), ("I", 0.8)])) for e in errors.values())
@@ -628,6 +630,27 @@ def test_export_records_the_files_the_model_was_built_from(config_copy, kind, na
     record = nc.export_as_yaml()
     assert record[kind]["hash"] == built
     with pytest.raises(ValueError, match="changed since it was recorded"):
+        NoiseControl.from_yaml(record)
+
+
+@pytest.mark.parametrize(
+    "kind, name, old, new",
+    [
+        ("processor", "ibm2016", "label: 2016-inspired reference", "label: 2016-inspired reference, edited"),
+        ("noise", "fez-2025", "error_probability: 0.0039", "error_probability: 0.0139"),
+    ],
+)
+def test_a_file_changed_after_the_first_comparison_is_refused_by_the_second(
+    config_copy, monkeypatch, kind, name, old, new
+):
+    """from_yaml compares each file before the build and again after it; with the first made to pass, a file
+    changed in between still builds, and the second comparison refuses it, so a record always describes the
+    content its model was built from."""
+    record = NoiseControl("ibm2016", "fez-2025").export_as_yaml()
+    path = configs.config_path(kind, name)
+    path.write_text(path.read_text(encoding="utf-8").replace(old, new, 1), encoding="utf-8")
+    monkeypatch.setattr(noise_module, "check_file_unchanged", lambda recorded: None)
+    with pytest.raises(ValueError, match=f"{record[kind]['path']} changed since it was recorded"):
         NoiseControl.from_yaml(record)
 
 

@@ -140,13 +140,48 @@ FEZ_PATH = "config/noise/bp.data.noise.fez-2025.yaml"
 NOT_A_NOISE_FILE = r"is not a bp\.data\.noise\.\*\.yaml file"
 
 
-def test_a_number_that_is_not_finite_is_refused_in_any_kind_of_file(config_copy):
+NAN = float("nan")
+
+
+def _load_by_kind(kind, name):
+    from bellbench import circuits, configs, run
+
+    loaders = {"circuit": circuits.load_circuit, "benchmark": run.load_benchmark}
+    return loaders.get(kind, lambda n: configs.load_config(kind, n))(name)
+
+
+# Each kind whose schema leaves a number to the finite check: a processor's position, a noise profile's probability,
+# a circuit file's analysis settings (a free object) and a benchmark run's scale. A run record's is in the next test;
+# a run list holds no float.
+@pytest.mark.parametrize(
+    "kind, name, change, field",
+    [
+        ("processor", "ibm2016", lambda d: d["qubits"][0].update(position=[NAN, 0.0]), r"qubits\[0\]\.position\[0\]"),
+        ("noise", "fez-2025", lambda d: d["qubit"]["readout_error"].update(reads_1_when_0=NAN),
+         r"qubit\.readout_error\.reads_1_when_0"),
+        ("circuit", "baseline-ibm2016", lambda d: d["analysis"].update(settings={"weight": NAN}),
+         r"analysis\.settings\.weight"),
+        ("benchmark", "core", lambda d: d["runs"][0].update(scale=NAN), r"runs\[0\]\.scale"),
+    ],
+)
+def test_a_number_that_is_not_finite_is_refused_in_any_kind_of_file(config_copy, kind, name, change, field):
     from bellbench import configs
 
-    proc = _broken(lambda p: p["qubits"][0].update(position=[float("nan"), 0.0]))
-    _write(configs.processor_path("ibm2016"), proc)
-    with pytest.raises(ValueError, match=r"\$\.qubits\[0\]\.position\[0\]: nan is not a finite number"):
-        configs.load_processor("ibm2016")
+    path = configs.config_path(kind, name)
+    data = _load(path)
+    change(data)
+    _write(path, data)
+    with pytest.raises(ValueError, match=r"\$\." + field + r": nan is not a finite number"):
+        _load_by_kind(kind, name)
+
+
+def test_a_number_that_is_not_finite_is_refused_in_a_run_record():
+    from bellbench.run import CircuitRun
+
+    record = CircuitRun("baseline-ibm2016", "boston-2026", shots=50, base_seed=1).run().export_as_yaml()
+    record["scheduled_duration"] = NAN
+    with pytest.raises(ValueError, match=r"the run record: \$\.scheduled_duration: nan is not a finite number"):
+        CircuitRun.from_yaml(record)
 
 
 def test_an_unknown_kind_of_config_file_raises_naming_the_known_ones():

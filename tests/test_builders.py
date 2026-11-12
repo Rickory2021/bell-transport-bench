@@ -141,7 +141,7 @@ def kept_fraction(state: builders.BuildState) -> float:
         ("z", "port", builders.bus_xx, 0.0),  # a phase flip on one port makes XX = -1
         ("x", "port", builders.bus_xx, 1.0),  # blind: a bit flip leaves XX alone
         ("x", "interior", builders.vacancy, 0.0),  # an excitation left on the path
-        ("x", "interior", builders.bus_zz, 0.0),  # caught by the vacancy read before the bus is reused
+        ("x", "interior", builders.bus_zz, 0.0),  # caught twice: the ZZ parity reads 1, and so does the vacancy read
         ("z", "interior", builders.vacancy, 1.0),  # blind: a phase on an empty qubit is no excitation
         # bus_xx's own parity cannot see an excitation on its last bus qubit, which turns the pair into Psi+ with
         # XX still +1: only the vacancy read before the bus is reused catches it.
@@ -154,6 +154,15 @@ def test_each_check_catches_what_it_states_and_misses_its_blind_spots(error, whe
     qubit = {"port": state.ports[0], "interior": state.interior[0], "last interior": state.interior[-1]}[where]
     getattr(state.circuit, error)(qubit)
     assert kept_fraction(check(state)) == kept
+
+
+def test_bus_zz_catches_with_its_vacancy_read_what_its_parity_misses():
+    """A flipped port and an excitation on the first bus qubit leave the ZZ parity even, so only the vacancy read
+    before the bus is reused discards the shot, on the hyperbolic graph's path 0-1-9-12."""
+    state = builders.ghz_uncompute(builders.start("hyperbolic"))
+    state.circuit.x(state.ports[0])
+    state.circuit.x(state.interior[0])
+    assert kept_fraction(builders.bus_zz(state)) == 0.0
 
 
 @pytest.mark.parametrize(

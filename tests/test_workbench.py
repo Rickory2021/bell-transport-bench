@@ -3,7 +3,8 @@
 
 Covers docs/DESIGN.md, section 1, as D-84 and D-87 settle them: the notebook's
 code cells, run in order at low shots, make and write one run, including the
-commented example that builds and saves a circuit; and a fresh render from the
+commented example that builds and saves a circuit with the analysis its settings
+name; and a fresh render from the
 template, process and invoke gives the committed notebook byte for byte.
 """
 
@@ -20,6 +21,10 @@ ROOT = Path(__file__).resolve().parents[1]
 NOTEBOOK = ROOT / "notebooks" / "bp.output.workbench.ipynb"
 BLUEPRINT = ROOT / "scripts" / "blueprint-render"
 EXAMPLE = ("# circuit = ", "# notes = ", "# save_circuit(", "# CIRCUIT = ")
+# With the example on, ANALYSIS is set to a parity analysis, which save_circuit would never pick by default, so the
+# saved file shows whether the setting reached it. A parity with no groups suits a circuit that measures no check.
+DEFAULT_ANALYSIS = 'ANALYSIS = {"name": "postselect"}'
+PARITY = {"name": "parity", "settings": {"checks": []}}
 
 
 def _code_cells():
@@ -30,9 +35,13 @@ def _code_cells():
 @pytest.mark.parametrize("with_example", [False, True])
 def test_the_code_cells_run_in_order(config_copy, with_example):
     namespace = {"display": lambda *a, **k: None}
-    for source in _code_cells():
+    cells = _code_cells()
+    if with_example:
+        assert sum(c.count(DEFAULT_ANALYSIS) for c in cells) == 1
+    for source in cells:
         if with_example:
             source = "\n".join(line[2:] if line.startswith(EXAMPLE) else line for line in source.splitlines())
+            source = source.replace(DEFAULT_ANALYSIS, f"ANALYSIS = {PARITY!r}")
         exec(compile(source, str(NOTEBOOK), "exec"), namespace)
         if "SHOTS" in namespace and namespace["SHOTS"] != 50:
             namespace["SHOTS"] = 50  # the settings cell sets the core benchmark's shots; a test needs few
@@ -40,6 +49,10 @@ def test_the_code_cells_run_in_order(config_copy, with_example):
     folder = namespace["folder"]
     assert folder.relative_to(configs.ROOT).parts[:5] == ("workspace", "runs", "workbench", circuit, "boston-2026")
     assert namespace["run"].base_seed == namespace["core"]["base_seed"]
+    if with_example:
+        from bellbench.circuits import load_circuit
+
+        assert load_circuit(circuit).analysis == PARITY
 
 
 def test_the_committed_notebook_is_a_fresh_render(tmp_path):

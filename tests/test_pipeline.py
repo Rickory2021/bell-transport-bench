@@ -37,6 +37,7 @@ from bellbench.pipeline import (
     schedule,
     scheduled_duration,
     simulate,
+    split_key,
 )
 
 # The organisers' recorded results: SWAPs out, CX gates, depth, noisy fidelity.
@@ -298,6 +299,7 @@ def test_pair_on_ports_is_true_when_routing_moved_nothing():
         (lambda qc: qc.reset(1), True),
         (lambda qc: (qc.barrier(), qc.delay(100, 1, unit="ns")), False),
         (lambda qc: qc.cx(0, 2), False),
+        (lambda qc: qc.cx(0, 1), True),  # used again only as a two-qubit gate's second qubit
     ],
 )
 def test_a_measurement_is_mid_circuit_only_when_its_own_qubit_is_used_again(after, mid):
@@ -322,6 +324,24 @@ def test_only_a_mid_circuit_measurement_gets_the_marker():
     assert ops[:2] == [("measure", None, 1), ("id", MID_CIRCUIT_LABEL, 1)]
     assert sum(label == MID_CIRCUIT_LABEL for _, label, _ in ops) == 1
     assert len(qc.data) == 5, "the circuit it was given is unchanged"
+
+
+def test_each_marker_lands_right_after_its_own_read():
+    from bellbench.noise import MID_CIRCUIT_LABEL
+
+    qc = QuantumCircuit(2, 4)
+    qc.measure(0, 0)
+    qc.x(0)
+    qc.measure(1, 1)
+    qc.x(1)
+    qc.measure(0, 2)
+    qc.measure(1, 3)
+    marked = mark_mid_circuit_measurements(qc)
+    ops = [(i.operation.label or i.operation.name, qc.find_bit(i.qubits[0]).index) for i in marked.data]
+    mark = MID_CIRCUIT_LABEL
+    assert ops == [
+        ("measure", 0), (mark, 0), ("x", 0), ("measure", 1), (mark, 1), ("x", 1), ("measure", 0), ("measure", 1)
+    ]
 
 
 @pytest.mark.parametrize("p, flipped", [(0.0, False), (1.0, True)])
@@ -461,6 +481,13 @@ def test_register_counts_sum_over_other_registers():
     assert register_counts(counts, qc, "check") == {"0": 5, "1": 5}
     with pytest.raises(ValueError, match="no classical register"):
         register_counts(counts, qc, "flag")
+
+
+@pytest.mark.parametrize("key", ["00", "1 0 00"])
+def test_split_key_refuses_a_key_without_one_part_per_register(key):
+    assert split_key("1 00", ["port", "check"]) == {"check": "1", "port": "00"}
+    with pytest.raises(ValueError, match="does not have one part per register"):
+        split_key(key, ["port", "check"])
 
 
 # -- Seeds -------------------------------------------------------------------------
