@@ -22,22 +22,25 @@ How each profile kind becomes a model:
   model is one depolarising error after the named gate on every directed edge,
   with no readout error and no decay.
 
-Values are checked after the overrides and the scale, and an invalid one raises
-a ValueError naming its field instead of being capped: a probability outside 0
-to 1, T2 above 2 T1, a gate error below what the gate's decay alone causes, or a
-gate error above the largest one Aer can build for that gate. Aer would
-otherwise cap T2, or drop or cap that gate's error, without a warning.
+NoiseControl checks every value after the overrides and the scale, and raises a
+ValueError naming the field instead of capping an invalid one: a probability
+outside 0 to 1, T2 above 2 T1, a gate error below what the gate's decay alone
+causes, or a gate error above the largest one Aer can build for that gate. Aer
+would otherwise cap T2, or drop or cap that gate's error, without a warning.
 
 An override is `{qubits, field, value}`, its field named by the profile's own
 key path (OVERRIDE_FIELDS); a two-qubit override names a coupler and applies in
-both directions, and durations cannot be overridden. The conditional channels
-(CONDITIONAL_CHANNELS) are validated and recorded, and setting either raises
-NotImplementedError until the channel is built with the first check that needs
-it; a run whose circuit resets or measures mid-circuit reads `conditional` and
-stops while the matching channel is unset.
+both directions, and durations cannot be overridden. NoiseControl validates and
+records the conditional channels (CONDITIONAL_CHANNELS), and raises
+NotImplementedError when either is set, until we build that channel with the
+first check that needs it; a run whose circuit resets or measures mid-circuit
+reads `conditional` and stops while the matching channel is unset.
 
-`export_as_yaml` returns NoiseControl's part of the run YAML, and `from_yaml`
-rebuilds a NoiseControl from it, refusing a file whose content hash changed.
+NoiseControl records each config file's path and content hash when it builds,
+and its scale, overrides and conditional channels cannot change afterwards.
+`export_as_yaml` returns that record as NoiseControl's part of the run YAML, and
+`from_yaml` rebuilds a NoiseControl from it, refusing a file whose content hash
+changed.
 """
 
 import math
