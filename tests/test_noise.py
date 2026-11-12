@@ -298,6 +298,34 @@ def test_record_outside_the_config_folder_is_refused():
         NoiseControl.from_yaml(record)
 
 
+def test_export_records_the_files_the_model_was_built_from(config_copy):
+    """A profile edited after the build leaves the export on the build's hash, and a rebuild refuses it."""
+    nc = NoiseControl("ibm2016", "fez-2025")
+    built = configs.content_hash(configs.noise_path("fez-2025"))
+    path = configs.noise_path("fez-2025")
+    text = path.read_text(encoding="utf-8")
+    path.write_text(text.replace("error_probability: 0.0039", "error_probability: 0.0139", 1), encoding="utf-8")
+    assert configs.content_hash(path) != built
+    record = nc.export_as_yaml()
+    assert record["noise"]["hash"] == built
+    with pytest.raises(ValueError, match="changed since it was recorded"):
+        NoiseControl.from_yaml(record)
+
+
+def test_settings_cannot_change_after_the_build():
+    override = {"qubits": [3, 4], "field": "gates.cz.error_probability", "value": 0.01}
+    nc = NoiseControl("ibm2016", "fez-2025", scale=1.5, overrides=[override])
+    before = nc.export_as_yaml()
+    with pytest.raises(AttributeError):
+        nc.scale = 2.0
+    nc.overrides[0]["value"] = 0.05
+    nc.overrides[0]["qubits"].append(2)
+    nc.conditional["reset_error"] = 0.5
+    nc.export_as_yaml()["overrides"][0]["value"] = 0.05
+    assert nc.export_as_yaml() == before
+    assert nc.target["cz"][(3, 4)].error == pytest.approx(0.015)
+
+
 def test_hash_ignores_comments_but_not_values(tmp_path):
     original = configs.noise_path("fez-2025")
     copy = tmp_path / original.name

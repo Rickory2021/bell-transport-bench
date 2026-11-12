@@ -10,8 +10,10 @@ tests/test_config.py. This module only reads files.
 `content_hash` identifies a config file by its parsed content, so a run can
 record which version of each file it used and a rerun can refuse one that
 changed (docs/DESIGN.md, section 5). Editing a comment or the formatting leaves
-the hash unchanged. `file_record` writes that record as `{path, hash}`, and
-`name_from_record` checks one and turns it back into a name.
+the hash unchanged. `load_recorded` loads a file and records it as
+`{path, hash}`, hashing the very content it returns, so the record describes
+what the caller builds from. `name_from_record` turns a record back into a
+name, and `check_unchanged` refuses a file whose content changed since then.
 
 `processor_graph` is the one builder of a processor's coupling graph, which
 NoiseControl, the figures and the tests share.
@@ -98,13 +100,16 @@ def load_noise(name: str) -> dict:
 
 
 def content_hash(path: Path) -> str:
-    """`sha256:` and the hash of the file's parsed YAML, written as JSON with sorted keys.
+    """`sha256:` and the hash of the file's parsed YAML, as `hash_data` gives it.
 
-    Comments and formatting do not change it; any value does. Dates hash as
-    their ISO text.
+    Comments and formatting do not change it; any value does.
     """
     with open(path, encoding="utf-8") as f:
-        data = yaml.safe_load(f)
+        return hash_data(yaml.safe_load(f))
+
+
+def hash_data(data) -> str:
+    """`sha256:` and the hash of parsed YAML, written as JSON with sorted keys; dates hash as their ISO text."""
     canonical = json.dumps(data, sort_keys=True, separators=(",", ":"), ensure_ascii=False, default=str)
     return "sha256:" + hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
@@ -114,13 +119,16 @@ def repo_path(path: Path) -> str:
     return Path(path).resolve().relative_to(ROOT).as_posix()
 
 
-def file_record(path: Path) -> dict:
-    """A config file as a run records it: `{path, hash}`, the path repo-relative."""
-    return {"path": repo_path(path), "hash": content_hash(path)}
+def load_recorded(kind: str, name: str) -> tuple[dict, dict]:
+    """The `kind` file for `name` as loaded YAML, and its `{path, hash}` record, hashed from that same content."""
+    path = config_path(kind, name)
+    with open(path, encoding="utf-8") as f:
+        data = yaml.safe_load(f)
+    return data, {"path": repo_path(path), "hash": hash_data(data)}
 
 
 def name_from_record(record: Mapping, kind: str) -> str:
-    """The config name a `{path, hash}` record points to; raises when the file changed."""
+    """The config name a `{path, hash}` record points to; raises when the path is not a `kind` file's."""
     if not isinstance(record, Mapping) or set(record) != {"path", "hash"}:
         raise ValueError(f"the {kind} record has the keys path and hash; got {record!r}")
     path = ROOT / record["path"]
@@ -129,16 +137,19 @@ def name_from_record(record: Mapping, kind: str) -> str:
         raise ValueError(f"the {kind} record's path {record['path']!r} is not a {prefix}*.yaml file")
     if not path.is_file():
         raise FileNotFoundError(f"the {kind} file {record['path']} recorded by the run no longer exists")
-    current = content_hash(path)
-    if current != record["hash"]:
-        raise ValueError(
-            f"{record['path']} changed since it was recorded: recorded {record['hash']}, now {current}; "
-            "a rerun needs the file the run used"
-        )
     name = path.name[len(prefix) : -len(".yaml")]
     if repo_path(config_path(kind, name)) != record["path"]:
         raise ValueError(f"the {kind} record's path {record['path']!r} is not where {kind} files live")
     return name
+
+
+def check_unchanged(recorded: Mapping, current: Mapping) -> None:
+    """Raise a ValueError when a file's `current` record has another hash than the one `recorded`."""
+    if current["hash"] != recorded["hash"]:
+        raise ValueError(
+            f"{recorded['path']} changed since it was recorded: recorded {recorded['hash']}, now {current['hash']}; "
+            "a rerun needs the file the run used"
+        )
 
 
 # -- The processor graph -----------------------------------------------------------

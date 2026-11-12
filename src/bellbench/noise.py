@@ -49,15 +49,7 @@ from qiskit.quantum_info import average_gate_fidelity
 from qiskit.transpiler import InstructionProperties, QubitProperties, Target
 from qiskit_aer.noise import NoiseModel, ReadoutError, depolarizing_error, thermal_relaxation_error
 
-from bellbench.configs import (
-    file_record,
-    load_noise,
-    load_processor,
-    name_from_record,
-    noise_path,
-    processor_graph,
-    processor_path,
-)
+from bellbench.configs import check_unchanged, load_recorded, name_from_record, processor_graph
 
 T1 = "qubit.t1_relaxation_time"
 T2 = "qubit.t2_dephasing_time"
@@ -86,8 +78,9 @@ class NoiseControl:
     ):
         self.processor_name = processor
         self.noise_name = noise
-        self.processor = load_processor(processor)
-        self.profile = load_noise(noise)
+        self.processor, processor_record = load_recorded("processor", processor)
+        self.profile, noise_record = load_recorded("noise", noise)
+        self._records = {"processor": processor_record, "noise": noise_record}
         self.kind = self.profile["kind"]
         if self.kind not in _BUILDERS:
             raise ValueError(f"noise profile {noise!r}: unknown kind {self.kind!r}; known: {', '.join(_BUILDERS)}")
@@ -97,9 +90,9 @@ class NoiseControl:
         self.edges = tuple(tuple(e) for e in self.processor["edges"])
         self.num_qubits = self.graph.number_of_nodes()
 
-        self.scale = _check_scale(scale)
-        self.overrides = _check_overrides(overrides, self.profile, self.graph)
-        self.conditional = _check_conditional(conditional)
+        self._scale = _check_scale(scale)
+        self._overrides = _check_overrides(overrides, self.profile, self.graph)
+        self._conditional = _check_conditional(conditional)
 
         self.target, self.noise_model = _BUILDERS[self.kind](self)
 
@@ -108,16 +101,33 @@ class NoiseControl:
         """Whether the Target carries gate durations, so a run's circuit is scheduled before simulating."""
         return self.kind == "snapshot"
 
+    # Fixed at the build, so the export always describes the model; each read returns a copy.
+
+    @property
+    def scale(self) -> float:
+        """The scale factor the model was built with."""
+        return self._scale
+
+    @property
+    def overrides(self) -> tuple[dict, ...]:
+        """The overrides the model was built with, as `{qubits: [ids], field, value}` copies, in order."""
+        return tuple({**o, "qubits": list(o["qubits"])} for o in self._overrides)
+
+    @property
+    def conditional(self) -> dict:
+        """Both conditional channels, as a copy."""
+        return dict(self._conditional)
+
     # -- YAML ------------------------------------------------------------------
 
     def export_as_yaml(self) -> dict:
-        """NoiseControl's part of the run YAML: its files by path and content hash, and its settings."""
+        """NoiseControl's part of the run YAML: the files it was built from, by path and hash, and its settings."""
         return {
-            "processor": file_record(processor_path(self.processor_name)),
-            "noise": file_record(noise_path(self.noise_name)),
+            "processor": dict(self._records["processor"]),
+            "noise": dict(self._records["noise"]),
             "scale": self.scale,
-            "overrides": [dict(o) for o in self.overrides],
-            "conditional": dict(self.conditional),
+            "overrides": list(self.overrides),
+            "conditional": self.conditional,
         }
 
     @classmethod
@@ -128,7 +138,10 @@ class NoiseControl:
             raise ValueError(f"a NoiseControl record has the keys {sorted(expected)}; got {sorted(record)}")
         processor = name_from_record(record["processor"], "processor")
         noise = name_from_record(record["noise"], "noise")
-        return cls(processor, noise, record["scale"], record["overrides"], record["conditional"])
+        nc = cls(processor, noise, record["scale"], record["overrides"], record["conditional"])
+        for kind in ("processor", "noise"):
+            check_unchanged(record[kind], nc._records[kind])
+        return nc
 
 
 # -- Building ------------------------------------------------------------------
@@ -235,7 +248,7 @@ def _qubit_values(nc: NoiseControl) -> dict[int, dict[str, float]]:
         READS_0_WHEN_1: q["readout_error"]["reads_0_when_1"],
     }
     values = {qubit: dict(base) for qubit in range(nc.num_qubits)}
-    for o in nc.overrides:
+    for o in nc._overrides:
         if o["field"] in QUBIT_FIELDS:
             values[o["qubits"][0]][o["field"]] = o["value"]
     for v in values.values():  # the scale multiplies probabilities and the decay rates 1/T1 and 1/T2
@@ -251,7 +264,7 @@ def _gate_errors(nc: NoiseControl) -> dict[str, dict[tuple, float]]:
     errors = {}
     for gate, spec in nc.profile["gates"].items():
         errors[gate] = {qargs: spec["error_probability"] for qargs in _qargs(spec["qubits"], nc)}
-    for o in nc.overrides:
+    for o in nc._overrides:
         gate = _override_gate(o["field"])
         if gate is not None:
             qubits = tuple(o["qubits"])
