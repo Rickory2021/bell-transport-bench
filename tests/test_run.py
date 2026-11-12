@@ -10,12 +10,15 @@ comparisons.
 """
 
 import csv
+import shutil
+import subprocess
 from types import SimpleNamespace
 
 import pytest
 import yaml
 from qiskit import ClassicalRegister
 
+from bellbench import configs
 from bellbench import run as run_module
 from bellbench.analysis import read_shots
 from bellbench.circuits import save_circuit, swap_chain
@@ -256,6 +259,27 @@ def test_a_rerun_reports_a_changed_circuit(folder):
     assert code == 1 and "DIFFERS: compiled ZZ circuit" in lines
 
 
+def _edit_csv(path, column, value):
+    """Set `column` in the first data row of the CSV at `path` to `value`."""
+    with open(path, newline="", encoding="utf-8") as f:
+        rows = list(csv.DictReader(f))
+    rows[0][column] = value
+    _write_csv(path, rows, tuple(rows[0]))
+
+
+@pytest.mark.parametrize(
+    "name, column, value, line",
+    [
+        ("counts.csv", "count", "1", "DIFFERS: counts"),
+        ("simulations.csv", "fidelity", "0.5", "DIFFERS: simulations"),
+    ],
+)
+def test_a_rerun_reports_changed_counts_or_numbers(folder, name, column, value, line):
+    _edit_csv(folder / name, column, value)
+    code, lines = rerun(folder)
+    assert code == 1 and line in lines
+
+
 def test_a_rerun_refuses_a_changed_file(config_copy):
     folder = CircuitRun("baseline-ibm2016", "boston-2026", shots=200).run().write(config_copy / "results")
     path = config_copy / "config" / "circuit" / "bp.data.circuit.baseline-ibm2016.yaml"
@@ -288,3 +312,48 @@ def test_uncommitted_runs_go_to_workspace(config_copy, monkeypatch, uncommitted,
     monkeypatch.setattr(run_module, "_git_state", lambda: ("abc123", uncommitted))
     folder = CircuitRun("baseline-ibm2016", "boston-2026", shots=100).run().write()
     assert folder.relative_to(config_copy).parts[0] == root
+
+
+def _git(root, *args):
+    command = ["git", "-c", "user.name=t", "-c", "user.email=t@t", *args]
+    subprocess.run(command, cwd=root, check=True, capture_output=True)
+
+
+@pytest.mark.skipif(shutil.which("git") is None, reason="git is not installed")
+def test_the_git_state_flags_uncommitted_changes_in_src_and_config_only(tmp_path, monkeypatch):
+    """The real check behind where a run lands: an edit in src/ or config/ counts, one elsewhere does not."""
+    monkeypatch.setattr(configs, "ROOT", tmp_path)
+    assert run_module._git_state() == (None, True), "outside git, a run counts as uncommitted"
+    for name in ("src/a.py", "config/b.yaml", "docs/c.md"):
+        (tmp_path / name).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / name).write_text("x\n", encoding="utf-8")
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "add", ".")
+    _git(tmp_path, "commit", "-qm", "start")
+    commit, uncommitted = run_module._git_state()
+    assert len(commit) == 40 and uncommitted is False
+    (tmp_path / "docs" / "c.md").write_text("edited\n", encoding="utf-8")
+    assert run_module._git_state()[1] is False
+    for name in ("src/a.py", "config/b.yaml"):
+        (tmp_path / name).write_text("edited\n", encoding="utf-8")
+        assert run_module._git_state() == (commit, True), name
+        _git(tmp_path, "checkout", "-q", "--", name)
+    (tmp_path / "src" / "new.py").write_text("x\n", encoding="utf-8")
+    assert run_module._git_state()[1] is True, "an untracked file in src/ counts too"
+
+
+@pytest.mark.parametrize(
+    "scale, conditional, suffix",
+    [
+        (1.0, None, ""),
+        (2.0, None, "-x2"),
+        (1.0, {"reset_error": 0.01}, "-{h}"),
+        (2.0, {"reset_error": 0.01}, "-x2-{h}"),
+    ],
+)
+def test_a_workbench_folder_names_its_scale_and_settings(tmp_path, monkeypatch, scale, conditional, suffix):
+    monkeypatch.setattr(run_module, "_stamp", lambda: "20261116T120000Z")
+    run = CircuitRun("baseline-ibm2016", "boston-2026", shots=50, scale=scale, conditional=conditional)
+    folder = run.run().write(tmp_path)
+    assert folder.name == "20261116T120000Z" + suffix.format(h=run.settings_hash)
+    assert run.settings_hash is None or len(run.settings_hash) == 8

@@ -39,6 +39,17 @@ def test_core_benchmark_file_maps_the_baseline_cases():
     assert data["shots"] == 20_000
 
 
+def test_each_core_case_names_its_model_and_simulation():
+    data, _ = load_benchmark("core")
+    circuit_of = {r["id"]: r["circuit"] for r in data["runs"]}
+    named = {c["case"]: (circuit_of[c["run"]], c["simulation"]) for c in data["cases"]}
+    assert named == {
+        1: ("baseline-ibm2016", "ideal"), 2: ("baseline-ibm2016", "noisy"),
+        4: ("baseline-contemporary", "ideal"), 5: ("baseline-contemporary", "noisy"),
+        7: ("baseline-hyperbolic", "ideal"), 8: ("baseline-hyperbolic", "noisy"),
+    }
+
+
 def test_benchmark_end_to_end(tmp_path, monkeypatch):
     stamps = iter(["20261116T120000Z", "20261116T130000Z"])
     monkeypatch.setattr(run_module, "_stamp", lambda: next(stamps))
@@ -115,12 +126,26 @@ def test_a_case_whose_pair_ends_off_its_ports_is_refused(config_copy):
     assert not (config_copy / "results").exists(), "a refused benchmark writes nothing"
 
 
+def test_a_case_whose_ideal_f_is_not_1_is_refused(config_copy):
+    unpaired = QuantumCircuit(5)  # a superposition on one port and no entangling gate, so ideal F is about 1/4
+    unpaired.h(0)
+    save_circuit("unpaired", "Unpaired", "ibm2016", unpaired, "A test circuit that makes no pair.")
+    _write_benchmark(config_copy, "unpaired", [{"id": "a", "circuit": "unpaired", "noise": "boston-2026"}],
+                     [{"case": 1, "run": "a", "simulation": "ideal"}])
+    with pytest.raises(ValueError, match=r"case 1: run 'a' has ideal F .*, not 1"):
+        run_benchmark("unpaired", config_copy / "results")
+    assert not (config_copy / "results").exists(), "a refused benchmark writes nothing"
+
+
 @pytest.mark.parametrize(
     "runs, cases, message",
     [
         ([{"id": "a", "circuit": "baseline-ibm2016", "noise": "boston-2026"}] * 2, [], "run ids must be unique"),
         ([{"id": "a", "circuit": "baseline-ibm2016", "noise": "boston-2026"}],
          [{"case": 1, "run": "b", "simulation": "ideal"}], "names run 'b'"),
+        ([{"id": "a", "circuit": "baseline-ibm2016", "noise": "boston-2026"}],
+         [{"case": 1, "run": "a", "simulation": "ideal"}, {"case": 1, "run": "a", "simulation": "noisy"}],
+         "each case is filled once"),
     ],
 )
 def test_a_malformed_benchmark_file_raises_naming_the_field(config_copy, runs, cases, message):

@@ -191,6 +191,15 @@ def test_a_circuit_that_does_not_fit_is_never_left_on_disk(config_copy):
     assert not (config_copy / "config" / "circuit" / "bp.data.circuit.wrong.yaml").exists()
 
 
+def test_an_overwrite_that_does_not_fit_restores_the_earlier_file(config_copy):
+    path = save_circuit("trial", "Trial", "ibm2016", swap_chain("ibm2016"), "A test circuit.")
+    before = path.read_text(encoding="utf-8")
+    with pytest.raises(ValueError, match="needs one register"):
+        save_circuit("trial", "Trial", "ibm2016", swap_chain("contemporary"), "For another graph.", overwrite=True)
+    assert path.read_text(encoding="utf-8") == before
+    assert load_circuit("trial").circuit == swap_chain("ibm2016")
+
+
 def test_a_circuit_file_naming_an_unknown_processor_raises(config_copy):
     path = config_copy / "config" / "circuit" / "bp.data.circuit.orphan.yaml"
     data = yaml.safe_load(configs.config_path("circuit", "baseline-ibm2016").read_text(encoding="utf-8"))
