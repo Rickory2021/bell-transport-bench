@@ -94,6 +94,70 @@ def test_registers_named_by_a_role_load(name):
     assert [r.name for r in circuit_from_qasm(circuit_to_qasm(circuit), 5).cregs] == [name]
 
 
+def _conditioned():
+    circuit = _with_register("check")
+    with circuit.if_test((circuit.cregs[0][0], 1)):
+        circuit.x(1)
+    return circuit
+
+
+def _delay(unit):
+    circuit = QuantumCircuit(5)
+    circuit.delay(250 if unit == "dt" else 1, 1, unit=unit)
+    return circuit
+
+
+def _on_port(operation):
+    circuit = _with_register("check")
+    if operation == "reset":
+        circuit.reset(4)
+    else:
+        circuit.measure(4, circuit.cregs[0][0])
+    return circuit
+
+
+@pytest.mark.parametrize(
+    "build, message",
+    [
+        (_conditioned, r"if_else on qubit\(s\) \[1\] depends on a measured bit"),
+        (lambda: _delay("dt"), r"the delay on qubit\(s\) \[1\] is in dt"),
+        (lambda: _on_port("measure"), "the circuit measures port qubit 4"),
+        (lambda: _on_port("reset"), "the circuit resets port qubit 4"),
+    ],
+)
+def test_what_a_circuit_file_may_not_hold_is_refused(build, message):
+    with pytest.raises(ValueError, match=r"\$\.circuit: " + message):
+        circuit_from_qasm(circuit_to_qasm(build()), 5, ports=(2, 4))  # _with_register reads qubit 0
+
+
+@pytest.mark.parametrize("unit", ["s", "ms", "us", "ns"])
+def test_a_delay_in_real_time_keeps_its_unit(unit):
+    loaded = circuit_from_qasm(circuit_to_qasm(_delay(unit)), 5)
+    delay = loaded.data[0].operation
+    assert (delay.name, delay.unit, float(delay.duration)) == ("delay", unit, 1.0)
+
+
+def test_save_refuses_a_conditioned_circuit_and_leaves_no_file(config_copy):
+    circuit = swap_chain("ibm2016")
+    check = ClassicalRegister(1, "check")
+    circuit.add_register(check)
+    circuit.measure(1, check[0])
+    with circuit.if_test((check[0], 1)):
+        circuit.x(1)
+    with pytest.raises(ValueError, match="depends on a measured bit"):
+        save_circuit("fed-forward", "Fed forward", "ibm2016", circuit, "A test circuit.")
+    assert not (config_copy / "config" / "circuit" / "bp.data.circuit.fed-forward.yaml").exists()
+
+
+def test_a_circuit_file_measuring_its_processors_port_is_refused(config_copy):
+    circuit = swap_chain("ibm2016")
+    check = ClassicalRegister(1, "check")
+    circuit.add_register(check)
+    circuit.measure(4, check[0])  # 4 is the 2016 graph's second port
+    with pytest.raises(ValueError, match="measures port qubit 4"):
+        save_circuit("port-read", "Port read", "ibm2016", circuit, "A test circuit.")
+
+
 def test_unparseable_gates_raise():
     with pytest.raises(ValueError, match="do not parse as OpenQASM 3"):
         circuit_from_qasm("OPENQASM 3.0;\nqubit[5] q;\nfoo q[0];\n", 5)

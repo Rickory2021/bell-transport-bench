@@ -133,6 +133,16 @@ def test_a_router_swap_through_a_measured_qubit_makes_its_measurement_mid_circui
         CircuitRun(name, "boston-2026", shots=100).run()
 
 
+def test_a_written_delay_lasts_exactly_its_length(config_copy):
+    """A 1 us wait on the first port before the pair is made adds exactly 1 us to the scheduled circuit."""
+    circuit = swap_chain("ibm2016")
+    circuit.data.insert(0, circuit.copy_empty_like().delay(1, 0, unit="us")[0])
+    save_circuit("waits", "Waits", "ibm2016", circuit, "A test circuit.")
+    base = CircuitRun("baseline-ibm2016", "boston-2026", shots=100).run()
+    waits = CircuitRun("waits", "boston-2026", shots=100).run()
+    assert waits.duration - base.duration == pytest.approx(1e-6, abs=1e-12)
+
+
 def test_an_analysis_the_registry_lacks_is_refused(config_copy):
     with pytest.raises(ValueError, match=r"\$\.analysis: no analysis named 'correct'; known: postselect, parity"):
         circuit = swap_chain("ibm2016")

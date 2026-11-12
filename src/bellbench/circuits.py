@@ -13,7 +13,12 @@ then checks what spans fields: the gates parse, the circuit has one register q
 with the processor's qubit count, and every classical register is named by its
 role (ROLES), alone or followed by an underscore and a name for the check, such
 as check_zz. A run adds each basis's rotation and the port measurement into a
-register named port, so a written circuit never uses that name.
+register named port, so a written circuit never uses that name, and never
+measures or resets a port. A circuit file holds no operation conditioned on a
+measured bit, since the noise model has no feedforward latency; a Pauli owed
+from a mid-circuit read goes in the analysis's frame instead. A delay is written
+in real time (s, ms, us or ns), never in dt, which is a noise profile's clock
+tick while a circuit file belongs to a processor (docs/DESIGN.md, section 7).
 
 The transport and check functions build circuits; `save_circuit` writes what
 they build as a circuit file. `swap_chain` is the baseline transport: the
@@ -30,6 +35,7 @@ import networkx as nx
 import yaml
 from openqasm3.parser import QASM3ParsingError
 from qiskit import QuantumCircuit, qasm3
+from qiskit.circuit import ControlFlowOp
 from qiskit.qasm3 import QASM3ImporterError
 
 from bellbench import configs
@@ -59,8 +65,8 @@ class CircuitFile:
 def load_circuit(name: str) -> CircuitFile:
     """The circuit file for `name`, checked; raises a ValueError naming the file and the field."""
     data, record = configs.load_recorded("circuit", name)
-    num_qubits = len(configs.load_processor(data["processor"])["qubits"])
-    circuit = circuit_from_qasm(data["circuit"], num_qubits, record["path"])
+    processor = configs.load_processor(data["processor"])
+    circuit = circuit_from_qasm(data["circuit"], len(processor["qubits"]), record["path"], processor["ports"])
     try:
         check_analysis(data["analysis"], [(r.name, r.size) for r in circuit.cregs] + [(PORT_REGISTER, 2)])
     except ValueError as e:
@@ -70,8 +76,10 @@ def load_circuit(name: str) -> CircuitFile:
     )
 
 
-def circuit_from_qasm(text: str, num_qubits: int, where: str = "circuit") -> QuantumCircuit:
-    """The circuit an OpenQASM 3 program builds, checked against the processor's qubit count and ROLES."""
+def circuit_from_qasm(
+    text: str, num_qubits: int, where: str = "circuit", ports: Sequence[int] = ()
+) -> QuantumCircuit:
+    """The circuit an OpenQASM 3 program builds, checked against the processor's qubits and ports, and ROLES."""
     try:
         circuit = qasm3.loads(text)
     except (QASM3ImporterError, QASM3ParsingError) as e:
@@ -84,6 +92,24 @@ def circuit_from_qasm(text: str, num_qubits: int, where: str = "circuit") -> Qua
             raise ValueError(
                 f"{where}: $.circuit: classical register {reg.name!r} is not named by a role ({', '.join(ROLES)}), "
                 "alone or followed by _ and a name such as check_zz; the run adds the port register itself"
+            )
+    for inst in circuit.data:
+        op, qubits = inst.operation, [circuit.find_bit(q).index for q in inst.qubits]
+        if isinstance(op, ControlFlowOp):
+            raise ValueError(
+                f"{where}: $.circuit: {op.name} on qubit(s) {qubits} depends on a measured bit; a circuit file holds "
+                "no feedforward, which the noise model cannot time, so record a Pauli owed from a read in the "
+                "analysis's frame_z or frame_x bits instead"
+            )
+        if op.name == "delay" and op.unit == "dt":
+            raise ValueError(
+                f"{where}: $.circuit: the delay on qubit(s) {qubits} is in dt, a noise profile's clock tick; write "
+                "it in s, ms, us or ns, which mean the same under every profile"
+            )
+        if op.name in ("measure", "reset") and set(qubits) & set(ports):
+            raise ValueError(
+                f"{where}: $.circuit: the circuit {op.name}s port qubit {qubits[0]}; the run measures the ports "
+                "itself, in each basis, after the circuit ends"
             )
     return circuit
 
