@@ -78,10 +78,10 @@ references:
     takeaways:
       - claim: "The three coupling graphs as exact edge lists, with ports 0 and 4 (5 qubits, 4 edges), 0 and 7 (9 qubits, 12 edges) and 0 and 12 (13 qubits, 24 edges), labelled by position."
         locator: "Section 1, the models cell"
-        used_in: [config/processor/bp.data.processor.ibm2016.yaml, config/processor/bp.data.processor.contemporary.yaml, config/processor/bp.data.processor.hyperbolic.yaml, docs/CHALLENGE.md]
+        used_in: [config/processor/bp.data.processor.ibm2016.yaml, config/processor/bp.data.processor.contemporary.yaml, config/processor/bp.data.processor.hyperbolic.yaml, docs/CHALLENGE.md, docs/DESIGN.md]
       - claim: "Baseline recipe: basic routing out and back at optimisation level 0 with an h and cx gate set; noise is a 2% two-qubit depolarising channel after every CX, H ideal, simulated exactly as a density matrix."
         locator: "Sections 2 and 4"
-        used_in: [config/noise/bp.data.noise.organiser-cx2.yaml, docs/CHALLENGE.md]
+        used_in: [config/noise/bp.data.noise.organiser-cx2.yaml, docs/CHALLENGE.md, docs/DESIGN.md]
       - claim: "Recorded results: CX 7, 19 and 13; depth 8, 20 and 14; ideal fidelity 1.000; noisy fidelity 0.915, 0.795 and 0.852."
         locator: "Section 4, the results table"
         used_in: [docs/CHALLENGE.md]
@@ -445,4 +445,4 @@ references:
     takeaways:
       - claim: "FakeFez, FakeBurlingtonV2 and FakeOurenseV2 are fake backends built from IBM system snapshots; their calibration values are fixed by the installed qiskit-ibm-runtime version (0.51.0 here)."
         locator: "Overview; Fake V2 Backends table"
-        used_in: [config/noise/bp.data.noise.fez-2025.yaml, config/noise/bp.data.noise.burlington-2020.yaml]
+        used_in: [config/noise/bp.data.noise.fez-2025.yaml, config/noise/bp.data.noise.burlington-2020.yaml, docs/DESIGN.md]
