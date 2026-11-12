@@ -55,13 +55,20 @@ changed.
 
 import math
 import numbers
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 
 from qiskit.circuit.library import get_standard_gate_name_mapping
 from qiskit.providers import BackendV2, Options
 from qiskit.quantum_info import average_gate_fidelity
 from qiskit.transpiler import InstructionProperties, QubitProperties, Target
-from qiskit_aer.noise import NoiseModel, ReadoutError, depolarizing_error, pauli_error, thermal_relaxation_error
+from qiskit_aer.noise import (
+    NoiseModel,
+    QuantumError,
+    ReadoutError,
+    depolarizing_error,
+    pauli_error,
+    thermal_relaxation_error,
+)
 
 from bellbench.configs import check_file_unchanged, check_unchanged, load_recorded, name_from_record, processor_graph
 
@@ -262,13 +269,22 @@ def _add_after(noise_model: NoiseModel, error, instruction: str, num_qubits: int
         noise_model.add_quantum_error(error, instruction, [q], warnings=False)
 
 
-def _build_depolarising(nc: NoiseControl):
-    spec = nc.profile["depolarising"]
+def _build_gate_set(nc: NoiseControl, error_for: Callable[[float, int], QuantumError]):
+    """The model of a profile kind that names its own gate set and one error after one of its gates.
+
+    The Target holds only the graph, the gate set and measure: no durations,
+    so no scheduling, and no readout error or decay. After every `after_gate`,
+    on every qubit or directed coupler it acts on, comes `error_for(p, n)`, the
+    kind's error with probability p, the profile's probability after the scale,
+    on the gate's n qubits. Every other gate is ideal, and the mid-circuit
+    measurement channel applies as to any profile.
+    """
+    spec = nc.profile[nc.kind]
     gates, after = spec["gates"], spec["after_gate"]
     if after not in gates:
         raise ValueError(f"noise profile {nc.noise_name!r}: after_gate {after!r} is not in its gates {gates}")
     probability = spec["probability"] * nc.scale
-    _check_probability("depolarising.probability", probability, nc.scale)
+    _check_probability(f"{nc.kind}.probability", probability, nc.scale)
 
     target = Target(num_qubits=nc.num_qubits)
     for gate in gates:
@@ -278,11 +294,15 @@ def _build_depolarising(nc: NoiseControl):
 
     noise_model = NoiseModel(basis_gates=list(gates))
     after_op = _standard(after)
-    error = depolarizing_error(probability, after_op.num_qubits)
+    error = error_for(probability, after_op.num_qubits)
     for qargs in _qargs(after_op.num_qubits, nc):
         noise_model.add_quantum_error(error, after, list(qargs))
     _add_mid_circuit_error(nc, noise_model)
     return target, noise_model
+
+
+def _build_depolarising(nc: NoiseControl):
+    return _build_gate_set(nc, depolarizing_error)
 
 
 _BUILDERS = {"snapshot": _build_snapshot, "depolarising": _build_depolarising}
