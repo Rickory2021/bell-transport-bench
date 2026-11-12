@@ -405,6 +405,52 @@ references:
         locator: "Device-properties table"
         used_in: [docs/DESIGN.md]
 
+  - id: guillaud-mirrahimi-2019-repetition-cat-qubits
+    title: "Repetition Cat Qubits for Fault-Tolerant Quantum Computation"
+    authors: [Jérémie Guillaud, Mazyar Mirrahimi]
+    year: 2019
+    kind: paper
+    url: https://doi.org/10.1103/PhysRevX.9.041053
+    download: https://arxiv.org/pdf/1904.09474v4
+    snapshot: null
+    redistribution: open-license
+    checked: false
+    summary: >-
+      Proposes a one-dimensional repetition code of cat qubits whose bit flips are strongly
+      suppressed, so only phase flips need correcting, with gates chosen to keep that noise bias.
+      Physical Review X 9, 041053 (2019), published under CC BY 4.0. Our biased-noise study asks
+      the circuit-level version of its premise.
+    takeaways:
+      - claim: "Cat qubits stabilised by two-photon driven dissipation have a tunable noise bias: bit flips are suppressed exponentially in the mean photon number, so phase flips dominate."
+        locator: "Abstract"
+        used_in: [config/noise/bp.data.noise.pauli-cx-biased.yaml, config/noise/bp.data.noise.pauli-cz-biased.yaml, config/noise/bp.data.noise.pauli-cx-unbiased.yaml]
+      - claim: "Gates can be built on such cat qubits that preserve the noise bias, which is what makes a code against phase flips alone worthwhile."
+        locator: "Abstract"
+        used_in: [config/noise/bp.data.noise.pauli-cx-biased.yaml]
+
+  - id: puri-2020-bias-preserving-cx
+    title: "Bias-preserving gates with stabilized cat qubits"
+    authors: [Shruti Puri, Lucas St-Jean, Jonathan A. Gross, Alexander Grimm, Nicholas E. Frattini, Pavithran S. Iyer, Anirudh Krishna, Steven Touzard, Liang Jiang, Alexandre Blais, Steven T. Flammia, Steven M. Girvin]
+    year: 2020
+    kind: paper
+    url: https://doi.org/10.1126/sciadv.aay5901
+    download: https://arxiv.org/pdf/1905.00450
+    snapshot: null
+    redistribution: link-only
+    checked: false
+    summary: >-
+      Shows how a CX between stabilised cat qubits in driven Kerr oscillators can keep its errors
+      dominated by phase flips, which a strictly two-level system cannot do. Science Advances 6,
+      eaay5901 (2020), under CC BY-NC 4.0. The source of our pauli profiles' contrast between a
+      native CX and a CX compiled from CZ.
+    takeaways:
+      - claim: "A gate that does not commute with the dominant error removes the noise bias, and a native bias-preserving CX is not possible in a strictly two-level system: a CX turns some phase flips into bit flips on its target."
+        locator: "Abstract and introduction"
+        used_in: [config/noise/bp.data.noise.pauli-cx-biased.yaml, config/noise/bp.data.noise.pauli-cz-biased.yaml, config/noise/bp.data.noise.pauli-cx-unbiased.yaml]
+      - claim: "With two-component cat qubits, a native CX keeps its error channel dominated by phase flips, with bit flips still exponentially suppressed."
+        locator: "Abstract"
+        used_in: [config/noise/bp.data.noise.pauli-cx-biased.yaml]
+
   # -- Software documentation -------------------------------------------------
 
   - id: qiskit-aer-noise-docs

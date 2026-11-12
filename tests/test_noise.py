@@ -527,6 +527,20 @@ def test_a_pauli_profile_whose_after_gate_is_not_in_its_gates_raises(config_copy
         NoiseControl("ibm2016", _pauli_profile(gates=["h", "cz", "sdg"]))
 
 
+@pytest.mark.parametrize(
+    "name, gate, bias",
+    [("pauli-cx-biased", "cx", 100), ("pauli-cz-biased", "cz", 100), ("pauli-cx-unbiased", "cx", 0.5)],
+)
+def test_the_study_profiles_match_organiser_cx2_per_two_qubit_gate(name, gate, bias):
+    """The three pauli profiles differ only in the native gate and the noise bias, and each two-qubit gate's total
+    error, 1 - (1 - p)^2, matches organiser-cx2's, a depolarising channel of strength 0.02 leaving the gate's qubits
+    untouched with probability 1/16 of it: 15/16 x 0.02 = 0.01875."""
+    profile = load_noise(name)["pauli"]
+    assert (profile["after_gate"], profile["bias"], profile["gates"]) == (gate, bias, ["h", gate, "sdg"])
+    organiser = load_noise("organiser-cx2")["depolarising"]["probability"]
+    assert 1 - (1 - profile["probability"]) ** 2 == pytest.approx(15 / 16 * organiser, abs=5e-6)
+
+
 def _correlators(processor: str, noise: str) -> dict[str, float]:
     """The baseline pair's exact correlators under `noise`, from its compiled ZZ circuit's port density matrix."""
     nc = NoiseControl(processor, noise)
