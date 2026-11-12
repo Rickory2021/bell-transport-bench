@@ -22,11 +22,15 @@ section 5). CircuitRun calls them in order:
 
 `derive_seed` gives each run and each simulation its own seed from a base seed
 and labels. `port_density_matrix` is for the organisers' cross-check only
-(D-50): it computes the ports' state exactly, without shots.
+(docs/DESIGN.md, section 8): it computes the ports' state exactly, without shots.
 
 How the compile is split: Qiskit's level 1 preset pass manager runs in three
-pieces (init; layout and routing; translation and optimization), which
-compile to the same circuit as one `transpile` call. Init cancels back-to-back
+pieces (init; layout and routing; translation and optimization). Two of its
+stages are left out: pre_init, which checks for control flow (a circuit file
+holds none), and scheduling, which `schedule` does. So a delay written in
+seconds keeps its unit until `schedule`, and such a circuit, on a profile with
+a time step, compiles to another circuit than one `transpile` call gives.
+Init cancels back-to-back
 inverse pairs, including two identical SWAPs, so SWAPs are counted after it,
 where they exist. A SWAP the router adds moves the pair, and the routed
 circuit's final layout shows whether each port still holds its half of it
@@ -291,7 +295,7 @@ def split_key(key: str, names: Sequence[str]) -> dict[str, str]:
 
 
 def port_density_matrix(circuit: QuantumCircuit, noise_model, ports: Sequence[int]):
-    """The two ports' density matrix, computed exactly; only the organisers' cross-check uses it (D-50)."""
+    """The two ports' density matrix, computed exactly; only the organisers' cross-check uses it (DESIGN.md, 8)."""
     a, b = _check_ports(circuit, ports)
     qc = circuit.remove_final_measurements(inplace=False)
     qc.save_density_matrix([a, b], label="ports")

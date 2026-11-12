@@ -107,7 +107,7 @@ def processor_names() -> list[str]:
 
 
 def load_processor(name: str) -> dict:
-    """The processor file for `name`, as loaded YAML."""
+    """The processor file for `name`, as loaded and checked YAML (`load_config`)."""
     return load_config("processor", name)
 
 
@@ -122,7 +122,7 @@ def noise_names() -> list[str]:
 
 
 def load_noise(name: str) -> dict:
-    """The noise profile for `name`, as loaded YAML."""
+    """The noise profile for `name`, as loaded and checked YAML (`load_config`)."""
     return load_config("noise", name)
 
 

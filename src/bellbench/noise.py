@@ -358,10 +358,13 @@ def _error_range(qargs, duration, qubit_values) -> tuple[float, float]:
     """The lowest and highest gate error Aer builds as stated, as average gate infidelities.
 
     The lowest is the infidelity that T1 and T2 decay alone cause over `duration`.
-    Aer models the rest of the error as a depolarising channel after that decay,
-    and caps it twice: the error at dim/(dim + 1), the infidelity of a fully
-    random channel, and the depolarising parameter at 4^n/(4^n - 1). The highest
-    error is whichever cap binds first, and equals dim/(dim + 1) with no decay.
+    Aer models the rest of the error as a depolarising channel, applied before the
+    decay, and caps it twice: the error at dim/(dim + 1), the largest average gate
+    infidelity any channel has (2/3 for one qubit, 4/5 for two), and the
+    depolarising parameter at 4^n/(4^n - 1), where that largest infidelity is
+    reached. A channel that leaves its qubits fully random has the lower
+    infidelity (dim - 1)/dim. The highest error is whichever cap binds first, and
+    equals dim/(dim + 1) with no decay.
     """
     n, dim = len(qargs), 2 ** len(qargs)
     decay = 0.0

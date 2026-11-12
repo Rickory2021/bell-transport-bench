@@ -1,11 +1,13 @@
 # tests/test_pipeline.py
 """The pipeline's steps, each alone, and the organisers' recorded fidelities reproduced exactly.
 
-The reproduction (D-50) follows the organisers' recipe, which this file
-rewrites from their example notebook's description
-(docs/CHALLENGE.md, The organisers' worked example): Qiskit's basic router at
-optimisation level 0 moves the pair out, the same SWAPs run in reverse, and the
-final compile uses only H and CX. Under the organiser-cx2 profile the exact
+The reproduction (docs/DESIGN.md, section 8) follows the organisers' recipe:
+`_organiser_recipe` restates the compile_at_ports cell of their example
+notebook (reference ideal-and-noisy-example in docs/bp.data.references.yaml)
+statement for statement, with its variables renamed, since docs/CHALLENGE.md
+(The organisers' worked example) does not hold its details. Qiskit's basic
+router at optimisation level 0 moves the pair out, the same SWAPs run in
+reverse, and the final compile uses only H and CX. Under the organiser-cx2 profile the exact
 fidelity from the ports' density matrix, through the one fidelity function,
 rounds to their recorded values.
 """
@@ -45,7 +47,11 @@ ORGANISERS = {
 
 
 def _organiser_recipe(nc: NoiseControl) -> tuple[QuantumCircuit, int]:
-    """The organisers' circuit on the processor's qubits, and the SWAPs the basic router added going out."""
+    """The organisers' circuit on the processor's qubits, and the SWAPs the basic router added going out.
+
+    Restates the compile_at_ports cell of the organisers' example notebook (reference
+    ideal-and-noisy-example), call for call.
+    """
     coupling = CouplingMap([list(e) for e in nc.edges])
     coupling.make_symmetric()
     bell = QuantumCircuit(2)

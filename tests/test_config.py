@@ -1,14 +1,15 @@
 # tests/test_config.py
-"""Checks on the processor and noise config files that a schema cannot make.
+"""The processor and noise config files, and how src/bellbench/configs.py loads them.
 
-The schemas (config/bp.schema.processor.yaml and config/bp.schema.noise.yaml)
-check each file's shape through `make bp-validate`. These tests check what spans
-fields or files: each processor graph is well formed and matches the challenge's
-counts, every reference id exists, every comment in a noise file matches the
-schema description it copies, and every value in a snapshot noise profile equals
-the median of the pinned snapshot it cites, so a profile cannot drift from its
-source. The last section checks that src/bellbench/configs.py finds each noise
-profile by name.
+Every load runs the schemas (config/bp.schema.processor.yaml and
+config/bp.schema.noise.yaml) and the checks that span fields, `check_processor`
+among them, so these tests cover both: each processor graph is well formed and
+matches the challenge's counts, every reference id exists, every comment in a
+noise file matches the schema description it copies, every value in a snapshot
+noise profile equals the median of the pinned snapshot it cites, so a profile
+cannot drift from its source, and the loaders refuse a malformed file, naming
+the file and the field. The last sections check that configs.py finds each file
+by name and turns a run's record back into one.
 """
 
 import copy

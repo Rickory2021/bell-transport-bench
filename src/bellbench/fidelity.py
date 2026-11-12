@@ -6,10 +6,10 @@ correlators (docs/CHALLENGE.md, Verifying the pair):
 
 - `fidelity_from_counts` estimates them from the port register's counts, one
   basis per circuit, and gives F with its standard error. Every result reports
-  this measured F (D-50).
+  this measured F (docs/DESIGN.md, section 8).
 - `fidelity_from_density` computes them exactly from the ports' density
   matrix. Only the cross-check that reproduces the organisers' recorded numbers
-  uses it (D-50).
+  uses it (section 8).
 
 A correlator <BB> is P(00) + P(11) - P(01) - P(10) over the shots of basis B:
 +1 where the two bits agree and -1 where they differ, so the bit order of the
@@ -90,7 +90,7 @@ def fidelity_from_counts(counts_by_basis: Mapping[str, Mapping[str, int]]) -> Fi
 
 
 def fidelity_from_density(rho) -> Fidelity:
-    """Exact F from the two ports' density matrix; only the organisers' cross-check uses it (D-50)."""
+    """Exact F from the two ports' density matrix; only the organisers' cross-check uses it (DESIGN.md, 8)."""
     rho = DensityMatrix(rho)
     if rho.num_qubits != 2:
         raise ValueError(f"the ports' density matrix is over 2 qubits; got {rho.num_qubits}")
