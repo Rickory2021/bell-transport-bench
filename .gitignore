@@ -16,6 +16,10 @@ project-export-files/
 # Local copies of references (make refs-fetch); never committed
 .references/
 
+# Runs, benchmarks and notebooks made with uncommitted changes; only the README is committed
+workspace/*
+!workspace/README.md
+
 # Editors and OS
 .vscode/
 .idea/

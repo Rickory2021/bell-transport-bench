@@ -1,7 +1,7 @@
 # tests/test_circuits.py
 """Circuit files hold the gates as written, and the swap-chain transport builds the core baselines.
 
-Covers docs/DESIGN.md, sections 2 and 7, as D-73 and D-80 restate them: the three
+Covers docs/DESIGN.md, sections 2 and 7, as D-83 and D-86 settle them: the three
 committed baseline files equal what the transport builds, a circuit file's gates
 round-trip through OpenQASM 2, and a file whose gates do not fit its processor,
 or that names a register outside its roles, fails to load naming the field.

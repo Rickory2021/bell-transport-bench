@@ -1,7 +1,7 @@
 # tests/test_run.py
 """CircuitRun runs a circuit file into a run folder, and a rerun of that folder repeats it exactly.
 
-Covers docs/DESIGN.md, sections 5 and 8, as D-73 and D-75 to D-80 settle them:
+Covers docs/DESIGN.md, sections 5 and 8, as D-83 and D-75 to D-79 settle them:
 the baseline's self-test (ideal F = 1, every shot kept, the pair on the ports),
 the organisers' fidelities measured within three standard errors, postselection
 and its Wilson interval, the stop rule for conditional channels, where a run

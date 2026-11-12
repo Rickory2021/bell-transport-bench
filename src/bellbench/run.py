@@ -15,19 +15,25 @@ silently perfect (D-48).
 
 `write` makes the run folder, <root>/runs/<circuit>/<noise>/<stamp>/, with root
 results/ for a run made from committed code and config, workspace/ otherwise
-(D-76, D-79). It holds bp.data.result.yaml, the settings and records, checked
+(D-76, D-78). It holds bp.data.result.yaml, the settings and records, checked
 against config/bp.schema.result.yaml; simulations.csv, one row of numbers per
 simulation; and counts.csv, every outcome with each register's bits in a column
 of its own. Seeds derive from the run's labels, never from its folder name
 (D-76), so a remade run repeats them.
 
-`rerun` rebuilds a run from its folder and compares (D-80): `make run RUN=<path>`.
+`rerun` rebuilds a run from its folder and compares (D-79): `make run RUN=<path>`.
+`write_views` draws a run folder's diagrams and report.md from its files, so the
+views can be remade at any time (D-74): `make report RUN=<path>`.
+`run_benchmark` makes every run a benchmark file lists, checks the core
+benchmark's self-test, and writes <root>/benchmarks/<name>/ with its run list,
+comparison.csv and report.md (D-81, D-86): `make benchmark NAME=<name>`.
 """
 
 import csv
 import datetime
 import math
 import platform
+import shutil
 import subprocess
 import sys
 from importlib.metadata import version
@@ -184,6 +190,7 @@ class CircuitRun:
         (folder / RESULT_FILE).write_text(yaml.dump(record, Dumper=_Dumper, sort_keys=False), encoding="utf-8")
         _write_csv(folder / "simulations.csv", self.simulation_rows())
         _write_csv(folder / "counts.csv", self.count_rows())
+        write_views(folder)
         return folder
 
     def simulation_rows(self) -> list[dict]:
@@ -303,6 +310,199 @@ def rerun(path: Path) -> tuple[int, list[str]]:
     return (DIFFER if differ else MATCH), lines
 
 
+# -- Views ----------------------------------------------------------------------------
+
+def write_views(folder: Path) -> list[Path]:
+    """Draw a run folder's diagrams and report.md from its record and numbers; returns the files written.
+
+    lean: the processor graph with its ports and the couplers the compiled ZZ
+    circuit uses, and the compiled ZZ circuit. full adds the written circuit, the
+    XX and YY circuits and the timeline of the scheduled ZZ circuit (D-74).
+    """
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    from bellbench.figures import draw_processor
+
+    folder = Path(folder)
+    record = yaml.safe_load((folder / RESULT_FILE).read_text(encoding="utf-8"))
+    proc = yaml.safe_load((configs.ROOT / record["noise_control"]["processor"]["path"]).read_text(encoding="utf-8"))
+    written = []
+
+    def save(fig, name):
+        fig.savefig(folder / name, dpi=150, facecolor="white", bbox_inches="tight", metadata={"Software": None})
+        plt.close(fig)
+        written.append(folder / name)
+
+    fig, ax = plt.subplots(figsize=(4, 4.3), facecolor="white")
+    used = [tuple(int(q) for q in edge.split("-")) for edge in record["cost"]["two_qubit_gates_by_edge"]["ZZ"]]
+    draw_processor(ax, proc, used_edges=used)
+    save(fig, "graph.png")
+    drawings = {"circuit-zz.png": record["compiled"]["ZZ"]}
+    if record["diagrams"] == "full":
+        drawings |= {"written.png": record["written"], "circuit-xx.png": record["compiled"]["XX"],
+                     "circuit-yy.png": record["compiled"]["YY"]}
+    for name, text in drawings.items():
+        circuit = qasm2.loads(text, custom_instructions=qasm2.LEGACY_CUSTOM_INSTRUCTIONS)
+        save(circuit.draw("mpl", idle_wires=False, fold=40), name)
+    if record["diagrams"] == "full" and record["scheduled_duration"] is not None:
+        from qiskit.visualization import timeline_drawer
+
+        nc = NoiseControl.from_yaml(record["noise_control"])
+        zz = qasm2.loads(record["compiled"]["ZZ"], custom_instructions=qasm2.LEGACY_CUSTOM_INSTRUCTIONS)
+        save(timeline_drawer(schedule(zz, nc), target=nc.target), "timeline.png")
+    (folder / "report.md").write_text(_run_report(folder, record), encoding="utf-8")
+    written.append(folder / "report.md")
+    return written
+
+
+def _run_report(folder: Path, record: dict) -> str:
+    rows = _read_csv(folder / "simulations.csv")
+    c = record["cost"]
+    lines = [
+        f"# Run {folder.parent.parent.name} under {folder.parent.name}",
+        "",
+        f"- **Circuit file:** `{record['circuit']['path']}`",
+        f"- **Noise profile:** `{record['noise_control']['noise']['path']}`, scale {record['noise_control']['scale']:g}",
+        f"- **Overrides:** {len(record['noise_control']['overrides'])}"
+        + (" (flagged: per-qubit values differ from the profile)" if record["noise_control"]["overrides"] else ""),
+        f"- **Shots:** {record['shots']} per basis per simulation",
+        f"- **Commit:** `{record['provenance']['commit']}`"
+        + (", with uncommitted changes" if record["provenance"]["uncommitted"] else ""),
+        "",
+        "| Simulation | F | Standard error | F raw | Acceptance (95% Wilson interval) |",
+        "|---|---|---|---|---|",
+    ]
+    for r in rows:
+        lines.append(
+            f"| {r['simulation']} | {float(r['fidelity']):.4f} | {float(r['fidelity_se']):.4f} | "
+            f"{float(r['fidelity_raw']):.4f} | {float(r['acceptance']):.4f} "
+            f"({float(r['acceptance_low']):.4f} to {float(r['acceptance_high']):.4f}) |"
+        )
+    duration = record["scheduled_duration"]
+    lines += [
+        "",
+        "| SWAPs (router's) | Two-qubit gates | Depth | Qubits used | Scheduled duration | Pair on the ports |",
+        "|---|---|---|---|---|---|",
+        f"| {c['swaps']} ({c['router_swaps']}) | {c['two_qubit_gates']} | {c['depth']} | {len(c['qubits_used'])} | "
+        + (f"{duration * 1e6:.3f} µs" if duration is not None else "not scheduled")
+        + f" | {'yes' if c['pair_on_ports'] else 'NO'} |",
+        "",
+        f"Standard error method: {rows[0]['se_method']}.",
+        "",
+    ]
+    return "\n".join(lines)
+
+
+# -- Benchmarks -------------------------------------------------------------------------
+
+RUN_LIST = "runs.yaml"
+
+
+def load_benchmark(name: str) -> tuple[dict, dict]:
+    """The benchmark file for `name`, checked, and its `{path, hash}` record."""
+    data, record = configs.load_recorded("benchmark", name)
+    ids = [r["id"] for r in data["runs"]]
+    if len(set(ids)) != len(ids):
+        raise ValueError(f"{record['path']}: $.runs: run ids must be unique; got {ids}")
+    cases = [c["case"] for c in data.get("cases", [])]
+    if len(set(cases)) != len(cases):
+        raise ValueError(f"{record['path']}: $.cases: each case is filled once; got {cases}")
+    for c in data.get("cases", []):
+        if c["run"] not in ids:
+            raise ValueError(f"{record['path']}: $.cases: case {c['case']} names run {c['run']!r}, which is not in runs")
+    return data, record
+
+
+def run_benchmark(name: str, root: Path | None = None, shots: int | None = None) -> Path:
+    """Make every run the benchmark lists and write its folder; refuses before writing when a case fails its self-test.
+
+    Remaking a benchmark deletes the runs its previous run list named and
+    replaces its folder (D-78). `shots` overrides the file's, for tests only.
+    """
+    data, record = load_benchmark(name)
+    runs = {}
+    for spec in data["runs"]:
+        runs[spec["id"]] = CircuitRun(
+            spec["circuit"], spec["noise"], shots or data["shots"], data["base_seed"],
+            spec.get("scale", 1.0), spec.get("overrides", ()), spec.get("conditional"),
+        ).run()
+    for case in data.get("cases", []):
+        run = runs[case["run"]]
+        if not run.cost["pair_on_ports"]:
+            raise ValueError(f"benchmark {name!r}: case {case['case']}: run {case['run']!r} left the pair off its ports")
+        if run.analysis["ideal"].accepted.value != 1.0:
+            ideal = run.analysis["ideal"].accepted.value
+            raise ValueError(f"benchmark {name!r}: case {case['case']}: run {case['run']!r} has ideal F {ideal}, not 1")
+    if root is None:
+        root = configs.ROOT / ("workspace" if _git_state()[1] else "results")
+    root = Path(root)
+    folder = root / "benchmarks" / name
+    if (folder / RUN_LIST).exists():
+        previous = yaml.safe_load((folder / RUN_LIST).read_text(encoding="utf-8"))
+        for path in previous["runs"].values():
+            shutil.rmtree(root / path, ignore_errors=True)
+    shutil.rmtree(folder, ignore_errors=True)
+    folders = {run_id: run.write(root) for run_id, run in runs.items()}
+    folder.mkdir(parents=True)
+    run_list = {
+        "benchmark": record,
+        "runs": {run_id: f.relative_to(root).as_posix() for run_id, f in folders.items()},
+        "cases": data.get("cases", []),
+    }
+    (folder / RUN_LIST).write_text(yaml.safe_dump(run_list, sort_keys=False), encoding="utf-8")
+    rows = comparison_rows(runs, data)
+    _write_csv(folder / "comparison.csv", rows)
+    (folder / "report.md").write_text(_benchmark_report(data, rows), encoding="utf-8")
+    return folder
+
+
+def comparison_rows(runs: dict, data: dict) -> list[dict]:
+    """One row per run and simulation, with the cost and D-7's two-qubit gates per accepted pair."""
+    case_of = {(c["run"], c["simulation"]): c["case"] for c in data.get("cases", [])}
+    rows = []
+    for run_id, run in runs.items():
+        for name in SIMULATIONS:
+            a = run.analysis[name]
+            rows.append({
+                "case": case_of.get((run_id, name), ""),
+                "run": run_id,
+                "circuit": run.circuit.name,
+                "processor": run.circuit.processor,
+                "noise": run.nc.noise_name,
+                "scale": run.nc.scale,
+                "overrides": len(run.nc.overrides),
+                **a.row(name),
+                "swaps": run.cost["swaps"],
+                "router_swaps": run.cost["router_swaps"],
+                "two_qubit_gates": run.cost["two_qubit_gates"],
+                "depth": run.cost["depth"],
+                "qubits_used": len(run.cost["qubits_used"]),
+                "scheduled_duration": run.duration if run.duration is not None else "",
+                "two_qubit_gates_per_accepted_pair": run.cost["two_qubit_gates"] / a.acceptance,
+            })
+    return rows
+
+
+def _benchmark_report(data: dict, rows: list[dict]) -> str:
+    lines = [f"# {data['label']}", "", data["notes"], ""]
+    if data.get("cases"):
+        lines += [
+            "| Case | Processor | Simulation | F | Standard error | Acceptance | Two-qubit gates | SWAPs |",
+            "|---|---|---|---|---|---|---|---|",
+        ]
+        for r in sorted((r for r in rows if r["case"] != ""), key=lambda r: r["case"]):
+            lines.append(
+                f"| {r['case']} | {r['processor']} | {r['simulation']} | {r['fidelity']:.4f} | "
+                f"{r['fidelity_se']:.4f} | {r['acceptance']:.4f} | {r['two_qubit_gates']} | {r['swaps']} |"
+            )
+        lines += ["", "Cases not listed have no run yet.", ""]
+    lines += [f"Every row, with the derived metrics, is in comparison.csv. Standard error method: {rows[0]['se_method']}.", ""]
+    return "\n".join(lines)
+
+
 # -- Helpers -------------------------------------------------------------------------
 
 
@@ -358,13 +558,26 @@ _Dumper.add_representer(
 )
 
 
+USAGE = """usage: python -m bellbench.run benchmark [NAME]     make a benchmark (default core)
+       python -m bellbench.run rerun PATH           rerun a run folder or its bp.data.result.yaml
+       python -m bellbench.run report PATH          redraw a run folder's diagrams and report.md"""
+
+
 def main(argv: list[str]) -> int:
-    if len(argv) != 2 or argv[0] != "rerun":
-        print("usage: python -m bellbench.run rerun <run folder or its bp.data.result.yaml>", file=sys.stderr)
-        return 2
-    code, lines = rerun(Path(argv[1]))
-    print("\n".join(lines))
-    return code
+    if argv[:1] == ["benchmark"] and len(argv) <= 2:
+        print(configs.repo_path(run_benchmark(argv[1] if len(argv) == 2 else "core")))
+        return 0
+    if argv[:1] == ["rerun"] and len(argv) == 2:
+        code, lines = rerun(Path(argv[1]))
+        print("\n".join(lines))
+        return code
+    if argv[:1] == ["report"] and len(argv) == 2:
+        folder = Path(argv[1])
+        for path in write_views(folder.parent if folder.name == RESULT_FILE else folder):
+            print(path)
+        return 0
+    print(USAGE, file=sys.stderr)
+    return 2
 
 
 if __name__ == "__main__":

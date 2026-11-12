@@ -22,6 +22,10 @@ help:
 	@echo ""
 	@echo "  Benchmark:"
 	@echo "    make test                        Run the bellbench test suite"
+	@echo "    make benchmark                   Make the core benchmark (results/ or workspace/)"
+	@echo "    make benchmark NAME=<n>          Make another benchmark"
+	@echo "    make run RUN=<path>              Rerun a run folder and compare (exit 1 on a difference)"
+	@echo "    make report RUN=<path>           Redraw a run folder's diagrams and report.md"
 	@echo ""
 	@echo "  Docs figures:"
 	@echo "    make figures                     Draw docs/assets/processor-models.png from the processor files"
@@ -55,10 +59,23 @@ bp-setup:
 
 # -- Benchmark -----------------------------------------------------------
 
-.PHONY: test
+.PHONY: test benchmark run report
+
+NAME ?= core
 
 test:
 	uv run --group dev pytest -q
+
+benchmark:
+	uv run python -m bellbench.run benchmark $(NAME)
+
+run:
+	@test -n "$(RUN)" || { echo "usage: make run RUN=<run folder or its bp.data.result.yaml>"; exit 2; }
+	uv run python -m bellbench.run rerun $(RUN)
+
+report:
+	@test -n "$(RUN)" || { echo "usage: make report RUN=<run folder or its bp.data.result.yaml>"; exit 2; }
+	uv run python -m bellbench.run report $(RUN)
 
 # -- Docs figures --------------------------------------------------------
 # make figures needs only the Python env. make diagram needs Node, because the

@@ -1,0 +1,87 @@
+# config/bp.schema.benchmark.yaml
+#
+# Validates config/benchmark/bp.data.benchmark.*.yaml: one benchmark, a named set
+# of runs with one comparison table across them (docs/DESIGN.md, section 6). Each
+# run is a circuit file under a noise profile; for the core benchmark, cases map
+# the challenge's nine cases onto a run and a simulation. Checks that span fields
+# (case runs exist, ids are unique) are in src/bellbench/run.py, which runs them
+# whenever a benchmark file loads.
+
+$schema: "https://json-schema.org/draft/2020-12/schema"
+title: Benchmark file
+description: The runs a benchmark makes, their shots and base seed, and which run fills which case.
+
+type: object
+required: [name, label, notes, shots, base_seed, runs]
+additionalProperties: false
+
+$defs:
+  text:
+    type: string
+    minLength: 1
+  slug:
+    type: string
+    pattern: '^[a-z0-9][a-z0-9-]*$'
+
+properties:
+  name:
+    description: Slug, the qualifier in the file name; make benchmark NAME=<name> runs it.
+    $ref: "#/$defs/slug"
+  label: {$ref: "#/$defs/text"}
+  notes:
+    description: Free text saying what the benchmark answers and anything a reader should know.
+    $ref: "#/$defs/text"
+  shots:
+    description: Shots per basis circuit in each simulation of every run.
+    type: integer
+    minimum: 1
+  base_seed:
+    description: The base seed every run derives its seeds from.
+    type: integer
+    minimum: 0
+    maximum: 4294967295
+  runs:
+    description: The runs, each a circuit file under a noise profile, with any scale, overrides and conditional channels.
+    type: array
+    minItems: 1
+    items:
+      type: object
+      required: [id, circuit, noise]
+      additionalProperties: false
+      properties:
+        id:
+          description: The run's name within this benchmark, which cases and the comparison table use.
+          $ref: "#/$defs/slug"
+        circuit: {$ref: "#/$defs/slug"}
+        noise: {$ref: "#/$defs/slug"}
+        scale: {type: number, exclusiveMinimum: 0}
+        overrides:
+          type: array
+          items:
+            type: object
+            required: [qubits, field, value]
+            additionalProperties: false
+            properties:
+              qubits:
+                oneOf:
+                  - {type: integer, minimum: 0}
+                  - {type: array, minItems: 1, maxItems: 2, items: {type: integer, minimum: 0}}
+              field: {$ref: "#/$defs/text"}
+              value: {type: number}
+        conditional:
+          type: object
+          additionalProperties: false
+          properties:
+            reset_error: {type: [number, "null"]}
+            mid_circuit_measurement_error: {type: [number, "null"]}
+  cases:
+    description: For the core benchmark, which run and simulation fills each of the challenge's nine cases.
+    type: array
+    items:
+      type: object
+      required: [case, run, simulation]
+      additionalProperties: false
+      properties:
+        case: {type: integer, minimum: 1, maximum: 9}
+        run: {$ref: "#/$defs/slug"}
+        simulation: {enum: [ideal, noisy]}
