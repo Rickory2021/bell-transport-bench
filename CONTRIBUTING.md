@@ -5,15 +5,15 @@ Git conventions for bell-transport-bench. Five people commit here during a one-w
 
 ## Branch strategy
 
-`main` always runs: `make test` passes and the core benchmark reproduces. Nobody pushes to it directly.
+`main` is not protected, and the hackathon is too short for required pull request reviews, so these rules rely on care instead of enforcement.
 
-1. Branch from an up-to-date `main`: `git switch main && git pull && git switch -c <type>/<short-description>` (for example `feat/noise-schema`, `fix/vacancy-check`).
-2. Commit on the branch, following the rules below.
-3. Push the branch and open a pull request: `gh pr create --fill --base main`.
-4. The repo owner merges with squash merge, so `main` gets one commit per pull request, titled in the commit format below.
-5. Delete the branch after merge: `gh pr merge --squash --delete-branch` does both.
+- **`main` must always run.** Before you push to it, the checks under [Before pushing to `main`](#before-pushing-to-main) pass. Everyone branches from `main`, so a broken `main` stops the whole team.
+- Pull before you start, so your commits land on top of everyone else's: `git switch main && git pull --rebase`.
+- Tell the group before you commit to `main`, and say what changed, so nobody is surprised by their next pull.
+- When unsure, branch. Experimental work, large changes, and anything touching shared code in `src/bellbench/` or `config/` go on a branch: `git switch -c <type>/<short-description>` (for example `feat/noise-schema`). Merge it into `main` when it is ready, or open a pull request if you want a second pair of eyes: `gh pr create --fill --base main`.
+- If something breaks, stop and tell the group. Do not stack fixes on a broken `main`; undo the commit that broke it with `git revert <commit>`. **Never force-push `main`.**
 
-Keep branches short-lived (a day or less). Rebase on `main` before opening the pull request if `main` moved: `git fetch origin && git rebase origin/main`, then `git push --force-with-lease`.
+Keep branches short-lived (a day or less), and rebase on `main` before merging if `main` moved: `git fetch origin && git rebase origin/main`, then `git push --force-with-lease` if you had already pushed the branch.
 
 ## Staging and committing
 
@@ -67,11 +67,11 @@ One commit per logical change you can describe in one sentence.
 - A noise profile and the schema change it needs go together; an unrelated notebook edit does not.
 - Generated files (the submission notebook, result tables) go in the same commit as the change that produced them, so the numbers and the code never disagree.
 
-## Before opening a pull request
+## Before pushing to `main`
 
 ```bash
 make test
 make bp-validate
 ```
 
-Both must pass. If the pull request changes results, rerun the core benchmark and commit the regenerated outputs with it.
+Both must pass. If your change moves results, rerun the core benchmark and commit the regenerated outputs with it.

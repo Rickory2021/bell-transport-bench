@@ -67,7 +67,7 @@ It is always called error detection with postselection, never fault tolerance or
 ## 7. Repo and tooling
 
 - Private GitHub repo; Python 3.12 with uv; exact pins: qiskit 2.6.2, qiskit-aer 0.18.2, qiskit-ibm-runtime 0.51.0.
-- Feature branches merged into `main` by pull request (CONTRIBUTING.md).
+- `main` is unprotected and must always run; branch and commit rules are in CONTRIBUTING.md.
 - `scripts/` holds the generic engines of blueprint-render and flatten-sync from dev-forge, pruned of all dev-forge-specific code, profiles and tests before the first commit. The PDF renderer stays, unused.
 
 **Why:** 3.12 is the overlap of what Qiskit, Aer, IBM Runtime and blueprint-render support, and what Colab runs. The scripts were pruned so nothing unrelated to this project enters its history.
@@ -83,3 +83,4 @@ Circuits are written on physical qubits and compiled at optimisation level 1. Fr
 - 2026-11-11: initial decisions 1 to 7.
 - 2026-11-11: research is folded into this file and the README, citing original sources; reports are not stored in the repo.
 - 2026-11-11: the task moved to CHALLENGE.md; sources became `bp.data.references.yaml`; section 8 (compilation) added.
+- 2026-11-11: section 7: branch rules follow the team’s agreed etiquette in CONTRIBUTING.md; direct pushes to `main` are allowed once the checks pass.
