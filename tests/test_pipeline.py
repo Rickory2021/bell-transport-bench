@@ -26,6 +26,7 @@ from bellbench.pipeline import (
     compile_bases,
     cost,
     derive_seed,
+    mid_circuit_measurements,
     pair_on_ports,
     port_density_matrix,
     register_counts,
@@ -278,6 +279,25 @@ def test_pair_on_ports_is_true_when_routing_moved_nothing():
     nc = NoiseControl("ibm2016", "boston-2026")
     zz = compile_bases(basis_circuits(_baseline(nc), nc.ports), nc, seed=5)["ZZ"]
     assert pair_on_ports(zz.routed, nc.ports)
+
+
+@pytest.mark.parametrize(
+    "after, mid",
+    [
+        (lambda qc: None, False),
+        (lambda qc: qc.x(1), True),
+        (lambda qc: qc.measure(1, 1), True),
+        (lambda qc: qc.reset(1), True),
+        (lambda qc: (qc.barrier(), qc.delay(100, 1, unit="ns")), False),
+        (lambda qc: qc.cx(0, 2), False),
+    ],
+)
+def test_a_measurement_is_mid_circuit_only_when_its_own_qubit_is_used_again(after, mid):
+    qc = QuantumCircuit(3, 2)
+    qc.h(0)
+    qc.measure(1, 0)
+    after(qc)
+    assert mid_circuit_measurements(qc) == ([(1, 1)] if mid else [])
 
 
 # -- Schedule ----------------------------------------------------------------------

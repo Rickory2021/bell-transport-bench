@@ -81,22 +81,56 @@ def test_wilson_interval():
     assert wilson_interval(0, 100)[0] == pytest.approx(0.0, abs=1e-12)
 
 
-def _with_check(config_copy, operation):
+def _save_checked(build) -> str:
+    """The 2016 baseline, whose path is 0-3-4, with a one-bit check register and whatever `build` adds."""
     circuit = swap_chain("ibm2016")
     check = ClassicalRegister(1, "check")
     circuit.add_register(check)
-    if operation == "reset":
-        circuit.reset(1)
-    else:
-        circuit.measure(1, check[0])
+    build(circuit, check)
     save_circuit("checked", "Checked", "ibm2016", circuit, "A test circuit.")
+    return "checked"
 
 
-@pytest.mark.parametrize("operation, channel", [("reset", "reset_error"), ("measure", "mid_circuit_measurement_error")])
-def test_a_conditional_operation_with_its_channel_unset_stops(config_copy, operation, channel):
-    _with_check(config_copy, operation)
-    with pytest.raises(ValueError, match=f"{operation} before the end.*{channel} is unset"):
-        CircuitRun("checked", "boston-2026")
+def test_a_final_check_measurement_runs_with_the_channels_unset(config_copy):
+    """Qubit 3 is vacated when the SWAPs come back, so a vacancy read at the end finds 0 and keeps every shot."""
+    name = _save_checked(lambda qc, check: qc.measure(3, check[0]))
+    run = CircuitRun(name, "boston-2026", shots=500).run()
+    assert run.analysis["ideal"].accepted.value == 1.0 and run.analysis["ideal"].acceptance == 1.0
+    assert run.registers == ["check", "port"]
+
+
+@pytest.mark.parametrize(
+    "build, message",
+    [
+        (lambda qc, check: qc.reset(1), r"resets qubit\(s\) \[1\] in its XX circuit, but .* reset_error is unset"),
+        (
+            lambda qc, check: (qc.measure(1, check[0]), qc.x(1)),
+            r"measures qubit\(s\) \[1\] and then acts on them again .* mid_circuit_measurement_error is unset",
+        ),
+        (
+            lambda qc, check: (qc.measure(1, check[0]), qc.measure(1, check[0])),
+            r"measures qubit\(s\) \[1\] and then acts on them again",
+        ),
+    ],
+)
+def test_a_reset_or_a_reused_measured_qubit_stops_while_its_channel_is_unset(config_copy, build, message):
+    name = _save_checked(build)
+    with pytest.raises(ValueError, match=message):
+        CircuitRun(name, "boston-2026", shots=100).run()
+
+
+def test_a_router_swap_through_a_measured_qubit_makes_its_measurement_mid_circuit(config_copy):
+    """Written last on qubit 3, the read is followed in the compiled circuit by the SWAP the router adds to bring
+    ports 0 and 4 together through qubit 3, the 2016 graph's only route between them. The barrier keeps the read
+    before the CX; without it the router reads the qubit after its SWAP, and the measurement stays final."""
+    def build(qc, check):
+        qc.measure(3, check[0])
+        qc.barrier()
+        qc.cx(0, 4)
+
+    name = _save_checked(build)
+    with pytest.raises(ValueError, match=r"measures qubit\(s\) \[3\] and then acts on them again"):
+        CircuitRun(name, "boston-2026", shots=100).run()
 
 
 def test_an_analysis_the_registry_lacks_is_refused(config_copy):

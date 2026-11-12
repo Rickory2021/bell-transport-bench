@@ -10,9 +10,13 @@ over all shots and over the shots kept. Every number after that is computed
 here the same way for every strategy: F raw from all shots, F from the kept
 ones, the acceptance and its Wilson interval, and the shots per basis.
 
-A run stops before simulating when its circuit resets or measures before the
-end while the matching conditional channel is unset, so neither is ever
-silently perfect (D-48).
+A run stops before simulating when, in any compiled basis circuit, a qubit is
+reset, or is measured and then acted on again, while the matching conditional
+channel is unset, so neither is ever silently perfect (docs/DESIGN.md, section
+4). A measurement with nothing after it on its qubit is final: its error is the
+readout error every measurement gets, so it needs no channel. The rule is
+judged on the compiled circuits, since a SWAP the router adds through a
+measured qubit makes its measurement mid-circuit.
 
 `write` makes the run folder: <root>/runs/workbench/<circuit>/<noise>/<stamp>/
 for a run made on its own, or the folder a benchmark names for each of its runs.
@@ -58,6 +62,7 @@ from bellbench.pipeline import (
     compile_bases,
     cost,
     derive_seed,
+    mid_circuit_measurements,
     schedule,
     scheduled_duration,
     simulate,
@@ -111,7 +116,6 @@ class CircuitRun:
             raise ValueError(f"diagrams is one of {', '.join(DIAGRAMS)}; got {diagrams!r}")
         self.circuit = load_circuit(circuit)
         self.nc = NoiseControl(self.circuit.processor, noise, scale, overrides, conditional)
-        _check_conditional_channels(self.circuit, self.nc)
         self.shots, self.base_seed, self.diagrams = shots, base_seed, diagrams
         self.labels = (circuit, noise, repr(self.nc.scale), self.settings_hash or "none")
         self.seeds = {step: derive_seed(base_seed, *self.labels, step) for step in ("transpile", *SIMULATIONS)}
@@ -132,6 +136,7 @@ class CircuitRun:
         """Compile, cost, schedule, simulate ideal and noisy, and read the shots; `methods` repeats a recorded run's."""
         circuits = basis_circuits(self.circuit.circuit, self.nc.ports)
         self.compiled = compile_bases(circuits, self.nc, self.seeds["transpile"])
+        _check_conditional_channels(self.circuit.name, self.compiled, self.nc)
         self.cost = cost(self.compiled, self.nc.ports)
         scheduled = {basis: schedule(c.compiled, self.nc) for basis, c in self.compiled.items()}
         self.duration = scheduled_duration(scheduled["ZZ"], self.nc)
@@ -541,14 +546,23 @@ def _benchmark_report(data: dict, rows: list[dict]) -> str:
 # -- Helpers -------------------------------------------------------------------------
 
 
-def _check_conditional_channels(circuit, nc: NoiseControl) -> None:
-    """Stop a circuit that resets or measures before the end while the matching channel is unset."""
-    names = {i.operation.name for i in circuit.circuit.data}
-    for operation, channel in (("reset", "reset_error"), ("measure", "mid_circuit_measurement_error")):
-        if operation in names and nc.conditional[channel] is None:
+def _check_conditional_channels(name: str, compiled: dict, nc: NoiseControl) -> None:
+    """Stop a run whose compiled circuits reset a qubit, or measure one and act on it again, while the matching
+    conditional channel is unset, so neither is silently perfect."""
+    for basis, c in compiled.items():
+        circuit = c.compiled
+        resets = sorted({circuit.find_bit(i.qubits[0]).index for i in circuit.data if i.operation.name == "reset"})
+        if resets and nc.conditional["reset_error"] is None:
             raise ValueError(
-                f"circuit {circuit.name!r} uses {operation} before the end, but the conditional channel {channel} "
-                "is unset, so it would be silently perfect (D-48)"
+                f"circuit {name!r} resets qubit(s) {resets} in its {basis} circuit, but the conditional channel "
+                "reset_error is unset, so each reset would be perfect; set it, as a value swept over a range"
+            )
+        reused = sorted({q for _, q in mid_circuit_measurements(circuit)})
+        if reused and nc.conditional["mid_circuit_measurement_error"] is None:
+            raise ValueError(
+                f"circuit {name!r} measures qubit(s) {reused} and then acts on them again in its {basis} circuit, "
+                "but the conditional channel mid_circuit_measurement_error is unset, so the qubit would come out "
+                "of each read perfect; set it, as a value swept over a range, or measure the qubit last"
             )
 
 

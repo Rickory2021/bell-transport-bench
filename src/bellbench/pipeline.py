@@ -301,6 +301,22 @@ def _check_ports(circuit: QuantumCircuit, ports: Sequence[int]) -> tuple[int, in
     return ports[0], ports[1]
 
 
+def mid_circuit_measurements(circuit: QuantumCircuit) -> list[tuple[int, int]]:
+    """Each measurement that its qubit outlives: `(index in circuit.data, qubit)` for every measurement followed,
+    on its own qubit, by a gate, a measurement or a reset. Barriers and delays do not count, so a measurement
+    with nothing after it on its qubit is final, whatever runs on other qubits after it."""
+    pending, out = {}, []
+    for k, inst in enumerate(circuit.data):
+        if inst.operation.name in ("barrier", "delay"):
+            continue
+        for q in inst.qubits:
+            if q in pending:
+                out.append((pending.pop(q), circuit.find_bit(q).index))
+        if inst.operation.name == "measure":
+            pending[inst.qubits[0]] = k
+    return sorted(out)
+
+
 def _check_operations_supported(circuit: QuantumCircuit, basis: str, nc: NoiseControl) -> None:
     """Raise when the circuit resets, waits or measures and the profile defines no such operation.
 
