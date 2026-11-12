@@ -8,4 +8,3 @@ values:
   notebook: A Jupyter notebook or a set of them.
   website: A web page.
   docs: Software documentation or a vendor page.
-  data: A data file, such as a calibration snapshot.

@@ -7,11 +7,13 @@
 name: burlington-2020
 label: FakeBurlingtonV2 medians, calibrated 2020-06-11
 kind: snapshot
-reference: ibm-fakeburlingtonv2-snapshot
+reference: qiskit-fake-provider
 snapshot:
   class: FakeBurlingtonV2
   package: qiskit-ibm-runtime==0.51.0
   calibrated: "2020-06-11"
+  properties: https://github.com/Qiskit/qiskit-ibm-runtime/blob/0.51.0/qiskit_ibm_runtime/fake_provider/backends/burlington/props_burlington.json
+  configuration: https://github.com/Qiskit/qiskit-ibm-runtime/blob/0.51.0/qiskit_ibm_runtime/fake_provider/backends/burlington/conf_burlington.json
 notes: >-
   Medians over the FakeBurlingtonV2 snapshot's 5 qubits and 8 directed CX
   couplers, as qiskit-ibm-runtime 0.51.0 pins them; it is the earliest calibration
@@ -42,7 +44,8 @@ measure: {duration: 5.8133333333333335e-6}
 borrowed:
   - field: measure.duration
     value: 5.8133333333333335e-6
-    source: "FakeOurenseV2 median (calibrated 2021-01-20), qiskit-ibm-runtime==0.51.0; reference ibm-fakeourensev2-snapshot"
+    source: "FakeOurenseV2 median (calibrated 2021-01-20), qiskit-ibm-runtime==0.51.0"
+    url: https://github.com/Qiskit/qiskit-ibm-runtime/blob/0.51.0/qiskit_ibm_runtime/fake_provider/backends/ourense/props_ourense.json
     why: >-
       FakeBurlingtonV2 records no measurement duration. The earliest T-graph snapshots
       that record one, FakeOurenseV2, FakeValenciaV2 and FakeVigoV2 (all calibrated

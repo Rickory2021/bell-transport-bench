@@ -29,6 +29,9 @@ $defs:
   seconds:
     type: number
     minimum: 0
+  url:
+    type: string
+    pattern: '^https?://'
   probability:
     type: number
     minimum: 0
@@ -70,9 +73,9 @@ properties:
     description: Free text naming the source in words, and anything a reader of the file should know.
     $ref: "#/$defs/text"
   snapshot:
-    description: The pinned snapshot a snapshot profile's values come from; tests read these fields.
+    description: The pinned snapshot a snapshot profile's values come from, with links to its files at the pinned tag; tests read these fields.
     type: object
-    required: [class, package, calibrated]
+    required: [class, package, calibrated, properties, configuration]
     additionalProperties: false
     properties:
       class:
@@ -85,6 +88,12 @@ properties:
         description: The snapshot's calibration date.
         type: string
         pattern: '^\d{4}-\d{2}-\d{2}$'
+      properties:
+        description: Link to the snapshot's properties file (per-qubit and per-gate values) at the pinned package's tag.
+        $ref: "#/$defs/url"
+      configuration:
+        description: Link to the snapshot's configuration file (the clock tick) at the pinned package's tag.
+        $ref: "#/$defs/url"
   time_step:
     description: "Time step in seconds: the hardware's clock tick. Null when the snapshot records none."
     oneOf:
@@ -129,12 +138,15 @@ properties:
     type: array
     items:
       type: object
-      required: [field, value, source, why]
+      required: [field, value, source, url, why]
       additionalProperties: false
       properties:
         field: {$ref: "#/$defs/text"}
         value: {type: number}
         source: {$ref: "#/$defs/text"}
+        url:
+          description: Link to the file the value comes from, at the pinned tag when it is a snapshot file.
+          $ref: "#/$defs/url"
         why: {$ref: "#/$defs/text"}
   depolarising:
     type: object

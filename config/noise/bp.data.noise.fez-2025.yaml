@@ -7,11 +7,13 @@
 name: fez-2025
 label: FakeFez medians, calibrated 2025-02-26
 kind: snapshot
-reference: ibm-fakefez-snapshot
+reference: qiskit-fake-provider
 snapshot:
   class: FakeFez
   package: qiskit-ibm-runtime==0.51.0
   calibrated: "2025-02-26"
+  properties: https://github.com/Qiskit/qiskit-ibm-runtime/blob/0.51.0/qiskit_ibm_runtime/fake_provider/backends/fez/props_fez.json
+  configuration: https://github.com/Qiskit/qiskit-ibm-runtime/blob/0.51.0/qiskit_ibm_runtime/fake_provider/backends/fez/conf_fez.json
 notes: >-
   Medians over the FakeFez snapshot's 156 qubits and 352 directed CZ couplers, as
   qiskit-ibm-runtime 0.51.0 pins them. Every qubit and coupler of a processor

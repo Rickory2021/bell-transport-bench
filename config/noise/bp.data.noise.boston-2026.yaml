@@ -7,11 +7,13 @@
 name: boston-2026
 label: FakeBoston medians, calibrated 2026-04-17
 kind: snapshot
-reference: ibm-fakeboston-snapshot
+reference: qiskit-fake-provider
 snapshot:
   class: FakeBoston
   package: qiskit-ibm-runtime==0.51.0
   calibrated: "2026-04-17"
+  properties: https://github.com/Qiskit/qiskit-ibm-runtime/blob/0.51.0/qiskit_ibm_runtime/fake_provider/backends/boston/props_boston.json
+  configuration: https://github.com/Qiskit/qiskit-ibm-runtime/blob/0.51.0/qiskit_ibm_runtime/fake_provider/backends/boston/conf_boston.json
 notes: >-
   Medians over the FakeBoston snapshot's 156 qubits and 352 directed CZ couplers, as
   qiskit-ibm-runtime 0.51.0 pins them. Every qubit and coupler of a processor

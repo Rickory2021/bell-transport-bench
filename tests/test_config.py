@@ -257,18 +257,22 @@ def test_snapshot_profile_matches_snapshot(name):
             assert _close(prof[timed]["duration"], snap[timed]), f"{timed} duration"
 
 
-@pytest.mark.parametrize("name", SNAPSHOT_PROFILES)
-def test_snapshot_reference_links_the_pinned_file(name):
-    """A snapshot profile's reference links its properties file at the tag its package pin names."""
+def _snapshot_links(class_name, version):
+    """The GitHub links to a fake backend's properties and configuration files at a package tag."""
     from qiskit_ibm_runtime import fake_provider
 
-    prof = NOISE[name]
-    version = prof["snapshot"]["package"].split("==")[1]
-    backend = getattr(fake_provider, prof["snapshot"]["class"])
-    path = f"/{version}/qiskit_ibm_runtime/fake_provider/backends/{Path(backend.dirname).name}/{backend.props_filename}"
-    (ref,) = [r for r in _load(REFERENCES)["references"] if r["id"] == prof["reference"]]
-    assert ref["url"] == "https://github.com/Qiskit/qiskit-ibm-runtime/blob" + path
-    assert ref["download"] == "https://raw.githubusercontent.com/Qiskit/qiskit-ibm-runtime" + path
+    backend = getattr(fake_provider, class_name)
+    base = f"https://github.com/Qiskit/qiskit-ibm-runtime/blob/{version}/qiskit_ibm_runtime/fake_provider/backends/{Path(backend.dirname).name}"
+    return f"{base}/{backend.props_filename}", f"{base}/{backend.conf_filename}"
+
+
+@pytest.mark.parametrize("name", SNAPSHOT_PROFILES)
+def test_snapshot_links_match_the_pin(name):
+    """A snapshot profile links its own snapshot's files at the tag its package pin names."""
+    snap = NOISE[name]["snapshot"]
+    properties, configuration = _snapshot_links(snap["class"], snap["package"].split("==")[1])
+    assert snap["properties"] == properties
+    assert snap["configuration"] == configuration
 
 
 def test_borrowed_measure_duration_matches_its_source():
@@ -276,6 +280,7 @@ def test_borrowed_measure_duration_matches_its_source():
     prof = NOISE["burlington-2020"]
     (entry,) = [b for b in prof["borrowed"] if b["field"] == "measure.duration"]
     assert entry["value"] == prof["measure"]["duration"]
+    assert entry["url"] == _snapshot_links("FakeOurenseV2", prof["snapshot"]["package"].split("==")[1])[0]
     for class_name in ("FakeOurenseV2", "FakeValenciaV2", "FakeVigoV2"):
         snap = _snapshot_medians(class_name)
         assert snap["calibrated"] == "2021-01-20"
