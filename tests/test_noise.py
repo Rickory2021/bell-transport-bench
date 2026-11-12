@@ -130,10 +130,11 @@ def test_scale_touches_errors_and_decay_rates_only():
     for q in range(base.num_qubits):
         assert doubled.target.qubit_properties[q].t1 == pytest.approx(base.target.qubit_properties[q].t1 / 2)
         assert doubled.target.qubit_properties[q].t2 == pytest.approx(base.target.qubit_properties[q].t2 / 2)
-        assert np.allclose(
-            doubled.noise_model._local_readout_errors[(q,)].probabilities[0, 1],
-            2 * base.noise_model._local_readout_errors[(q,)].probabilities[0, 1],
-        )
+        for misread in ((0, 1), (1, 0)):  # reads 1 when 0, and reads 0 when 1
+            assert np.allclose(
+                doubled.noise_model._local_readout_errors[(q,)].probabilities[misread],
+                2 * base.noise_model._local_readout_errors[(q,)].probabilities[misread],
+            )
         assert doubled.target["measure"][(q,)].duration == base.target["measure"][(q,)].duration
         assert doubled.target["reset"][(q,)].duration == base.target["reset"][(q,)].duration
     assert doubled.target.dt == base.target.dt
@@ -191,6 +192,9 @@ def test_scale_applies_after_overrides():
         ({"qubits": [0], "field": "qubit.t2_dephasing_time", "value": 3 * FEZ["qubit"]["t1_relaxation_time"]}, "above 2 x"),
         ({"qubits": [0], "field": "qubit.readout_error.reads_1_when_0", "value": 1.5}, "between 0 and 1"),
         ({"qubits": [0], "field": "gates.sx.error_probability", "value": 1e-7}, "decay alone"),
+        ({"qubits": [0], "field": "gates.sx.error_probability", "value": 1.5}, r"gates.sx.error_probability .* between 0 and 1"),
+        ({"qubits": [0], "field": "qubit.t1_relaxation_time", "value": 0.0}, "must be greater than 0"),
+        ({"qubits": [0], "field": "qubit.t2_dephasing_time", "value": -1e-6}, "must be greater than 0"),
         ({"qubits": [0], "field": "qubit.t1_relaxation_time"}, "exactly the keys"),
     ],
 )
@@ -242,6 +246,38 @@ def test_depolarising_profile_takes_no_overrides():
         NoiseControl("ibm2016", "organiser-cx2", overrides=[o])
 
 
+# -- Profiles the schema accepts but NoiseControl cannot build ------------------
+
+
+def _edit_profile(name, change):
+    import yaml
+
+    path = configs.noise_path(name)
+    profile = load_noise(name)
+    change(profile)
+    path.write_text(yaml.safe_dump(profile, sort_keys=False), encoding="utf-8")
+
+
+@pytest.mark.parametrize(
+    "name, change, message",
+    [
+        ("organiser-cx2", lambda p: p["depolarising"].update(after_gate="cz"), "after_gate 'cz' is not in its gates"),
+        ("fez-2025", lambda p: p["gates"].update(foo=dict(p["gates"]["sx"])), "'foo' is not one of Qiskit's standard"),
+        ("fez-2025", lambda p: p["gates"]["cz"].update(qubits=1), "'cz' acts on 2 qubit"),
+    ],
+)
+def test_a_profile_noisecontrol_cannot_build_raises(config_copy, name, change, message):
+    _edit_profile(name, change)
+    with pytest.raises(ValueError, match=message):
+        NoiseControl("ibm2016", name)
+
+
+def test_an_unknown_profile_kind_raises_naming_kind(config_copy):
+    _edit_profile("organiser-cx2", lambda p: p.update(kind="biased"))
+    with pytest.raises(ValueError, match="kind"):
+        NoiseControl("ibm2016", "organiser-cx2")
+
+
 # -- Conditional channels -------------------------------------------------------
 
 
@@ -259,7 +295,9 @@ def test_invalid_conditional_raises(conditional):
 
 def test_unset_conditional_channels_are_recorded():
     nc = NoiseControl("ibm2016", "fez-2025", conditional={"reset_error": None})
-    assert nc.conditional == {"reset_error": None, "mid_circuit_measurement_error": None}
+    unset = {"reset_error": None, "mid_circuit_measurement_error": None}
+    assert nc.conditional == unset
+    assert nc.export_as_yaml()["conditional"] == unset
 
 
 # -- The depolarising cross-check profile ---------------------------------------
@@ -301,18 +339,35 @@ def test_export_round_trip():
     assert rebuilt.noise_model == nc.noise_model
 
 
-def test_changed_hash_is_refused():
+@pytest.mark.parametrize("kind", ["processor", "noise"])
+def test_changed_hash_is_refused(kind):
     record = NoiseControl("ibm2016", "fez-2025").export_as_yaml()
-    record["noise"]["hash"] = "sha256:" + "0" * 64
-    with pytest.raises(ValueError, match="changed since it was recorded"):
+    record[kind]["hash"] = "sha256:" + "0" * 64
+    with pytest.raises(ValueError, match=f"{record[kind]['path']} changed since it was recorded"):
         NoiseControl.from_yaml(record)
 
 
-def test_record_outside_the_config_folder_is_refused():
+def test_record_outside_the_config_folder_is_refused(config_copy):
+    """An identical copy of a profile outside config/noise/ is refused for where it is, not for being missing."""
     record = NoiseControl("ibm2016", "fez-2025").export_as_yaml()
+    (config_copy / "docs").mkdir()
+    shutil.copy(configs.noise_path("fez-2025"), config_copy / "docs" / "bp.data.noise.fez-2025.yaml")
     record["noise"]["path"] = "docs/bp.data.noise.fez-2025.yaml"
-    with pytest.raises((ValueError, FileNotFoundError)):
+    with pytest.raises(ValueError, match="is not where noise files live"):
         NoiseControl.from_yaml(record)
+
+
+def test_a_record_missing_its_file_is_refused():
+    record = NoiseControl("ibm2016", "fez-2025").export_as_yaml()
+    record["noise"]["path"] = "config/noise/bp.data.noise.no-such-profile.yaml"
+    with pytest.raises(FileNotFoundError, match="no longer exists"):
+        NoiseControl.from_yaml(record)
+
+
+def test_a_record_with_other_keys_is_refused():
+    record = NoiseControl("ibm2016", "fez-2025").export_as_yaml()
+    with pytest.raises(ValueError, match="a NoiseControl record has the keys"):
+        NoiseControl.from_yaml({**record, "seed": 1})
 
 
 def test_export_records_the_files_the_model_was_built_from(config_copy):

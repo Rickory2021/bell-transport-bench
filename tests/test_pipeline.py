@@ -17,6 +17,7 @@ import pytest
 from qiskit import QuantumCircuit, transpile
 from qiskit.transpiler import CouplingMap, generate_preset_pass_manager
 
+from bellbench.configs import load_noise
 from bellbench.fidelity import fidelity_from_counts, fidelity_from_density
 from bellbench.noise import NoiseControl
 from bellbench.pipeline import (
@@ -232,6 +233,44 @@ def test_schedule_turns_idle_time_into_delays():
     scheduled = schedule(zz, nc)
     assert "delay" in scheduled.count_ops()
     assert scheduled_duration(scheduled, nc) > 0
+
+
+def _idle_population_of_1(nc: NoiseControl, busy_gates: int) -> tuple[float, float]:
+    """Qubit 1's idle time in seconds while qubit 0 runs `busy_gates` sx gates, and its |1> population after."""
+    from qiskit_aer import AerSimulator
+
+    qc = QuantumCircuit(nc.num_qubits)
+    qc.x(1)
+    qc.barrier(0, 1)
+    for _ in range(busy_gates):
+        qc.sx(0)
+    qc.barrier(0, 1)
+    scheduled = schedule(qc, nc)
+    idle = 0.0
+    for instruction in scheduled.data:
+        if instruction.operation.name == "delay" and scheduled.find_bit(instruction.qubits[0]).index == 1:
+            op = instruction.operation
+            idle += op.duration * nc.target.dt if op.unit == "dt" else op.duration
+    scheduled.save_density_matrix(qubits=[1])
+    rho = AerSimulator(method="density_matrix", noise_model=nc.noise_model).run(scheduled).result().data()
+    return idle, rho["density_matrix"].data[1, 1].real
+
+
+@pytest.mark.parametrize("noise", ["boston-2026", "burlington-2020"])
+def test_scheduling_reads_the_targets_timings_and_an_idle_qubit_decays(noise):
+    """Scheduling takes the delay, the time step and the durations from the Target, and the idle qubit decays by T1.
+
+    boston-2026 has a time step, so delays come in dt; burlington-2020 has none, so they come in seconds.
+    """
+    nc = NoiseControl("ibm2016", noise)
+    profile = load_noise(noise)
+    assert nc.target.dt == profile["time_step"]
+    assert all(p.duration == profile["measure"]["duration"] for p in nc.target["measure"].values())
+    idle, after = _idle_population_of_1(nc, busy_gates=40)
+    no_idle, before = _idle_population_of_1(nc, busy_gates=0)
+    assert no_idle == 0.0
+    assert idle == pytest.approx(40 * profile["gates"]["sx"]["duration"], rel=1e-12, abs=40 * (nc.target.dt or 0))
+    assert after == pytest.approx(before * math.exp(-idle / profile["qubit"]["t1_relaxation_time"]), rel=1e-9)
 
 
 def test_a_depolarising_profile_is_not_scheduled():
