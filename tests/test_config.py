@@ -157,6 +157,23 @@ def test_a_malformed_file_record_is_refused(record, message):
         configs.name_from_record(record, "noise")
 
 
+@pytest.mark.parametrize(
+    "file, name",
+    [
+        ("bp.data.noise.fez-2025.yaml", "fez-2025"),
+        ("bp.data.noise..yaml", None),
+        ("bp.data.circuit.fez-2025.yaml", None),
+        ("bp.data.noise.fez-2025.yml", None),
+    ],
+)
+def test_a_file_name_gives_back_its_name_and_nothing_else(file, name):
+    from bellbench import configs
+
+    assert configs.name_from_file("noise", file) == name
+    if name is not None:
+        assert configs.file_name("noise", name) == file
+
+
 def test_core_graphs_are_present():
     assert set(CORE_GRAPHS) <= set(PROCESSORS)
 

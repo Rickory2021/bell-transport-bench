@@ -148,15 +148,24 @@ class NoiseControl:
     @classmethod
     def from_yaml(cls, record: Mapping) -> "NoiseControl":
         """Rebuild a NoiseControl from `export_as_yaml`'s mapping; refuses a file whose hash changed."""
+        nc = cls(*cls.args_from_record(record))
+        nc.check_record(record)
+        return nc
+
+    @staticmethod
+    def args_from_record(record: Mapping) -> tuple:
+        """The processor, noise, scale, overrides and conditional channels an `export_as_yaml` mapping names."""
         expected = {"processor", "noise", "scale", "overrides", "conditional"}
         if set(record) != expected:
             raise ValueError(f"a NoiseControl record has the keys {sorted(expected)}; got {sorted(record)}")
         processor = name_from_record(record["processor"], "processor")
         noise = name_from_record(record["noise"], "noise")
-        nc = cls(processor, noise, record["scale"], record["overrides"], record["conditional"])
+        return processor, noise, record["scale"], record["overrides"], record["conditional"]
+
+    def check_record(self, record: Mapping) -> None:
+        """Raise a ValueError when the processor or noise file has changed since `record` was exported."""
         for kind in ("processor", "noise"):
-            check_unchanged(record[kind], nc._records[kind])
-        return nc
+            check_unchanged(record[kind], self._records[kind])
 
 
 # -- Building ------------------------------------------------------------------

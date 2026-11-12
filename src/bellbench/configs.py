@@ -22,7 +22,9 @@ what the caller builds from. `name_from_record` turns a record back into a
 name, and `check_unchanged` refuses a file whose content changed since then.
 
 `processor_graph` is the one builder of a processor's coupling graph, which
-NoiseControl, the figures and the tests share.
+NoiseControl, the figures and the tests share. `CORE_PROCESSORS` names the
+three core processor models, and `Dumper` writes the YAML that circuit files
+and run records hold.
 """
 
 import hashlib
@@ -37,6 +39,9 @@ from jsonschema import Draft202012Validator
 from jsonschema.exceptions import best_match
 
 ROOT = Path(__file__).resolve().parents[2]
+
+# The three core processor models, in the order the challenge lists them (docs/CHALLENGE.md).
+CORE_PROCESSORS = ("ibm2016", "contemporary", "hyperbolic")
 
 # Each kind of config file, and what an error message calls one; its files live in config/<kind>/.
 KINDS = {
@@ -59,7 +64,7 @@ def config_path(kind: str, name: str) -> Path:
 
 def config_names(kind: str) -> list[str]:
     """The names of every `kind` file, sorted."""
-    return sorted(p.name.split(".")[-2] for p in config_folder(kind).glob(file_name(kind, "*")))
+    return sorted(name_from_file(kind, p.name) for p in config_folder(kind).glob(file_name(kind, "*")))
 
 
 def load_config(kind: str, name: str) -> dict:
@@ -77,6 +82,14 @@ def config_folder(kind: str) -> Path:
 def file_name(kind: str, name: str) -> str:
     """A config file's name: bp.data.<kind>.<name>.yaml."""
     return f"bp.data.{kind}.{name}.yaml"
+
+
+def name_from_file(kind: str, file: str) -> str | None:
+    """The name in a `kind` file's name, the inverse of `file_name`; None when `file` is not a `kind` file's name."""
+    prefix, suffix = file_name(kind, "\0").split("\0")
+    if not (file.startswith(prefix) and file.endswith(suffix)) or len(file) <= len(prefix) + len(suffix):
+        return None
+    return file[len(prefix) : -len(suffix)]
 
 
 def processor_path(name: str) -> Path:
@@ -143,12 +156,11 @@ def name_from_record(record: Mapping, kind: str) -> str:
     if not isinstance(record, Mapping) or set(record) != {"path", "hash"}:
         raise ValueError(f"the {kind} record has the keys path and hash; got {record!r}")
     path = ROOT / record["path"]
-    prefix = f"bp.data.{kind}."
-    if not (path.name.startswith(prefix) and path.name.endswith(".yaml")):
-        raise ValueError(f"the {kind} record's path {record['path']!r} is not a {prefix}*.yaml file")
+    name = name_from_file(kind, path.name)
+    if name is None:
+        raise ValueError(f"the {kind} record's path {record['path']!r} is not a {file_name(kind, '*')} file")
     if not path.is_file():
         raise FileNotFoundError(f"the {kind} file {record['path']} recorded by the run no longer exists")
-    name = path.name[len(prefix) : -len(".yaml")]
     if repo_path(config_path(kind, name)) != record["path"]:
         raise ValueError(f"the {kind} record's path {record['path']!r} is not where {kind} files live")
     return name
@@ -238,6 +250,19 @@ def _read(kind: str, name: str) -> tuple[Path, dict]:
     if data["name"] != name:
         raise ValueError(f"{where}: $.name: {data['name']!r} does not match the file's name {name!r}")
     return path, data
+
+
+class Dumper(yaml.SafeDumper):
+    """Writes multi-line text, such as gates, as a literal block, so it reads as written, and long prose as a
+    folded block."""
+
+
+def _block_text(dumper, text):
+    style = "|" if "\n" in text else (">" if len(text) > 80 else None)
+    return dumper.represent_scalar("tag:yaml.org,2002:str", text, style=style)
+
+
+Dumper.add_representer(str, _block_text)
 
 
 @cache

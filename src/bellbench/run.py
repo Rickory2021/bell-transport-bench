@@ -197,15 +197,11 @@ class CircuitRun:
         _check_result_format(record)
         circuit = configs.name_from_record(record["circuit"], "circuit")
         nc_record = record["noise_control"]
-        noise = configs.name_from_record(nc_record["noise"], "noise")
-        run = cls(
-            circuit, noise, record["shots"], record["base_seed"], nc_record["scale"],
-            nc_record["overrides"], nc_record["conditional"], record["diagrams"],
-        )
+        _, noise, scale, overrides, conditional = NoiseControl.args_from_record(nc_record)
+        shots, base_seed, diagrams = record["shots"], record["base_seed"], record["diagrams"]
+        run = cls(circuit, noise, shots, base_seed, scale, overrides, conditional, diagrams)
         configs.check_unchanged(record["circuit"], run.circuit.record)
-        built = run.nc.export_as_yaml()
-        for kind in ("processor", "noise"):
-            configs.check_unchanged(nc_record[kind], built[kind])
+        run.nc.check_record(nc_record)
         if run.seeds != record["seeds"]:
             raise ValueError(f"the recorded seeds {record['seeds']} are not the ones the run's labels give {run.seeds}")
         return run
@@ -234,7 +230,7 @@ class CircuitRun:
             raise ValueError("write takes a root or a folder, not both")
         folder = Path(folder)
         folder.mkdir(parents=True, exist_ok=False)
-        (folder / RESULT_FILE).write_text(yaml.dump(record, Dumper=_Dumper, sort_keys=False), encoding="utf-8")
+        (folder / RESULT_FILE).write_text(yaml.dump(record, Dumper=configs.Dumper, sort_keys=False), encoding="utf-8")
         _write_csv(folder / "simulations.csv", self.simulation_rows(), SIMULATION_COLUMNS)
         _write_csv(folder / "counts.csv", self.count_rows(), COUNT_COLUMNS)
         write_views(folder)
@@ -619,15 +615,6 @@ def _read_csv(path: Path) -> list[dict]:
 def _stringify(rows: list[dict]) -> list[dict]:
     """Rows as csv reads them back, so a fresh run compares with a written one exactly."""
     return [{k: str(v) for k, v in row.items()} for row in rows]
-
-
-class _Dumper(yaml.SafeDumper):
-    """Writes circuits as literal blocks, so a record's OpenQASM reads as written."""
-
-
-_Dumper.add_representer(
-    str, lambda d, s: d.represent_scalar("tag:yaml.org,2002:str", s, style="|" if "\n" in s else None)
-)
 
 
 USAGE = """usage: python -m bellbench.run benchmark [NAME]     make a benchmark (default core)

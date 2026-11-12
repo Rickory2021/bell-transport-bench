@@ -46,7 +46,7 @@ from bellbench.pipeline import PORT_REGISTER
 # flag's bits catch a fault in a check, and frame_z or frame_x bits say a Z or an X is owed on the first port.
 ROLES = ("check", "flag", "frame_z", "frame_x")
 REGISTER_NAME = re.compile(rf"(?:{'|'.join(ROLES)})(?:_[a-z0-9]+)*")
-CORE_PROCESSORS = ("ibm2016", "contemporary", "hyperbolic")
+CORE_PROCESSORS = configs.CORE_PROCESSORS
 
 
 @dataclass(frozen=True)
@@ -145,7 +145,7 @@ def save_circuit(
     }
     path.parent.mkdir(parents=True, exist_ok=True)
     previous = path.read_text(encoding="utf-8") if path.exists() else None
-    text = f"# {configs.repo_path(path)}\n\n" + yaml.dump(data, Dumper=_Dumper, sort_keys=False)
+    text = f"# {configs.repo_path(path)}\n\n" + yaml.dump(data, Dumper=configs.Dumper, sort_keys=False)
     path.write_text(text, encoding="utf-8")
     try:
         load_circuit(name)
@@ -224,18 +224,6 @@ def write_baseline(processor: str, overwrite: bool = False) -> Path:
         baseline_name(processor), f"Baseline, {proc['label']}", processor, swap_chain(processor, path), notes,
         overwrite=overwrite,
     )
-
-
-class _Dumper(yaml.SafeDumper):
-    """Writes the gates as a literal block, so they read as written, and long prose as a folded block."""
-
-
-def _block_text(dumper, text):
-    style = "|" if "\n" in text else (">" if len(text) > 80 else None)
-    return dumper.represent_scalar("tag:yaml.org,2002:str", text, style=style)
-
-
-_Dumper.add_representer(str, _block_text)
 
 
 if __name__ == "__main__":

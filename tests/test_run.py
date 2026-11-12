@@ -280,12 +280,20 @@ def test_a_rerun_reports_changed_counts_or_numbers(folder, name, column, value, 
     assert code == 1 and line in lines
 
 
-def test_a_rerun_refuses_a_changed_file(config_copy):
+@pytest.mark.parametrize(
+    "path",
+    [
+        "config/circuit/bp.data.circuit.baseline-ibm2016.yaml",
+        "config/noise/bp.data.noise.boston-2026.yaml",
+        "config/processor/bp.data.processor.ibm2016.yaml",
+    ],
+)
+def test_a_rerun_refuses_a_changed_file(config_copy, path):
     folder = CircuitRun("baseline-ibm2016", "boston-2026", shots=200).run().write(config_copy / "results")
-    path = config_copy / "config" / "circuit" / "bp.data.circuit.baseline-ibm2016.yaml"
-    path.write_text(path.read_text(encoding="utf-8").replace("label: Baseline", "label: Edited"), encoding="utf-8")
+    edited = config_copy / path
+    edited.write_text(edited.read_text(encoding="utf-8").replace("label: ", "label: Edited ", 1), encoding="utf-8")
     code, lines = rerun(folder)
-    assert code == 2 and "changed since it was recorded" in lines[0]
+    assert code == 2 and f"{path} changed since it was recorded" in lines[0]
 
 
 def test_a_run_of_an_earlier_result_format_is_refused(folder):

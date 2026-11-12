@@ -36,7 +36,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 
 from bellbench.fidelity import BASES
-from bellbench.pipeline import PORT_REGISTER
+from bellbench.pipeline import PORT_REGISTER, split_key
 
 Registers = Sequence[tuple[str, int]]  # each classical register's name and size, in order, the port last
 BIT = re.compile(r"([a-z][a-z0-9_]*)\[(\d+)\]")
@@ -201,10 +201,7 @@ def _parse_bit(bit, sizes: Mapping[str, int]) -> tuple[str, int]:
 
 def _split(key: str, registers: Registers) -> dict[str, str]:
     """A count key as each register's bit string; Qiskit writes the last register first."""
-    parts = key.split(" ")
-    if len(parts) != len(registers):
-        raise ValueError(f"count key {key!r} does not have one part per register {[n for n, _ in registers]}")
-    return dict(zip((name for name, _ in reversed(registers)), parts))
+    return split_key(key, [name for name, _ in registers])
 
 
 def _parity(bits: Mapping[str, str], refs: Sequence[tuple[str, int]]) -> int:

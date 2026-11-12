@@ -21,9 +21,8 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 import networkx as nx  # noqa: E402
 
-from bellbench.configs import ROOT, load_processor, processor_graph  # noqa: E402
+from bellbench.configs import CORE_PROCESSORS, ROOT, load_processor, processor_graph  # noqa: E402
 
-CORE_PROCESSORS = ("ibm2016", "contemporary", "hyperbolic")
 COLORS = {"ibm2016": "#2151c7", "contemporary": "#137665", "hyperbolic": "#7139cc"}
 DEFAULT_COLOR = "#4a5568"
 EDGE_COLOR = "#9aa6b8"

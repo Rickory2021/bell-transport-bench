@@ -272,14 +272,22 @@ def register_counts(counts: Mapping[str, int], circuit: QuantumCircuit, name: st
     names = [reg.name for reg in circuit.cregs]
     if name not in names:
         raise ValueError(f"the circuit has no classical register named {name!r}; it has {names}")
-    position = len(names) - 1 - names.index(name)
     out = Counter()
     for key, n in counts.items():
-        parts = key.split(" ")
-        if len(parts) != len(names):
-            raise ValueError(f"count key {key!r} does not have one part per register {names}")
-        out[parts[position]] += n
+        out[split_key(key, names)[name]] += n
     return dict(sorted(out.items()))
+
+
+def split_key(key: str, names: Sequence[str]) -> dict[str, str]:
+    """A count key as each register's bit string, by name; Qiskit writes the last register first.
+
+    `names` are the circuit's classical registers in order. A key with another
+    number of parts raises a ValueError naming them.
+    """
+    parts = key.split(" ")
+    if len(parts) != len(names):
+        raise ValueError(f"count key {key!r} does not have one part per register {list(names)}")
+    return dict(zip(reversed(names), parts))
 
 
 def port_density_matrix(circuit: QuantumCircuit, noise_model, ports: Sequence[int]):
