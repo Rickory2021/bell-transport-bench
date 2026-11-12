@@ -23,6 +23,10 @@ help:
 	@echo "  Benchmark:"
 	@echo "    make test                        Run the bellbench test suite"
 	@echo ""
+	@echo "  Docs figures:"
+	@echo "    make figures                     Draw docs/assets/processor-models.png from the processor files"
+	@echo "    make diagram                     Render docs/assets/design-flow.png from DESIGN.md (needs Node)"
+	@echo ""
 	@echo "  References:"
 	@echo "    make refs-fetch                  Download local copies into .references/ (gitignored)"
 	@echo ""
@@ -55,6 +59,25 @@ bp-setup:
 
 test:
 	uv run --group dev pytest -q
+
+# -- Docs figures --------------------------------------------------------
+# make figures needs only the Python env. make diagram needs Node, because the
+# Mermaid CLI renders through a headless browser; only whoever edits the
+# diagram in docs/DESIGN.md runs it, and the PNG is committed for everyone else.
+
+MERMAID_CLI = @mermaid-js/mermaid-cli@11.16.0
+
+.PHONY: figures diagram
+
+figures:
+	uv run python -m bellbench.figures
+
+diagram:
+	@tmp=$$(mktemp --suffix=.mmd) && \
+	awk '/^```mermaid/{f=1; next} /^```/{f=0} f' docs/DESIGN.md > $$tmp && \
+	test -s $$tmp || { echo "no mermaid block in docs/DESIGN.md"; rm -f $$tmp; exit 1; } && \
+	npx -y $(MERMAID_CLI) -i $$tmp -o docs/assets/design-flow.png -s 2 -b white && \
+	rm -f $$tmp
 
 # -- References ----------------------------------------------------------
 
