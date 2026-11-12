@@ -17,7 +17,9 @@ two ports does not matter. Its variance over N shots is (1 - c^2) / N, and the
 three bases are measured on separate shots, so the standard error of F is a
 quarter of the square root of the three variances summed (UNCERTAINTY_METHOD).
 A basis with no shots leaves its correlator, and so F, undefined: it warns and
-gives NaN rather than a number.
+gives NaN rather than a number; a run's record and report flag such a basis
+(src/bellbench/run.py). Every value returned is a plain Python number, whatever
+integer type the counts hold, so it writes to YAML as it is.
 """
 
 import math
@@ -76,7 +78,7 @@ def correlator_from_counts(counts: Mapping[str, int], basis: str = "") -> Correl
     if shots == 0:
         warnings.warn(f"basis {basis or '?'} kept no shots, so its correlator and F are undefined", stacklevel=2)
         return Correlator(math.nan, 0)
-    agree = counts.get("00", 0) + counts.get("11", 0)
+    agree = int(counts.get("00", 0) + counts.get("11", 0))
     return Correlator((2 * agree - shots) / shots, shots)
 
 

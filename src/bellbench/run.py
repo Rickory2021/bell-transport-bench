@@ -194,15 +194,22 @@ class CircuitRun:
             "compiled": {basis: circuit_to_qasm(c.compiled) for basis, c in self.compiled.items()},
             "cost": self.cost,
             "scheduled_duration": self.duration,
-            "simulations": {
-                name: {"seeds": dict(sim.seeds), "methods": dict(sim.methods)} for name, sim in self.simulations.items()
-            },
+            "simulations": {name: self._simulation_record(name) for name in self.simulations},
             "provenance": {
                 "commit": commit,
                 "uncommitted": uncommitted,
                 "packages": {"python": platform.python_version(), **{p: version(p) for p in PACKAGES}},
             },
         }
+
+    def _simulation_record(self, name: str) -> dict:
+        """Aer's seeds and methods for one simulation, and `empty_bases`, the bases that kept no shot, when any."""
+        sim = self.simulations[name]
+        record = {"seeds": dict(sim.seeds), "methods": dict(sim.methods)}
+        empty = [b for b in BASES if self.analysis[name].accepted_shots[b] == 0]
+        if empty:
+            record["empty_bases"] = empty
+        return record
 
     @classmethod
     def from_yaml(cls, record: dict) -> "CircuitRun":
@@ -451,6 +458,13 @@ def _run_report(folder: Path, record: dict) -> str:
         f"Standard error method: {rows[0]['se_method']}.",
         "",
     ]
+    for name, sim in record["simulations"].items():
+        if sim.get("empty_bases"):
+            lines += [
+                f"**The {name} simulation kept no shot in {', '.join(sim['empty_bases'])},** so its F and that "
+                "basis's correlator are undefined (nan).",
+                "",
+            ]
     return "\n".join(lines)
 
 

@@ -196,6 +196,26 @@ def test_a_router_swap_through_a_measured_qubit_makes_its_measurement_mid_circui
         CircuitRun(name, "boston-2026", shots=100, base_seed=SEED).run()
 
 
+def test_a_basis_with_no_kept_shot_is_flagged_in_the_record_and_report(config_copy, tmp_path):
+    """Qubit 1 is put in |1> and read as a check, so every shot is discarded and every basis is empty."""
+    def build(qc, check):
+        qc.x(1)
+        qc.measure(1, check[0])
+
+    name = _save_checked(build)
+    with pytest.warns(UserWarning, match="kept no shots"):
+        folder = CircuitRun(name, "boston-2026", shots=50, base_seed=SEED).run().write(tmp_path)
+    record = yaml.safe_load((folder / RESULT_FILE).read_text(encoding="utf-8"))
+    assert all(record["simulations"][s]["empty_bases"] == ["XX", "YY", "ZZ"] for s in ("ideal", "noisy"))
+    report = (folder / "report.md").read_text(encoding="utf-8")
+    assert "**The noisy simulation kept no shot in XX, YY, ZZ,**" in report
+
+
+def test_a_run_that_keeps_shots_records_no_empty_bases(folder):
+    record = yaml.safe_load((folder / RESULT_FILE).read_text(encoding="utf-8"))
+    assert all("empty_bases" not in record["simulations"][s] for s in ("ideal", "noisy"))
+
+
 def test_a_written_delay_lasts_exactly_its_length(config_copy):
     """A 1 us wait on the first port before the pair is made adds exactly 1 us to the scheduled circuit."""
     circuit = swap_chain("ibm2016")

@@ -48,6 +48,12 @@ $defs:
         description: The simulation method Aer used for each basis circuit.
         allOf: [{$ref: "#/$defs/bases"}]
         additionalProperties: {$ref: "#/$defs/text"}
+      empty_bases:
+        description: The bases in which the simulation kept no shot, so its F is undefined; written only if any.
+        type: array
+        minItems: 1
+        uniqueItems: true
+        items: {enum: [XX, YY, ZZ]}
 
 properties:
   result_format:

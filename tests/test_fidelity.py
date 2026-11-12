@@ -8,9 +8,11 @@ import math
 
 import numpy as np
 import pytest
+import yaml
 from qiskit.quantum_info import DensityMatrix, Statevector
 
 from bellbench.fidelity import (
+    BASES,
     UNCERTAINTY_METHOD,
     bell_fidelity,
     correlator_from_counts,
@@ -61,6 +63,14 @@ def test_a_basis_with_no_shots_warns_and_gives_nan():
     with pytest.warns(UserWarning, match="YY kept no shots"):
         f = fidelity_from_counts({"XX": {"00": 5}, "YY": {}, "ZZ": {"11": 5}})
     assert math.isnan(f.value) and math.isnan(f.standard_error)
+
+
+def test_numpy_counts_give_plain_python_numbers():
+    counts = {b: {"00": np.int64(45), "11": np.int64(40), "01": np.int64(15)} for b in BASES}
+    fidelity = fidelity_from_counts(counts)
+    assert type(fidelity.value) is float and type(fidelity.standard_error) is float
+    assert all(type(c.value) is float for c in fidelity.correlators.values())
+    assert yaml.safe_load(yaml.safe_dump({"f": fidelity.value})) == {"f": fidelity.value}
 
 
 @pytest.mark.parametrize(
