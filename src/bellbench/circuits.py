@@ -166,12 +166,11 @@ def smallest_shortest_path(graph: nx.Graph, a: int, b: int) -> list[int]:
     return min(nx.all_shortest_paths(graph, a, b))
 
 
-def swap_chain(processor: str, path: Sequence[int] | None = None) -> QuantumCircuit:
-    """The baseline transport: H on the first port, SWAPs along `path` until the pair's qubits are neighbours,
-    CX onto the second port, then the same SWAPs in reverse so the pair ends on the ports (D-30).
+def port_path(processor: str, path: Sequence[int] | None = None) -> tuple[nx.Graph, list[int]]:
+    """The processor's graph and a checked path from its first port to its second along its couplers.
 
-    `path` runs from the first port to the second along couplers of the graph;
-    by default it is the lexicographically smallest shortest path.
+    By default the path is the lexicographically smallest shortest path; a
+    given one must run port to port, along couplers, visiting no qubit twice.
     """
     proc = configs.load_processor(processor)
     graph = configs.processor_graph(proc)
@@ -184,6 +183,18 @@ def swap_chain(processor: str, path: Sequence[int] | None = None) -> QuantumCirc
             raise ValueError(f"path {path}: qubits {u} and {v} are not a coupler of {processor!r}")
     if len(set(path)) != len(path):
         raise ValueError(f"path {path} visits a qubit twice")
+    return graph, path
+
+
+def swap_chain(processor: str, path: Sequence[int] | None = None) -> QuantumCircuit:
+    """The baseline transport: H on the first port, SWAPs along `path` until the pair's qubits are neighbours,
+    CX onto the second port, then the same SWAPs in reverse so the pair ends on the ports (D-30).
+
+    `path` runs from the first port to the second along couplers of the graph;
+    by default it is the lexicographically smallest shortest path.
+    """
+    graph, path = port_path(processor, path)
+    a, b = path[0], path[-1]
     circuit = QuantumCircuit(graph.number_of_nodes())
     circuit.h(a)
     hops = list(zip(path[:-2], path[1:-1]))
