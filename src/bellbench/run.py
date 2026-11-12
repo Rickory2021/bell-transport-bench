@@ -83,7 +83,11 @@ STAMP = "%Y%m%dT%H%M%SZ"  # the UTC time that names run and benchmark folders
 # The CSV contract: the columns of each CSV a run or benchmark writes, in order.
 # The writers take their headers from here and nowhere else, and the workbench
 # and the submission notebook read these names, so a column is added only when
-# the value it holds is built, and never renamed in place.
+# the value it holds is built, and never renamed in place. counts.csv's outcome
+# is the key Qiskit writes: one bit string per register, separated by spaces,
+# the last register first, and inside each string the highest bit first, so the
+# port register's string ends with the first port's bit. `read_table` reads any
+# of the three with its text columns kept as text.
 SIMULATION_COLUMNS = (
     "simulation",
     "fidelity", "fidelity_se", "fidelity_raw", "fidelity_raw_se", "se_method",
@@ -92,6 +96,7 @@ SIMULATION_COLUMNS = (
     *(f"shots_{kind}_{b}" for b in BASES for kind in ("raw", "accepted")),
 )
 COUNT_COLUMNS = ("simulation", "basis", "outcome", "count")
+TEXT_COLUMNS = ("simulation", "se_method", "basis", "outcome", "run", "circuit", "processor", "noise")
 COMPARISON_COLUMNS = (
     "case", "run", "circuit", "processor", "noise", "scale", "overrides",
     *SIMULATION_COLUMNS,
@@ -716,6 +721,31 @@ def _git_state() -> tuple[str | None, bool]:
     except (OSError, subprocess.CalledProcessError):
         return None, True
     return commit, bool(status.strip())
+
+
+def read_table(path):
+    """simulations.csv, counts.csv or comparison.csv as a pandas DataFrame, checked against its declared columns.
+
+    Text columns stay text, so an outcome such as "01" or "01 0" keeps its bits
+    (read as a number, "01" would become 1; the bit order is in the CSV
+    contract above). comparison.csv's case is a nullable integer, empty (<NA>)
+    for a run that fills no case; nan in a number column is NaN. A file of
+    another name, or whose header is not its declared columns, raises a
+    ValueError naming it.
+    """
+    import pandas as pd
+
+    path = Path(path)
+    tables = {"simulations.csv": SIMULATION_COLUMNS, "counts.csv": COUNT_COLUMNS, "comparison.csv": COMPARISON_COLUMNS}
+    if path.name not in tables:
+        raise ValueError(f"{path}: read_table reads {', '.join(tables)}; got {path.name}")
+    columns = tables[path.name]
+    with open(path, newline="", encoding="utf-8") as f:
+        header = tuple(next(csv.reader(f), ()))
+    if header != columns:
+        raise ValueError(f"{path}: the header is not the declared columns of {path.name}; got {list(header)}")
+    dtype = {c: str for c in columns if c in TEXT_COLUMNS} | ({"case": "Int64"} if "case" in columns else {})
+    return pd.read_csv(path, dtype=dtype, keep_default_na=False, na_values=["", "nan"])
 
 
 def _write_csv(path: Path, rows: list[dict], columns) -> None:

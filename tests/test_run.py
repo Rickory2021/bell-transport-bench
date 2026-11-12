@@ -10,6 +10,7 @@ comparisons.
 """
 
 import csv
+import math
 import shutil
 import subprocess
 from types import SimpleNamespace
@@ -30,6 +31,7 @@ from bellbench.run import (
     CircuitRun,
     Analysis,
     _write_csv,
+    read_table,
     rerun,
     wilson_interval,
 )
@@ -265,6 +267,35 @@ def test_counts_hold_the_full_outcome_key():
     assert len(rows) == 12
     assert all(tuple(r) == COUNT_COLUMNS for r in rows)
     assert {(r["outcome"], r["count"]) for r in rows} == {("01 0 1", 3), ("10 1 0", 2)}
+
+
+def test_read_table_keeps_bit_strings_as_text(folder):
+    counts = read_table(folder / "counts.csv")
+    assert set(counts["outcome"]) <= {"00", "01", "10", "11"} and "00" in set(counts["outcome"])
+    assert counts["count"].sum() == 2 * 3 * 500
+    simulations = read_table(folder / "simulations.csv")
+    assert tuple(simulations.columns) == SIMULATION_COLUMNS
+    assert simulations["fidelity"].dtype == float and list(simulations["simulation"]) == ["ideal", "noisy"]
+
+
+def test_read_table_reads_nan_as_nan(folder):
+    _edit_csv(folder / "simulations.csv", "fidelity", "nan")
+    assert math.isnan(read_table(folder / "simulations.csv")["fidelity"][0])
+
+
+@pytest.mark.parametrize(
+    "rename, change, message",
+    [
+        ("other.csv", None, "read_table reads simulations.csv, counts.csv, comparison.csv; got other.csv"),
+        ("counts.csv", lambda text: text.replace("outcome", "key", 1), "the header is not the declared columns"),
+    ],
+)
+def test_read_table_refuses_a_file_it_does_not_know(folder, tmp_path, rename, change, message):
+    text = (folder / "counts.csv").read_text(encoding="utf-8")
+    path = tmp_path / rename
+    path.write_text(change(text) if change else text, encoding="utf-8")
+    with pytest.raises(ValueError, match=message):
+        read_table(path)
 
 
 def test_a_row_that_does_not_fit_the_declared_columns_raises(tmp_path):

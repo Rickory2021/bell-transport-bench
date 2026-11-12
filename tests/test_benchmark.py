@@ -29,6 +29,7 @@ from bellbench.run import (
     CircuitRun,
     comparison_rows,
     current_benchmark,
+    read_table,
     load_benchmark,
     main,
     run_benchmark,
@@ -157,6 +158,17 @@ def _write_benchmark(root, name, runs, cases):
     data = {"name": name, "label": "Test", "notes": "A test benchmark.", "shots": 100, "base_seed": 7,
             "runs": runs, "cases": cases}
     (root / "config" / "benchmark" / f"bp.data.benchmark.{name}.yaml").write_text(yaml.safe_dump(data), encoding="utf-8")
+
+
+def test_read_table_gives_cases_as_integers_and_no_case_as_na(config_copy):
+    _write_benchmark(config_copy, "mixed", [
+        {"id": "a", "circuit": "baseline-ibm2016", "noise": "boston-2026"},
+        {"id": "b", "circuit": "baseline-contemporary", "noise": "boston-2026"},
+    ], [{"case": 1, "run": "a", "simulation": "ideal"}])
+    table = read_table(run_benchmark("mixed", config_copy / "results", shots=50) / "comparison.csv")
+    assert str(table["case"].dtype) == "Int64"
+    assert table["case"].iloc[0] == 1 and table["case"].iloc[1:].isna().all()
+    assert tuple(table.columns) == COMPARISON_COLUMNS
 
 
 def test_a_case_whose_pair_ends_off_its_ports_is_refused(config_copy):
