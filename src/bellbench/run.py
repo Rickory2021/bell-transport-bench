@@ -554,19 +554,28 @@ def run_benchmark(name: str, root: Path | None = None, shots: int | None = None)
 
 
 def current_benchmark(name: str, root: Path | None = None) -> Path:
-    """The benchmark's current folder: the one with the latest stamp under <root>/runs/benchmark/<name>/.
+    """The benchmark's current folder: the finished one with the latest stamp under <root>/runs/benchmark/<name>/.
 
-    `root` defaults to results/, where the benchmarks made from committed code are.
+    A folder is finished once it holds report.md, which a benchmark writes last,
+    so a make that failed partway never becomes the current one. `root` defaults
+    to results/, where the benchmarks made from committed code are.
     """
     parent = (configs.ROOT / "results" if root is None else Path(root)) / "runs" / "benchmark" / name
-    stamps = sorted(p for p in parent.glob("*") if p.is_dir() and re.fullmatch(r"\d{8}T\d{6}Z", p.name))
+    stamps = sorted(
+        p for p in parent.glob("*")
+        if p.is_dir() and re.fullmatch(r"\d{8}T\d{6}Z", p.name) and (p / "report.md").is_file()
+    )
     if not stamps:
         raise FileNotFoundError(f"no {name!r} benchmark in {parent}; make benchmark NAME={name} makes one")
     return stamps[-1]
 
 
 def comparison_rows(runs: dict, data: dict) -> list[dict]:
-    """One row per run and simulation, with the cost and D-7's two-qubit gates per accepted pair."""
+    """One row per run and simulation, with the cost and the two-qubit gates per accepted pair.
+
+    The gates per accepted pair are undefined (NaN) where a simulation kept no
+    shot, as its F is.
+    """
     case_of = {(c["run"], c["simulation"]): c["case"] for c in data.get("cases", [])}
     rows = []
     for run_id, run in runs.items():
@@ -587,7 +596,9 @@ def comparison_rows(runs: dict, data: dict) -> list[dict]:
                 "depth": run.cost["depth"],
                 "qubits_used": len(run.cost["qubits_used"]),
                 "scheduled_duration": run.duration if run.duration is not None else "",
-                "two_qubit_gates_per_accepted_pair": run.cost["two_qubit_gates"] / a.acceptance,
+                "two_qubit_gates_per_accepted_pair": (
+                    run.cost["two_qubit_gates"] / a.acceptance if a.acceptance else math.nan
+                ),
             })
     return rows
 

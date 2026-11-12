@@ -10,6 +10,8 @@ and the make targets reach the command line.
 """
 
 import csv
+import math
+from types import SimpleNamespace
 
 import pytest
 import yaml
@@ -23,6 +25,7 @@ from bellbench.run import (
     RESULT_FILE,
     RUN_LIST,
     CircuitRun,
+    comparison_rows,
     current_benchmark,
     load_benchmark,
     main,
@@ -93,13 +96,32 @@ def test_a_benchmark_lands_in_results_only_when_every_reading_is_clean(config_co
     assert folder.relative_to(config_copy).parts[0] == root
 
 
-def test_the_current_benchmark_is_the_latest_stamp(tmp_path):
+def test_the_current_benchmark_is_the_latest_finished_stamp(tmp_path):
+    """A folder is finished once it holds report.md; a later one a failed make left partway is passed over."""
     with pytest.raises(FileNotFoundError, match="make benchmark NAME=core"):
         current_benchmark("core", tmp_path)
     parent = tmp_path / "runs" / "benchmark" / "core"
     for name in ("20261115T090000Z", "20261116T120000Z", "20261114T230000Z", "notes"):
         (parent / name).mkdir(parents=True)
+        (parent / name / "report.md").write_text("# A benchmark\n", encoding="utf-8")
+    (parent / "20261117T080000Z" / "ibm2016").mkdir(parents=True)
     assert current_benchmark("core", tmp_path) == parent / "20261116T120000Z"
+
+
+def test_a_simulation_that_kept_no_shot_has_no_gates_per_accepted_pair():
+    analysis = {
+        name: SimpleNamespace(acceptance=acceptance, row=lambda n: {"simulation": n})
+        for name, acceptance in (("ideal", 1.0), ("noisy", 0.0))
+    }
+    run = SimpleNamespace(
+        analysis=analysis, circuit=SimpleNamespace(name="c", processor="ibm2016"),
+        nc=SimpleNamespace(noise_name="boston-2026", scale=1.0, overrides=[]),
+        cost={"swaps": 2, "router_swaps": 0, "two_qubit_gates": 7, "depth": 8, "qubits_used": [0, 3, 4]},
+        duration=None,
+    )
+    ideal, noisy = comparison_rows({"a": run}, {"runs": []})
+    assert ideal["two_qubit_gates_per_accepted_pair"] == 7.0
+    assert math.isnan(noisy["two_qubit_gates_per_accepted_pair"])
 
 
 def test_two_makes_in_one_second_refuse_and_keep_the_first(tmp_path, monkeypatch):
