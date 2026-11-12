@@ -21,7 +21,9 @@ measured qubit makes its measurement mid-circuit.
 `write` makes the run folder: <root>/runs/workbench/<circuit>/<noise>/<stamp>/
 for a run made on its own, or the folder a benchmark names for each of its runs.
 <root> is results/ for a run made from committed code and config, workspace/
-otherwise. A run folder holds bp.data.result.yaml, the settings and records,
+otherwise. The git state is read when `run` starts, so the record describes the
+tree the numbers came from, and a write after a later commit still lands in
+workspace/. A run folder holds bp.data.result.yaml, the settings and records,
 checked against config/bp.schema.result.yaml; simulations.csv, one row of
 numbers per simulation; and counts.csv, every outcome as the key Qiskit writes,
 one bit string per register in reverse of the record's register order. Seeds derive from
@@ -120,7 +122,7 @@ class CircuitRun:
         self.shots, self.base_seed, self.diagrams = shots, base_seed, diagrams
         self.labels = (circuit, noise, repr(self.nc.scale), self.settings_hash or "none")
         self.seeds = {step: derive_seed(base_seed, *self.labels, step) for step in ("transpile", *SIMULATIONS)}
-        self.compiled = self.cost = self.duration = None
+        self.compiled = self.cost = self.duration = self.git_state = None
         self.simulations, self.analysis = {}, {}
 
     @property
@@ -134,7 +136,12 @@ class CircuitRun:
     # -- Running ---------------------------------------------------------------
 
     def run(self, methods: dict[str, str] | None = None) -> "CircuitRun":
-        """Compile, cost, schedule, simulate ideal and noisy, and read the shots; `methods` repeats a recorded run's."""
+        """Compile, cost, schedule, simulate ideal and noisy, and read the shots; `methods` repeats a recorded run's.
+
+        The commit and whether src/ or config/ has uncommitted changes are read
+        first, so they describe the code and config the numbers came from.
+        """
+        self.git_state = _git_state()
         circuits = basis_circuits(self.circuit.circuit, self.nc.ports)
         self.compiled = compile_bases(circuits, self.nc, self.seeds["transpile"])
         _check_conditional_channels(self.circuit.name, self.compiled, self.nc)
@@ -166,7 +173,7 @@ class CircuitRun:
         """The run's settings and records, as bp.data.result.yaml holds them."""
         if not self.simulations:
             raise RuntimeError("the run has not run yet; call run() first")
-        commit, uncommitted = _git_state()
+        commit, uncommitted = self.git_state
         return {
             "result_format": RESULT_FORMAT,
             "circuit": dict(self.circuit.record),
@@ -448,11 +455,14 @@ def load_benchmark(name: str) -> tuple[dict, dict]:
 def run_benchmark(name: str, root: Path | None = None, shots: int | None = None) -> Path:
     """Make every run the benchmark lists and write a new folder; refuses before writing if a case fails its self-test.
 
-    The folder is <root>/runs/benchmark/<name>/<stamp>/, with `root` results/ or
-    workspace/ as the git state says, and each run is written in it under its run
-    id. Earlier folders are never changed or deleted. `shots` overrides the
-    file's, for tests only.
+    The folder is <root>/runs/benchmark/<name>/<stamp>/, and each run is written
+    in it under its run id. `root` is results/ only when the git state read as the
+    benchmark starts and as each of its runs starts is the same commit with
+    nothing uncommitted in src/ or config/, and workspace/ otherwise, so an edit
+    or a commit during the make lands on the safe side. Earlier folders are never
+    changed or deleted. `shots` overrides the file's, for tests only.
     """
+    start = _git_state()
     data, record = load_benchmark(name)
     runs = {}
     for spec in data["runs"]:
@@ -469,7 +479,8 @@ def run_benchmark(name: str, root: Path | None = None, shots: int | None = None)
             raise ValueError(f"benchmark {name!r}: case {case['case']}: run {case['run']!r} has ideal F {ideal}, not 1")
     run_list = {"benchmark": record, "runs": list(runs), "cases": data.get("cases", [])}
     if root is None:
-        root = configs.ROOT / ("workspace" if _git_state()[1] else "results")
+        clean = not start[1] and all(run.git_state == start for run in runs.values())
+        root = configs.ROOT / ("results" if clean else "workspace")
     folder = Path(root) / "runs" / "benchmark" / name / _stamp()
     configs.check_config("runs", run_list, (folder / RUN_LIST).as_posix())
     try:

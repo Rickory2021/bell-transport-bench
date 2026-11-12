@@ -61,6 +61,6 @@ display(pd.DataFrame(run.simulation_rows()).set_index("simulation").T)
 display(pd.Series(run.cost, name="cost"))
 
 # %%
-# Write the run folder: results/ when src/ and config/ are committed, workspace/ otherwise.
+# Write the run folder: results/ when src/ and config/ were committed as the run started, workspace/ otherwise.
 folder = run.write()
 print(configs.repo_path(folder))

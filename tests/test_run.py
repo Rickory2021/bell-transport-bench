@@ -322,6 +322,17 @@ def test_uncommitted_runs_go_to_workspace(config_copy, monkeypatch, uncommitted,
     assert folder.relative_to(config_copy).parts[0] == root
 
 
+def test_the_git_state_is_read_when_the_run_starts(config_copy, monkeypatch):
+    """Simulated with an uncommitted edit, written after a commit: the run still lands in workspace/ as uncommitted."""
+    monkeypatch.setattr(run_module, "_git_state", lambda: ("abc123", True))
+    run = CircuitRun("baseline-ibm2016", "boston-2026", shots=100).run()
+    monkeypatch.setattr(run_module, "_git_state", lambda: ("def456", False))
+    folder = run.write()
+    record = yaml.safe_load((folder / RESULT_FILE).read_text(encoding="utf-8"))
+    assert folder.relative_to(config_copy).parts[0] == "workspace"
+    assert record["provenance"]["commit"] == "abc123" and record["provenance"]["uncommitted"] is True
+
+
 def _git(root, *args):
     command = ["git", "-c", "user.name=t", "-c", "user.email=t@t", *args]
     subprocess.run(command, cwd=root, check=True, capture_output=True)

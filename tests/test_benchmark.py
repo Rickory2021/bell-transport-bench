@@ -75,6 +75,24 @@ def test_benchmark_end_to_end(tmp_path, monkeypatch):
     assert len(list((tmp_path / "runs").rglob(RESULT_FILE))) == 6
 
 
+@pytest.mark.parametrize(
+    "states, root",
+    [
+        ([("abc", False)], "results"),
+        ([("abc", True)], "workspace"),
+        ([("abc", False), ("abc", True)], "workspace"),
+        ([("abc", False), ("def", False)], "workspace"),
+    ],
+)
+def test_a_benchmark_lands_in_results_only_when_every_reading_is_clean(config_copy, monkeypatch, states, root):
+    """The state is read as the benchmark starts and as each run starts; an edit or a commit during the make
+    sends the whole benchmark to workspace/."""
+    readings = iter(states + [states[-1]] * 3)
+    monkeypatch.setattr(run_module, "_git_state", lambda: next(readings))
+    folder = run_benchmark("core", shots=50)
+    assert folder.relative_to(config_copy).parts[0] == root
+
+
 def test_the_current_benchmark_is_the_latest_stamp(tmp_path):
     with pytest.raises(FileNotFoundError, match="make benchmark NAME=core"):
         current_benchmark("core", tmp_path)
