@@ -204,5 +204,6 @@ def test_a_circuit_file_naming_an_unknown_processor_raises(config_copy):
     path = config_copy / "config" / "circuit" / "bp.data.circuit.orphan.yaml"
     data = yaml.safe_load(configs.config_path("circuit", "baseline-ibm2016").read_text(encoding="utf-8"))
     path.write_text(yaml.safe_dump({**data, "name": "orphan", "processor": "no-such-graph"}), encoding="utf-8")
-    with pytest.raises(FileNotFoundError, match="no processor file named 'no-such-graph'"):
+    message = r"config/circuit/bp\.data\.circuit\.orphan\.yaml: \$\.processor: no processor file named 'no-such-graph'"
+    with pytest.raises(ValueError, match=message):
         load_circuit("orphan")

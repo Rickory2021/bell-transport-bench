@@ -65,7 +65,10 @@ class CircuitFile:
 def load_circuit(name: str) -> CircuitFile:
     """The circuit file for `name`, checked; raises a ValueError naming the file and the field."""
     data, record = configs.load_recorded("circuit", name)
-    processor = configs.load_processor(data["processor"])
+    try:
+        processor = configs.load_processor(data["processor"])
+    except FileNotFoundError as e:
+        raise ValueError(f"{record['path']}: $.processor: {e}") from None
     circuit = circuit_from_qasm(data["circuit"], len(processor["qubits"]), record["path"], processor["ports"])
     try:
         check_analysis(data["analysis"], [(r.name, r.size) for r in circuit.cregs] + [(PORT_REGISTER, 2)])
