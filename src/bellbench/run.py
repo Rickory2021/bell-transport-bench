@@ -101,14 +101,19 @@ COMPARISON_COLUMNS = (
 
 
 class CircuitRun:
-    """One run: a circuit file under a noise profile, with its scale, overrides and conditional channels."""
+    """One run: a circuit file under a noise profile, with its scale, overrides and conditional channels.
+
+    `shots` (per basis circuit, in each simulation) and `base_seed` have no
+    default: the caller states both, as a benchmark file or the workbench does, so
+    every seed a run uses traces to a value written down.
+    """
 
     def __init__(
         self,
         circuit: str,
         noise: str,
-        shots: int = 20_000,
-        base_seed: int = 2026,
+        shots: int,
+        base_seed: int,
         scale: float = 1.0,
         overrides=(),
         conditional=None,

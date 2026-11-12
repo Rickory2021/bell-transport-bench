@@ -34,13 +34,14 @@ from bellbench.run import (
     wilson_interval,
 )
 
+SEED = 2026  # the base seed every test run uses; CircuitRun has no default
 # The organisers' recorded noisy fidelities under their 2% CX noise (docs/CHALLENGE.md).
 ORGANISERS = {"ibm2016": 0.915, "contemporary": 0.795, "hyperbolic": 0.852}
 
 
 @pytest.mark.parametrize("processor, swaps, cz", [("ibm2016", 2, 7), ("contemporary", 6, 19), ("hyperbolic", 4, 13)])
 def test_baseline_passes_its_self_test(processor, swaps, cz):
-    run = CircuitRun(f"baseline-{processor}", "boston-2026", shots=1000).run()
+    run = CircuitRun(f"baseline-{processor}", "boston-2026", shots=1000, base_seed=SEED).run()
     ideal, noisy = run.analysis["ideal"], run.analysis["noisy"]
     assert ideal.accepted.value == 1.0 and ideal.acceptance == 1.0
     assert noisy.acceptance == 1.0 and noisy.accepted.value == noisy.raw.value < 1.0
@@ -51,17 +52,26 @@ def test_baseline_passes_its_self_test(processor, swaps, cz):
 
 @pytest.mark.parametrize("processor", sorted(ORGANISERS))
 def test_measured_cross_check_lands_within_three_standard_errors(processor):
-    noisy = CircuitRun(f"baseline-{processor}", "organiser-cx2", shots=20_000).run().analysis["noisy"]
+    noisy = CircuitRun(f"baseline-{processor}", "organiser-cx2", shots=20_000, base_seed=SEED).run().analysis["noisy"]
     # The organisers recorded three decimals, so their value carries up to 0.0005 of rounding.
     assert abs(noisy.accepted.value - ORGANISERS[processor]) < 3 * noisy.accepted.standard_error + 0.0005
 
 
 def test_seeds_repeat_for_the_same_labels_and_differ_otherwise():
-    a = CircuitRun("baseline-ibm2016", "boston-2026")
-    assert a.seeds == CircuitRun("baseline-ibm2016", "boston-2026", shots=10).seeds
-    assert a.seeds != CircuitRun("baseline-ibm2016", "fez-2025").seeds
-    assert a.seeds != CircuitRun("baseline-ibm2016", "boston-2026", scale=2).seeds
+    a = CircuitRun("baseline-ibm2016", "boston-2026", shots=100, base_seed=SEED)
+    assert a.seeds == CircuitRun("baseline-ibm2016", "boston-2026", shots=10, base_seed=SEED).seeds
+    assert a.seeds != CircuitRun("baseline-ibm2016", "boston-2026", shots=100, base_seed=SEED + 1).seeds
+    assert a.seeds != CircuitRun("baseline-ibm2016", "fez-2025", shots=100, base_seed=SEED).seeds
+    assert a.seeds != CircuitRun("baseline-ibm2016", "boston-2026", shots=100, base_seed=SEED, scale=2).seeds
     assert len(set(a.seeds.values())) == 3
+
+
+@pytest.mark.parametrize("missing", ["shots", "base_seed"])
+def test_shots_and_the_base_seed_are_always_stated(missing):
+    settings = {"shots": 100, "base_seed": SEED}
+    del settings[missing]
+    with pytest.raises(TypeError, match=missing):
+        CircuitRun("baseline-ibm2016", "boston-2026", **settings)
 
 
 def test_postselection_keeps_shots_whose_checks_read_zero():
@@ -97,7 +107,7 @@ def _save_checked(build) -> str:
 def test_a_final_check_measurement_runs_with_the_channels_unset(config_copy):
     """Qubit 3 is vacated when the SWAPs come back, so a vacancy read at the end finds 0 and keeps every shot."""
     name = _save_checked(lambda qc, check: qc.measure(3, check[0]))
-    run = CircuitRun(name, "boston-2026", shots=500).run()
+    run = CircuitRun(name, "boston-2026", shots=500, base_seed=SEED).run()
     assert run.analysis["ideal"].accepted.value == 1.0 and run.analysis["ideal"].acceptance == 1.0
     assert run.registers == ["check", "port"]
 
@@ -119,7 +129,7 @@ def test_a_final_check_measurement_runs_with_the_channels_unset(config_copy):
 def test_a_reset_or_a_reused_measured_qubit_stops_while_its_channel_is_unset(config_copy, build, message):
     name = _save_checked(build)
     with pytest.raises(ValueError, match=message):
-        CircuitRun(name, "boston-2026", shots=100).run()
+        CircuitRun(name, "boston-2026", shots=100, base_seed=SEED).run()
 
 
 @pytest.mark.parametrize("p, low, high", [(0.0, 0.9, 1.0), (1.0, 0.0, 0.1)])
@@ -131,7 +141,7 @@ def test_a_reset_runs_once_its_channel_is_set(config_copy, p, low, high):
         qc.measure(1, check[0])
 
     name = _save_checked(build)
-    run = CircuitRun(name, "boston-2026", shots=2000, conditional={"reset_error": p}).run()
+    run = CircuitRun(name, "boston-2026", shots=2000, base_seed=SEED, conditional={"reset_error": p}).run()
     assert run.analysis["ideal"].acceptance == 1.0
     assert low <= run.analysis["noisy"].acceptance <= high
 
@@ -155,7 +165,7 @@ def _vacancy_then_zz(reset: bool):
 def test_a_protected_circuit_runs_end_to_end_once_both_channels_are_set(config_copy):
     name = _save_checked(_vacancy_then_zz(reset=True))
     conditional = {"reset_error": 0.01, "mid_circuit_measurement_error": 0.01}
-    run = CircuitRun(name, "boston-2026", shots=2000, conditional=conditional).run()
+    run = CircuitRun(name, "boston-2026", shots=2000, base_seed=SEED, conditional=conditional).run()
     ideal, noisy = run.analysis["ideal"], run.analysis["noisy"]
     assert ideal.accepted.value == 1.0 and ideal.acceptance == 1.0
     assert 0.5 < noisy.acceptance < 1.0 and noisy.accepted.value > noisy.raw.value
@@ -166,7 +176,8 @@ def test_a_protected_circuit_runs_end_to_end_once_both_channels_are_set(config_c
 def test_a_reused_qubit_carries_the_mid_circuit_error_into_its_next_check(config_copy, p, low, high):
     """With no reset between, a flip after the vacancy read starts the ZZ ancilla in |1>, so its check fires."""
     name = _save_checked(_vacancy_then_zz(reset=False))
-    run = CircuitRun(name, "boston-2026", shots=2000, conditional={"mid_circuit_measurement_error": p}).run()
+    conditional = {"mid_circuit_measurement_error": p}
+    run = CircuitRun(name, "boston-2026", shots=2000, base_seed=SEED, conditional=conditional).run()
     assert run.analysis["ideal"].acceptance == 1.0
     assert low <= run.analysis["noisy"].acceptance <= high
 
@@ -182,7 +193,7 @@ def test_a_router_swap_through_a_measured_qubit_makes_its_measurement_mid_circui
 
     name = _save_checked(build)
     with pytest.raises(ValueError, match=r"measures qubit\(s\) \[3\] and then acts on them again"):
-        CircuitRun(name, "boston-2026", shots=100).run()
+        CircuitRun(name, "boston-2026", shots=100, base_seed=SEED).run()
 
 
 def test_a_written_delay_lasts_exactly_its_length(config_copy):
@@ -190,8 +201,8 @@ def test_a_written_delay_lasts_exactly_its_length(config_copy):
     circuit = swap_chain("ibm2016")
     circuit.data.insert(0, circuit.copy_empty_like().delay(1, 0, unit="us")[0])
     save_circuit("waits", "Waits", "ibm2016", circuit, "A test circuit.")
-    base = CircuitRun("baseline-ibm2016", "boston-2026", shots=100).run()
-    waits = CircuitRun("waits", "boston-2026", shots=100).run()
+    base = CircuitRun("baseline-ibm2016", "boston-2026", shots=100, base_seed=SEED).run()
+    waits = CircuitRun("waits", "boston-2026", shots=100, base_seed=SEED).run()
     assert waits.duration - base.duration == pytest.approx(1e-6, abs=1e-12)
 
 
@@ -206,7 +217,7 @@ def test_an_analysis_the_registry_lacks_is_refused(config_copy):
 
 @pytest.fixture
 def folder(tmp_path):
-    return CircuitRun("baseline-ibm2016", "boston-2026", shots=500).run().write(tmp_path)
+    return CircuitRun("baseline-ibm2016", "boston-2026", shots=500, base_seed=SEED).run().write(tmp_path)
 
 
 def test_run_folder_holds_its_record_and_numbers(folder, tmp_path):
@@ -289,7 +300,8 @@ def test_a_rerun_reports_changed_counts_or_numbers(folder, name, column, value, 
     ],
 )
 def test_a_rerun_refuses_a_changed_file(config_copy, path):
-    folder = CircuitRun("baseline-ibm2016", "boston-2026", shots=200).run().write(config_copy / "results")
+    run = CircuitRun("baseline-ibm2016", "boston-2026", shots=200, base_seed=SEED)
+    folder = run.run().write(config_copy / "results")
     edited = config_copy / path
     edited.write_text(edited.read_text(encoding="utf-8").replace("label: ", "label: Edited ", 1), encoding="utf-8")
     code, lines = rerun(folder)
@@ -351,7 +363,8 @@ def test_a_rerun_with_edited_recorded_seeds_differs_in_its_counts(folder):
     ],
 )
 def test_a_changed_file_that_no_longer_loads_is_refused_for_the_change(config_copy, path, broken):
-    folder = CircuitRun("baseline-ibm2016", "boston-2026", shots=100).run().write(config_copy / "results")
+    run = CircuitRun("baseline-ibm2016", "boston-2026", shots=100, base_seed=SEED)
+    folder = run.run().write(config_copy / "results")
     edited = config_copy / path
     edited.write_text(edited.read_text(encoding="utf-8") + broken, encoding="utf-8")
     code, lines = rerun(folder)
@@ -380,14 +393,14 @@ def test_the_record_holds_the_circuits_in_openqasm_3(folder):
 @pytest.mark.parametrize("uncommitted, root", [(True, "workspace"), (False, "results")])
 def test_uncommitted_runs_go_to_workspace(config_copy, monkeypatch, uncommitted, root):
     monkeypatch.setattr(run_module, "_git_state", lambda: ("abc123", uncommitted))
-    folder = CircuitRun("baseline-ibm2016", "boston-2026", shots=100).run().write()
+    folder = CircuitRun("baseline-ibm2016", "boston-2026", shots=100, base_seed=SEED).run().write()
     assert folder.relative_to(config_copy).parts[0] == root
 
 
 def test_the_git_state_is_read_when_the_run_starts(config_copy, monkeypatch):
     """Simulated with an uncommitted edit, written after a commit: the run still lands in workspace/ as uncommitted."""
     monkeypatch.setattr(run_module, "_git_state", lambda: ("abc123", True))
-    run = CircuitRun("baseline-ibm2016", "boston-2026", shots=100).run()
+    run = CircuitRun("baseline-ibm2016", "boston-2026", shots=100, base_seed=SEED).run()
     monkeypatch.setattr(run_module, "_git_state", lambda: ("def456", False))
     folder = run.write()
     record = yaml.safe_load((folder / RESULT_FILE).read_text(encoding="utf-8"))
@@ -434,7 +447,7 @@ def test_the_git_state_flags_uncommitted_changes_in_src_and_config_only(tmp_path
 )
 def test_a_workbench_folder_names_its_scale_and_settings(tmp_path, monkeypatch, scale, conditional, suffix):
     monkeypatch.setattr(run_module, "_stamp", lambda: "20261116T120000Z")
-    run = CircuitRun("baseline-ibm2016", "boston-2026", shots=50, scale=scale, conditional=conditional)
+    run = CircuitRun("baseline-ibm2016", "boston-2026", shots=50, base_seed=SEED, scale=scale, conditional=conditional)
     folder = run.run().write(tmp_path)
     assert folder.name == "20261116T120000Z" + suffix.format(h=run.settings_hash)
     assert run.settings_hash is None or len(run.settings_hash) == 8

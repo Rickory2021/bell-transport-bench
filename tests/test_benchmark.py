@@ -34,6 +34,9 @@ from bellbench.run import (
 )
 
 
+SEED = 2026  # the base seed every test run uses; CircuitRun has no default
+
+
 def test_core_benchmark_file_maps_the_baseline_cases():
     data, record = load_benchmark("core")
     assert record["path"] == "config/benchmark/bp.data.benchmark.core.yaml"
@@ -226,13 +229,14 @@ def test_a_malformed_benchmark_file_raises_naming_the_field(config_copy, runs, c
     ("full", {"graph.png", "circuit-zz.png", "written.png", "circuit-xx.png", "circuit-yy.png", "timeline.png", "report.md"}),
 ])
 def test_views_are_drawn(tmp_path, diagrams, files):
-    folder = CircuitRun("baseline-ibm2016", "boston-2026", shots=100, diagrams=diagrams).run().write(tmp_path)
+    run = CircuitRun("baseline-ibm2016", "boston-2026", shots=100, base_seed=SEED, diagrams=diagrams)
+    folder = run.run().write(tmp_path)
     assert files <= {p.name for p in folder.iterdir()}
     assert {p.name for p in write_views(folder)} == files
 
 
 def test_command_line(tmp_path, capsys):
-    folder = CircuitRun("baseline-ibm2016", "boston-2026", shots=100).run().write(tmp_path)
+    folder = CircuitRun("baseline-ibm2016", "boston-2026", shots=100, base_seed=SEED).run().write(tmp_path)
     assert main(["rerun", str(folder)]) == 0
     assert main(["report", str(folder / RESULT_FILE)]) == 0
     assert main(["nonsense"]) == 2
