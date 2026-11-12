@@ -35,7 +35,7 @@ import hashlib
 import json
 from collections import Counter
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from qiskit import ClassicalRegister, QuantumCircuit
 from qiskit.transpiler import PassManager, StagedPassManager, generate_preset_pass_manager
@@ -63,12 +63,18 @@ class Compiled:
 
 @dataclass(frozen=True)
 class Simulation:
-    """One simulation's port counts per basis, with the seed and method Aer used for each basis circuit."""
+    """One simulation's port counts per basis, with the seed and method Aer used for each basis circuit.
+
+    `raw` holds each basis's counts with every classical register, keyed as
+    Qiskit writes them (one bit string per register, the last register first),
+    so a run can postselect on check bits and store the counts in full.
+    """
 
     counts: dict[str, dict[str, int]]
     seeds: dict[str, int]
     methods: dict[str, str]
     shots: int
+    raw: dict[str, dict[str, int]] = field(default_factory=dict)
 
 
 # -- Basis circuits ----------------------------------------------------------------
@@ -241,12 +247,13 @@ def simulate(
     bases = list(circuits)
     simulator = AerSimulator(method=method, noise_model=noise_model, seed_simulator=seed)
     result = simulator.run([circuits[b] for b in bases], shots=shots).result()
-    counts, seeds, methods = {}, {}, {}
+    counts, seeds, methods, raw = {}, {}, {}, {}
     for i, basis in enumerate(bases):
-        counts[basis] = register_counts(result.get_counts(i), circuits[basis], PORT_REGISTER)
+        raw[basis] = dict(sorted(result.get_counts(i).items()))
+        counts[basis] = register_counts(raw[basis], circuits[basis], PORT_REGISTER)
         seeds[basis] = int(result.results[i].seed_simulator)
         methods[basis] = str(result.results[i].metadata["method"])
-    return Simulation(counts, seeds, methods, shots)
+    return Simulation(counts, seeds, methods, shots, raw)
 
 
 def register_counts(counts: Mapping[str, int], circuit: QuantumCircuit, name: str) -> dict[str, int]:

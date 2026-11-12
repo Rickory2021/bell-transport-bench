@@ -161,7 +161,11 @@ def check_unchanged(recorded: Mapping, current: Mapping) -> None:
 
 
 def check_config(kind: str, data, where: str) -> None:
-    """Raise a ValueError naming `where` and the field when `data` is not a valid `kind` file."""
+    """Raise a ValueError naming `where` and the field when `data` does not fit config/bp.schema.<kind>.yaml.
+
+    `kind` is a kind of config file, or `result` for a run record, which a run
+    writes outside config/ but checks against a schema in it.
+    """
     error = best_match(_validator(ROOT / "config" / f"bp.schema.{kind}.yaml").iter_errors(data))
     if error is not None:
         raise ValueError(f"{where}: {error.json_path}: {error.message}")
