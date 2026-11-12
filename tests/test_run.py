@@ -5,10 +5,12 @@ Covers docs/DESIGN.md, sections 5 and 8, as D-83 and D-75 to D-79 settle them:
 the baseline's self-test (ideal F = 1, every shot kept, the pair on the ports),
 the organisers' fidelities measured within three standard errors, postselection
 and its Wilson interval, the stop rule for conditional channels, where a run
-folder goes, and the rerun's refusals and comparisons.
+folder goes, the CSV headers it writes, and the rerun's refusals and
+comparisons.
 """
 
 import csv
+from types import SimpleNamespace
 
 import pytest
 import yaml
@@ -17,7 +19,16 @@ from qiskit import ClassicalRegister
 from bellbench import run as run_module
 from bellbench.circuits import save_circuit, swap_chain
 from bellbench.pipeline import Simulation
-from bellbench.run import RESULT_FILE, CircuitRun, analyse, rerun, wilson_interval
+from bellbench.run import (
+    COUNT_COLUMNS,
+    RESULT_FILE,
+    SIMULATION_COLUMNS,
+    CircuitRun,
+    _write_csv,
+    analyse,
+    rerun,
+    wilson_interval,
+)
 
 # The organisers' recorded noisy fidelities under their 2% CX noise (docs/CHALLENGE.md).
 ORGANISERS = {"ibm2016": 0.915, "contemporary": 0.795, "hyperbolic": 0.852}
@@ -108,6 +119,31 @@ def test_run_folder_holds_its_record_and_numbers(folder, tmp_path):
     with open(folder / "counts.csv", newline="", encoding="utf-8") as f:
         rows = list(csv.DictReader(f))
     assert sum(int(r["count"]) for r in rows if r["simulation"] == "noisy" and r["basis"] == "ZZ") == 500
+
+
+@pytest.mark.parametrize("name, columns", [("simulations.csv", SIMULATION_COLUMNS), ("counts.csv", COUNT_COLUMNS)])
+def test_run_folder_csv_headers_are_the_declared_columns(folder, name, columns):
+    raw = (folder / name).read_bytes()
+    assert b"\r" not in raw, f"{name} ends its lines with LF only"
+    assert tuple(raw.decode("utf-8").split("\n", 1)[0].split(",")) == columns
+
+
+def test_counts_have_a_column_for_every_role():
+    # Keys as Qiskit writes them: the last register first, so "port check".
+    raw = {b: {"01 1": 1} for b in ("XX", "YY", "ZZ")}
+    sims = {name: Simulation({}, {}, {}, 1, raw) for name in ("ideal", "noisy")}
+    rows = CircuitRun.count_rows(SimpleNamespace(simulations=sims, registers=["check", "port"]))
+    assert len(rows) == 6
+    assert all(tuple(r) == COUNT_COLUMNS for r in rows)
+    assert {(r["check"], r["flag"], r["port"]) for r in rows} == {("1", "", "01")}
+
+
+def test_a_row_that_does_not_fit_the_declared_columns_raises(tmp_path):
+    row = {c: 0 for c in COUNT_COLUMNS}
+    with pytest.raises(ValueError, match="extra \\['stray'\\]"):
+        _write_csv(tmp_path / "counts.csv", [{**row, "stray": 1}], COUNT_COLUMNS)
+    with pytest.raises(ValueError, match="missing \\['count'\\]"):
+        _write_csv(tmp_path / "counts.csv", [{k: v for k, v in row.items() if k != "count"}], COUNT_COLUMNS)
 
 
 def test_a_rerun_matches(folder):

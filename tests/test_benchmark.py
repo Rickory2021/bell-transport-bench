@@ -3,8 +3,10 @@
 
 Covers docs/DESIGN.md, section 6, as D-78, D-81 and D-86 settle them: the core
 benchmark file maps cases 1, 2, 4, 5, 7 and 8; a benchmark writes a new stamped
-folder with its runs inside, and a remake keeps the earlier one; a run folder's
-views are drawn; and the make targets reach the command line.
+folder with its runs inside, a remake keeps the earlier one, and the latest is
+the current one; two makes in one second refuse; the run list fits its schema;
+comparison.csv's header is the declared columns; a run folder's views are drawn;
+and the make targets reach the command line.
 """
 
 import csv
@@ -13,9 +15,20 @@ import pytest
 import yaml
 from qiskit import QuantumCircuit
 
+from bellbench import configs
 from bellbench import run as run_module
 from bellbench.circuits import save_circuit
-from bellbench.run import RESULT_FILE, RUN_LIST, CircuitRun, load_benchmark, main, run_benchmark, write_views
+from bellbench.run import (
+    COMPARISON_COLUMNS,
+    RESULT_FILE,
+    RUN_LIST,
+    CircuitRun,
+    current_benchmark,
+    load_benchmark,
+    main,
+    run_benchmark,
+    write_views,
+)
 
 
 def test_core_benchmark_file_maps_the_baseline_cases():
@@ -39,6 +52,8 @@ def test_benchmark_end_to_end(tmp_path, monkeypatch):
     with open(folder / "comparison.csv", newline="", encoding="utf-8") as f:
         rows = list(csv.DictReader(f))
     assert len(rows) == 6
+    assert tuple(rows[0]) == COMPARISON_COLUMNS
+    assert b"\r" not in (folder / "comparison.csv").read_bytes()
     assert {r["case"] for r in rows} == {"1", "2", "4", "5", "7", "8"}
     assert all(float(r["two_qubit_gates_per_accepted_pair"]) == float(r["two_qubit_gates"]) for r in rows)
     assert "| 5 | contemporary | noisy |" in (folder / "report.md").read_text(encoding="utf-8")
@@ -47,6 +62,39 @@ def test_benchmark_end_to_end(tmp_path, monkeypatch):
     assert again == folder.parent / "20261116T130000Z"
     assert len(list(folder.rglob(RESULT_FILE))) == 3, "a remake keeps the earlier benchmark whole"
     assert len(list((tmp_path / "runs").rglob(RESULT_FILE))) == 6
+
+
+def test_the_current_benchmark_is_the_latest_stamp(tmp_path):
+    with pytest.raises(FileNotFoundError, match="make benchmark NAME=core"):
+        current_benchmark("core", tmp_path)
+    parent = tmp_path / "runs" / "benchmark" / "core"
+    for name in ("20261115T090000Z", "20261116T120000Z", "20261114T230000Z", "notes"):
+        (parent / name).mkdir(parents=True)
+    assert current_benchmark("core", tmp_path) == parent / "20261116T120000Z"
+
+
+def test_two_makes_in_one_second_refuse_and_keep_the_first(tmp_path, monkeypatch):
+    monkeypatch.setattr(run_module, "_stamp", lambda: "20261116T120000Z")
+    folder = run_benchmark("core", tmp_path, shots=50)
+    with pytest.raises(FileExistsError, match="made this second already"):
+        run_benchmark("core", tmp_path, shots=50)
+    assert len(list(folder.rglob(RESULT_FILE))) == 3
+
+
+@pytest.mark.parametrize("runs, ok", [
+    (["ibm2016", "contemporary"], True),
+    (["ibm2016", "ibm2016"], False),
+    (["../elsewhere"], False),
+    ([], False),
+])
+def test_the_run_list_schema(runs, ok):
+    record = {"path": "config/benchmark/bp.data.benchmark.core.yaml", "hash": "sha256:" + "0" * 64}
+    run_list = {"benchmark": record, "runs": runs, "cases": [{"case": 1, "run": "ibm2016", "simulation": "ideal"}]}
+    if ok:
+        configs.check_config("runs", run_list, "the run list")
+    else:
+        with pytest.raises(ValueError, match=r"the run list: \$\.runs"):
+            configs.check_config("runs", run_list, "the run list")
 
 
 def _write_benchmark(root, name, runs, cases):
