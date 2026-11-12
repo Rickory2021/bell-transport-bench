@@ -16,6 +16,11 @@ dependencies = [
     "qiskit==2.6.2",
     "qiskit-aer==0.18.2",
     "qiskit-ibm-runtime==0.51.0",
+    # The OpenQASM 3 reader that circuit files and run records need. qiskit-ibm-runtime already
+    # brings both in; pinning them keeps the reader fixed. openqasm3 1.0.1, not 1.0.2: 1.0.2 was a
+    # day old when the circuit files moved to OpenQASM 3.
+    "qiskit-qasm3-import==0.6.0",
+    "openqasm3[parser]==1.0.1",
     "networkx==3.7",
     "numpy",
     "pandas",
