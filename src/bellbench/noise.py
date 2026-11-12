@@ -41,9 +41,7 @@ rebuilds a NoiseControl from it, refusing a file whose content hash changed.
 
 import math
 from collections.abc import Mapping, Sequence
-from pathlib import Path
 
-import networkx as nx
 from qiskit.circuit.library import get_standard_gate_name_mapping
 from qiskit.providers import BackendV2, Options
 from qiskit.quantum_info import average_gate_fidelity
@@ -51,13 +49,13 @@ from qiskit.transpiler import InstructionProperties, QubitProperties, Target
 from qiskit_aer.noise import NoiseModel, ReadoutError, depolarizing_error, thermal_relaxation_error
 
 from bellbench.configs import (
-    ROOT,
-    content_hash,
+    file_record,
     load_noise,
     load_processor,
+    name_from_record,
     noise_path,
+    processor_graph,
     processor_path,
-    repo_path,
 )
 
 T1 = "qubit.t1_relaxation_time"
@@ -93,7 +91,7 @@ class NoiseControl:
         if self.kind not in _BUILDERS:
             raise ValueError(f"noise profile {noise!r}: unknown kind {self.kind!r}; known: {', '.join(_BUILDERS)}")
 
-        self.graph = _processor_graph(self.processor)
+        self.graph = processor_graph(self.processor)
         self.ports = tuple(self.processor["ports"])
         self.edges = tuple(tuple(e) for e in self.processor["edges"])
         self.num_qubits = self.graph.number_of_nodes()
@@ -114,8 +112,8 @@ class NoiseControl:
     def export_as_yaml(self) -> dict:
         """NoiseControl's part of the run YAML: its files by path and content hash, and its settings."""
         return {
-            "processor": _file_record(processor_path(self.processor_name)),
-            "noise": _file_record(noise_path(self.noise_name)),
+            "processor": file_record(processor_path(self.processor_name)),
+            "noise": file_record(noise_path(self.noise_name)),
             "scale": self.scale,
             "overrides": [dict(o) for o in self.overrides],
             "conditional": dict(self.conditional),
@@ -127,8 +125,8 @@ class NoiseControl:
         expected = {"processor", "noise", "scale", "overrides", "conditional"}
         if set(record) != expected:
             raise ValueError(f"a NoiseControl record has the keys {sorted(expected)}; got {sorted(record)}")
-        processor = _name_from_record(record["processor"], "processor", processor_path)
-        noise = _name_from_record(record["noise"], "noise", noise_path)
+        processor = name_from_record(record["processor"], "processor")
+        noise = name_from_record(record["noise"], "noise")
         return cls(processor, noise, record["scale"], record["overrides"], record["conditional"])
 
 
@@ -389,13 +387,6 @@ def _check_conditional(conditional) -> dict:
 # -- Helpers ----------------------------------------------------------------------
 
 
-def _processor_graph(proc: dict) -> nx.Graph:
-    graph = nx.Graph()
-    graph.add_nodes_from(q["id"] for q in proc["qubits"])
-    graph.add_edges_from(tuple(e) for e in proc["edges"])
-    return graph
-
-
 def _qargs(num_qubits: int, nc: NoiseControl) -> list[tuple]:
     """Every qubit for a one-qubit gate, or every directed coupler for a two-qubit gate."""
     if num_qubits == 1:
@@ -413,29 +404,3 @@ def _standard(name: str, num_qubits: int | None = None):
     if num_qubits is not None and op.num_qubits != num_qubits:
         raise ValueError(f"gate {name!r} acts on {op.num_qubits} qubit(s); the profile says {num_qubits}")
     return op
-
-
-def _file_record(path: Path) -> dict:
-    return {"path": repo_path(path), "hash": content_hash(path)}
-
-
-def _name_from_record(record: Mapping, kind: str, find) -> str:
-    """The config name a `{path, hash}` record points to; raises when the file changed."""
-    if not isinstance(record, Mapping) or set(record) != {"path", "hash"}:
-        raise ValueError(f"the {kind} record has the keys path and hash; got {record!r}")
-    path = ROOT / record["path"]
-    prefix = f"bp.data.{kind}."
-    if not (path.name.startswith(prefix) and path.name.endswith(".yaml")):
-        raise ValueError(f"the {kind} record's path {record['path']!r} is not a {prefix}*.yaml file")
-    if not path.is_file():
-        raise FileNotFoundError(f"the {kind} file {record['path']} recorded by the run no longer exists")
-    current = content_hash(path)
-    if current != record["hash"]:
-        raise ValueError(
-            f"{record['path']} changed since it was recorded: recorded {record['hash']}, now {current}; "
-            "a rerun needs the file the run used"
-        )
-    name = path.name[len(prefix) : -len(".yaml")]
-    if repo_path(find(name)) != record["path"]:
-        raise ValueError(f"the {kind} record's path {record['path']!r} is not where {kind} files live")
-    return name

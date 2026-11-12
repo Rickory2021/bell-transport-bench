@@ -20,6 +20,8 @@ import networkx as nx
 import pytest
 import yaml
 
+from bellbench.configs import processor_graph
+
 ROOT = Path(__file__).resolve().parents[1]
 PROCESSOR_DIR = ROOT / "config" / "processor"
 NOISE_DIR = ROOT / "config" / "noise"
@@ -44,13 +46,6 @@ CORE_GRAPHS = {
     "contemporary": (9, 12, 4, 2),
     "hyperbolic": (13, 24, 3, 3),
 }
-
-
-def _graph(proc):
-    g = nx.Graph()
-    g.add_nodes_from(q["id"] for q in proc["qubits"])
-    g.add_edges_from(tuple(e) for e in proc["edges"])
-    return g
 
 
 # -- References ----------------------------------------------------------------
@@ -89,7 +84,7 @@ def test_processor_graph_is_well_formed(name):
     assert len(undirected) == len(proc["edges"]), "an edge is listed twice"
     with_position = sum("position" in q for q in proc["qubits"])
     assert with_position in (0, len(ids)), "positions for every qubit or for none"
-    assert nx.is_connected(_graph(proc)), "every qubit must be reachable"
+    assert nx.is_connected(processor_graph(proc)), "every qubit must be reachable"
 
 
 def test_core_graphs_are_present():
@@ -100,7 +95,7 @@ def test_core_graphs_are_present():
 def test_core_graph_matches_challenge(name):
     qubits, edges, hops, disjoint = CORE_GRAPHS[name]
     proc = PROCESSORS[name]
-    g = _graph(proc)
+    g = processor_graph(proc)
     a, b = proc["ports"]
     assert g.number_of_nodes() == qubits
     assert g.number_of_edges() == edges
@@ -113,7 +108,7 @@ def test_t_graph_matches_its_snapshot():
     from qiskit_ibm_runtime.fake_provider import FakeBurlingtonV2
 
     snap = nx.Graph(tuple(e) for e in FakeBurlingtonV2().coupling_map.get_edges())
-    assert nx.is_isomorphic(_graph(PROCESSORS["ibm2016"]), snap)
+    assert nx.is_isomorphic(processor_graph(PROCESSORS["ibm2016"]), snap)
 
 
 # -- Noise profiles: comments --------------------------------------------------

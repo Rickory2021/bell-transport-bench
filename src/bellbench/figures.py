@@ -21,7 +21,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 import networkx as nx  # noqa: E402
 
-from bellbench.configs import ROOT, load_processor  # noqa: E402
+from bellbench.configs import ROOT, load_processor, processor_graph  # noqa: E402
 
 CORE_PROCESSORS = ("ibm2016", "contemporary", "hyperbolic")
 COLORS = {"ibm2016": "#2151c7", "contemporary": "#137665", "hyperbolic": "#7139cc"}
@@ -29,14 +29,6 @@ DEFAULT_COLOR = "#4a5568"
 EDGE_COLOR = "#9aa6b8"
 PORT_COLOR = "#c62639"
 FIGURE_PATH = ROOT / "docs" / "assets" / "processor-models.png"
-
-
-def processor_graph(proc: dict) -> nx.Graph:
-    """The processor's coupling graph, with qubits as nodes named by id."""
-    graph = nx.Graph()
-    graph.add_nodes_from(q["id"] for q in proc["qubits"])
-    graph.add_edges_from(tuple(e) for e in proc["edges"])
-    return graph
 
 
 def processor_layout(proc: dict, graph: nx.Graph) -> dict:

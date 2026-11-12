@@ -3,8 +3,8 @@
 
 import matplotlib.pyplot as plt
 
-from bellbench.configs import load_processor
-from bellbench.figures import CORE_PROCESSORS, caption, draw_processor, processor_figure, processor_graph
+from bellbench.configs import load_processor, processor_graph
+from bellbench.figures import CORE_PROCESSORS, caption, draw_processor, processor_figure
 
 
 def test_figure_has_a_panel_per_core_model():
