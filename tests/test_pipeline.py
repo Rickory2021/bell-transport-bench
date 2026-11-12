@@ -103,7 +103,9 @@ def test_a_gate_the_profile_lacks_raises_naming_the_basis_and_gates():
     nc = NoiseControl("ibm2016", "organiser-cx2")
     qc = _baseline(nc)
     qc.t(nc.ports[0])  # T cannot be made from H, CX and S dagger
-    with pytest.raises(ValueError, match=r"cannot be compiled to the 'organiser-cx2' profile's gates \['cx', 'h', 'sdg'\]"):
+    # The bases compile in the order XX, YY, ZZ, so the first to fail is XX.
+    message = r"the XX circuit cannot be compiled to the 'organiser-cx2' profile's gates \['cx', 'h', 'sdg'\]"
+    with pytest.raises(ValueError, match=message):
         compile_bases(basis_circuits(qc, nc.ports), nc, seed=5)
 
 
@@ -119,17 +121,17 @@ def test_basis_circuits_rotate_and_measure_the_ports():
     nc = NoiseControl("ibm2016", "boston-2026")
     written = _baseline(nc)
     out = basis_circuits(written, nc.ports)
-    expected = {
-        "ZZ": ["measure", "measure"],
-        "XX": ["h", "h", "measure", "measure"],
-        "YY": ["sdg", "h", "sdg", "h", "measure", "measure"],
+    a, b = nc.ports
+    expected = {  # each added operation with the port it acts on, in order
+        "ZZ": [("measure", a), ("measure", b)],
+        "XX": [("h", a), ("h", b), ("measure", a), ("measure", b)],
+        "YY": [("sdg", a), ("h", a), ("sdg", b), ("h", b), ("measure", a), ("measure", b)],
     }
     assert set(out) == set(expected)
     for basis, qc in out.items():
         assert [r.name for r in qc.cregs] == [PORT_REGISTER]
         added = qc.data[len(written.data):]
-        assert [i.operation.name for i in added] == expected[basis]
-        assert {qc.find_bit(i.qubits[0]).index for i in added} == set(nc.ports)
+        assert [(i.operation.name, qc.find_bit(i.qubits[0]).index) for i in added] == expected[basis]
         measured = [(qc.find_bit(i.qubits[0]).index, qc.find_bit(i.clbits[0]).index) for i in added if i.operation.name == "measure"]
         assert measured == [(nc.ports[0], 0), (nc.ports[1], 1)]
     assert written.num_clbits == 0, "the written circuit is left unchanged"
@@ -299,8 +301,10 @@ def test_noisy_simulation_is_repeatable_by_seed():
 
 
 def test_a_recorded_method_can_be_forced():
+    """Aer picks density_matrix for this noisy run by itself, so the test forces another method."""
     nc = NoiseControl("ibm2016", "boston-2026")
-    assert set(_run(nc, nc.noise_model, seed=3, shots=200, method="density_matrix").methods.values()) == {"density_matrix"}
+    assert set(_run(nc, nc.noise_model, seed=3, shots=200).methods.values()) == {"density_matrix"}
+    assert set(_run(nc, nc.noise_model, seed=3, shots=200, method="statevector").methods.values()) == {"statevector"}
 
 
 @pytest.mark.parametrize("shots", [0, -5, 2.5, True])

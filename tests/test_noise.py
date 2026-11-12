@@ -10,6 +10,7 @@ Some checks read the noise model's per-instruction errors through Aer's private
 simulation applies.
 """
 
+import copy
 import math
 import shutil
 import warnings
@@ -22,6 +23,7 @@ from qiskit_aer import AerSimulator
 from qiskit_aer.noise import NoiseModel, depolarizing_error
 
 from bellbench import configs
+from bellbench import noise as noise_module
 from bellbench.configs import content_hash, load_noise, noise_names, processor_names
 from bellbench.noise import CONDITIONAL_CHANNELS, NoiseControl
 
@@ -272,9 +274,16 @@ def test_a_profile_noisecontrol_cannot_build_raises(config_copy, name, change, m
         NoiseControl("ibm2016", name)
 
 
-def test_an_unknown_profile_kind_raises_naming_kind(config_copy):
+def test_a_kind_with_no_builder_raises_naming_kind(monkeypatch):
+    """The guard for the schema's kinds and the builders drifting apart: a kind the schema accepts, with no builder."""
+    monkeypatch.delitem(noise_module._BUILDERS, "depolarising")
+    with pytest.raises(ValueError, match="unknown kind 'depolarising'; known: snapshot"):
+        NoiseControl("ibm2016", "organiser-cx2")
+
+
+def test_a_kind_the_schema_lacks_is_refused_when_the_profile_loads(config_copy):
     _edit_profile("organiser-cx2", lambda p: p.update(kind="biased"))
-    with pytest.raises(ValueError, match="kind"):
+    with pytest.raises(ValueError, match=r"\$\.kind: 'biased' is not one of"):
         NoiseControl("ibm2016", "organiser-cx2")
 
 
@@ -385,15 +394,24 @@ def test_export_records_the_files_the_model_was_built_from(config_copy):
 
 
 def test_settings_cannot_change_after_the_build():
+    """Edits to the caller's input, to each property's value and to an export never reach the next export."""
     override = {"qubits": [3, 4], "field": "gates.cz.error_probability", "value": 0.01}
     nc = NoiseControl("ibm2016", "fez-2025", scale=1.5, overrides=[override])
-    before = nc.export_as_yaml()
+    before = copy.deepcopy(nc.export_as_yaml())  # shares no object with nc, so an edit cannot change both sides
+    assert before["overrides"] == [{"qubits": [3, 4], "field": "gates.cz.error_probability", "value": 0.01}]
+    assert before["conditional"] == {"reset_error": None, "mid_circuit_measurement_error": None}
     with pytest.raises(AttributeError):
         nc.scale = 2.0
+    override["value"] = 0.9
+    override["qubits"].append(0)
     nc.overrides[0]["value"] = 0.05
     nc.overrides[0]["qubits"].append(2)
     nc.conditional["reset_error"] = 0.5
-    nc.export_as_yaml()["overrides"][0]["value"] = 0.05
+    export = nc.export_as_yaml()
+    export["overrides"][0]["value"] = 0.05
+    export["conditional"]["mid_circuit_measurement_error"] = 0.5
+    export["processor"]["hash"] = "sha256:edited"
+    export["noise"]["path"] = "edited"
     assert nc.export_as_yaml() == before
     assert nc.target["cz"][(3, 4)].error == pytest.approx(0.015)
 
