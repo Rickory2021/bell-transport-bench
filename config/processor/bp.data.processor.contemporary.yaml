@@ -1,0 +1,37 @@
+# config/processor/bp.data.processor.contemporary.yaml
+#
+# The Contemporary IBM-style processor model, the organisers' graph (docs/DESIGN.md, section 3).
+# Validated by config/bp.schema.processor.yaml.
+
+name: contemporary
+label: Contemporary IBM-style
+reference: ideal-and-noisy-example
+notes: >-
+  The organisers' example notebook, section 1 (the models cell), gives the 9-node graph
+  as an edge list with its ports; the organisers stated at the event that the
+  graphs are exact. Ids and positions are the notebook's: slide 4's drawings carry
+  no qubit numbers, so the notebook labels the qubits by position.
+qubits:
+  - {id: 0, position: [-2.1, 1]}
+  - {id: 1, position: [-0.9, 1.7]}
+  - {id: 2, position: [0.3, 1]}
+  - {id: 3, position: [1.5, 1.7]}
+  - {id: 4, position: [-1.5, -0.35]}
+  - {id: 5, position: [-0.3, 0.35]}
+  - {id: 6, position: [0.9, -0.35]}
+  - {id: 7, position: [2.1, 0.35]}
+  - {id: 8, position: [-0.3, -1.65]}
+ports: [0, 7]
+edges:
+  - [0, 1]
+  - [0, 4]
+  - [1, 2]
+  - [1, 5]
+  - [2, 3]
+  - [2, 5]
+  - [2, 6]
+  - [3, 7]
+  - [4, 5]
+  - [5, 6]
+  - [5, 8]
+  - [6, 7]

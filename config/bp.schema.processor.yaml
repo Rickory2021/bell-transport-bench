@@ -1,0 +1,74 @@
+# config/bp.schema.processor.yaml
+#
+# Validates config/processor/bp.data.processor.*.yaml: one processor model, its
+# qubits, its two ports and its coupling graph. The organisers' three graphs are
+# the core set; any other graph is a further file of the same shape. Checks that
+# span fields (ids in order, ports and edges naming real qubits, positions for
+# every qubit or none, the reference id existing) are in tests/test_config.py.
+
+$schema: "https://json-schema.org/draft/2020-12/schema"
+title: Processor model
+description: A processor's qubits, its two ports and the couplers between its qubits.
+
+type: object
+required: [name, label, reference, notes, qubits, ports, edges]
+additionalProperties: false
+
+$defs:
+  text:
+    type: string
+    minLength: 1
+  qubit_id:
+    description: A qubit's id, Qiskit's index for that physical qubit.
+    type: integer
+    minimum: 0
+
+properties:
+  name:
+    description: Slug, the qualifier in the file name; runs and benchmarks pick the processor by it.
+    type: string
+    pattern: '^[a-z0-9][a-z0-9-]*$'
+  label:
+    description: The model's name as the challenge gives it.
+    $ref: "#/$defs/text"
+  reference:
+    description: The source's id in docs/bp.data.references.yaml.
+    type: string
+    pattern: '^[a-z0-9][a-z0-9-]*$'
+  notes:
+    description: Free text naming the source in words, and anything a reader of the file should know.
+    $ref: "#/$defs/text"
+  qubits:
+    description: One entry per qubit, in id order; the qubit count is the list's length.
+    type: array
+    minItems: 2
+    items:
+      type: object
+      required: [id]
+      additionalProperties: false
+      properties:
+        id:
+          description: Qiskit's index for this physical qubit, 0 to n - 1, each once.
+          $ref: "#/$defs/qubit_id"
+        position:
+          description: Drawing coordinates (x, y), used only for figures. Give them for every qubit or for none; without them, figures use an automatic layout.
+          type: array
+          minItems: 2
+          maxItems: 2
+          items: {type: number}
+  ports:
+    description: The ids of the two qubits where the Bell pair must end up. Their positions are the requirement; the ids are the source's labels.
+    type: array
+    minItems: 2
+    maxItems: 2
+    items: {$ref: "#/$defs/qubit_id"}
+  edges:
+    description: Undirected couplers between qubit ids; a two-qubit gate may act on each pair in either direction.
+    type: array
+    minItems: 1
+    uniqueItems: true
+    items:
+      type: array
+      minItems: 2
+      maxItems: 2
+      items: {$ref: "#/$defs/qubit_id"}
