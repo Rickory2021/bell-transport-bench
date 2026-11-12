@@ -16,7 +16,7 @@ import pytest
 from qiskit import QuantumCircuit, transpile
 from qiskit.transpiler import CouplingMap, generate_preset_pass_manager
 
-from bellbench.circuits import swap_chain
+from bellbench.circuits import smallest_shortest_path, swap_chain
 from bellbench.configs import load_noise
 from bellbench.fidelity import fidelity_from_counts, fidelity_from_density
 from bellbench.noise import NoiseControl
@@ -153,7 +153,7 @@ def test_baseline_keeps_its_swaps_and_the_pair_on_the_ports(processor, swaps, cz
     c = cost(compiled, nc.ports)
     assert (c["swaps"], c["router_swaps"], c["two_qubit_gates"]) == (swaps, 0, cz)
     assert c["pair_on_ports"] is True
-    assert set(c["qubits_used"]) >= set(nc.ports)
+    assert c["qubits_used"] == sorted(smallest_shortest_path(nc.graph, *nc.ports)), "the path's qubits and no other"
     assert all(sum(edges.values()) == cz for edges in c["two_qubit_gates_by_edge"].values())
     allowed = {f"{min(e)}-{max(e)}" for e in nc.edges}
     assert all(set(edges) <= allowed for edges in c["two_qubit_gates_by_edge"].values())
@@ -168,6 +168,19 @@ def test_router_swaps_are_counted_and_move_the_pair_off_the_ports():
     c = cost(compile_bases(basis_circuits(qc, nc.ports), nc, seed=5), nc.ports)
     assert c["router_swaps"] == c["swaps"] == 3
     assert c["pair_on_ports"] is False
+
+
+def test_pair_on_ports_is_false_when_routing_moves_one_port():
+    """A CX between the 2016 graph's ports makes the router move port 0 and leave port 4, under seed 1."""
+    nc = NoiseControl("ibm2016", "boston-2026")
+    a, b = nc.ports
+    qc = QuantumCircuit(nc.num_qubits)
+    qc.h(a)
+    qc.cx(a, b)
+    zz = compile_bases(basis_circuits(qc, nc.ports), nc, seed=1)["ZZ"]
+    final = zz.routed.layout.final_layout
+    assert [final[zz.routed.qubits[p]] != p for p in (a, b)] == [True, False], "the case needs exactly one port moved"
+    assert pair_on_ports(zz.routed, nc.ports) is False
 
 
 def test_a_back_to_back_swap_pair_is_not_counted():
@@ -195,6 +208,27 @@ def test_staged_compile_equals_one_transpile(processor):
             optimization_level=1, target=nc.target, initial_layout=list(range(nc.num_qubits)), seed_transpiler=17
         )
         assert compiled[basis].compiled == pm.run(qc)
+
+
+def test_staged_compile_equals_one_transpile_when_the_router_works_under_each_seed():
+    """On a circuit the router must change, the staged compile follows the transpiler seed as one transpile does."""
+    nc = NoiseControl("hyperbolic", "boston-2026")
+    a, b = nc.ports
+    qc = QuantumCircuit(nc.num_qubits)
+    qc.h(a)
+    qc.cx(a, b)
+    qc.cx(1, 7)
+    qc.cx(2, 10)
+    circuits = basis_circuits(qc, nc.ports)
+    compiled = {seed: compile_bases(circuits, nc, seed=seed) for seed in (1, 2)}
+    assert compiled[1]["ZZ"].compiled != compiled[2]["ZZ"].compiled, "the two seeds must route differently"
+    for seed, by_basis in compiled.items():
+        assert by_basis["ZZ"].routed.count_ops().get("swap", 0) > 0
+        pm = generate_preset_pass_manager(
+            optimization_level=1, target=nc.target, initial_layout=list(range(nc.num_qubits)), seed_transpiler=seed
+        )
+        for basis, c in circuits.items():
+            assert by_basis[basis].compiled == pm.run(c)
 
 
 def test_depth_counts_gates_only():
@@ -225,6 +259,17 @@ def test_schedule_turns_idle_time_into_delays():
     scheduled = schedule(zz, nc)
     assert "delay" in scheduled.count_ops()
     assert scheduled_duration(scheduled, nc) > 0
+
+
+def test_schedule_is_as_late_as_possible_and_its_duration_is_in_seconds():
+    """The second port idles until the CX reaches it: as late as possible, its wait comes first. The duration,
+    2.868 us under boston-2026, is the longest path summed by hand from the profile's durations (code review CA3)."""
+    nc = NoiseControl("ibm2016", "boston-2026")
+    zz = compile_bases(basis_circuits(_baseline(nc), nc.ports), nc, seed=5)["ZZ"].compiled
+    scheduled = schedule(zz, nc)
+    on_second_port = [i.operation.name for i in scheduled.data if scheduled.find_bit(i.qubits[0]).index == nc.ports[1]]
+    assert on_second_port[0] == "delay" and on_second_port[-1] == "measure"
+    assert scheduled_duration(scheduled, nc) == pytest.approx(2.868e-6, rel=1e-12)
 
 
 def _idle_population_of_1(nc: NoiseControl, busy_gates: int) -> tuple[float, float]:
@@ -330,10 +375,65 @@ def test_register_counts_sum_over_other_registers():
 # -- Seeds -------------------------------------------------------------------------
 
 
+def test_simulate_records_each_basis_circuits_own_seed():
+    nc = NoiseControl("ibm2016", "boston-2026")
+    sim = _run(nc, nc.noise_model, seed=1234, shots=100)
+    assert sim.seeds["XX"] == 1234, "Aer seeds the job's first circuit with the job seed"
+    assert len(set(sim.seeds.values())) == 3, "and each later circuit with a seed of its own"
+
+
+def test_register_counts_reads_the_keys_aer_writes():
+    """Aer writes one bit string per register, the last-added register first and its highest bit first."""
+    from qiskit import ClassicalRegister
+    from qiskit_aer import AerSimulator
+
+    qc = QuantumCircuit(3)
+    port, check = ClassicalRegister(2, "port"), ClassicalRegister(1, "check")
+    qc.add_register(port)
+    qc.add_register(check)
+    qc.x(0)  # port[0] reads 1, port[1] reads 0
+    qc.x(2)  # check reads 1
+    qc.measure([0, 1], port)
+    qc.measure(2, check[0])
+    counts = AerSimulator().run(qc, shots=10, seed_simulator=1).result().get_counts()
+    assert counts == {"1 01": 10}
+    assert register_counts(counts, qc, "port") == {"01": 10}
+    assert register_counts(counts, qc, "check") == {"1": 10}
+
+
+def _expected_measured_fidelity(nc: NoiseControl, scheduled: dict) -> float:
+    """F from each basis's exact port probabilities, with each port's two misread rates applied: what the
+    measured F converges to. A misread turns an outcome's sign factor into 1 - 2 e0 for a 0 and -(1 - 2 e1) for a 1."""
+    e0 = nc.profile["qubit"]["readout_error"]["reads_1_when_0"]
+    e1 = nc.profile["qubit"]["readout_error"]["reads_0_when_1"]
+    sign = (1 - 2 * e0, -(1 - 2 * e1))
+    corr = {}
+    for basis, qc in scheduled.items():
+        probs = port_density_matrix(qc, nc.noise_model, nc.ports).probabilities()  # index = a + 2 b
+        corr[basis] = sum(p * sign[i & 1] * sign[i >> 1] for i, p in enumerate(probs))
+    return (1 + corr["XX"] - corr["YY"] + corr["ZZ"]) / 4
+
+
+def test_noisy_measured_fidelity_agrees_with_the_exact_expectation():
+    """The measured F under noise sits within four standard errors of the value the exact state predicts (D-20)."""
+    nc = NoiseControl("ibm2016", "boston-2026")
+    compiled = compile_bases(basis_circuits(_baseline(nc), nc.ports), nc, seed=5)
+    scheduled = {basis: schedule(c.compiled, nc) for basis, c in compiled.items()}
+    measured = fidelity_from_counts(simulate(scheduled, nc.noise_model, shots=100_000, seed=11).counts)
+    expected = _expected_measured_fidelity(nc, scheduled)
+    assert 0.9 < expected < 1
+    assert abs(measured.value - expected) < 4 * measured.standard_error
+
+
 def test_derive_seed_is_stable_distinct_and_32_bit():
     a = derive_seed(2026, "run-a", "noisy")
     assert a == derive_seed(2026, "run-a", "noisy")
     assert len({a, derive_seed(2026, "run-a", "ideal"), derive_seed(2026, "run-b", "noisy"), derive_seed(2027, "run-a", "noisy")}) == 4
+    # The documented rule: the first four bytes, big-endian, of a SHA-256 of the base seed and labels as compact JSON.
+    import hashlib
+
+    digest = hashlib.sha256(b'[2026,"run-a","noisy"]').digest()
+    assert a == int.from_bytes(digest[:4], "big")
     assert 0 <= a < 2**32
 
 

@@ -219,6 +219,45 @@ def test_gate_error_up_to_aers_maximum_builds_as_stated(gate, qubits, highest):
         NoiseControl("ibm2016", "fez-2025", overrides=[{"qubits": qubits, "field": field, "value": above}])
 
 
+def _aers_largest_cz_infidelity(t1_t2: list[tuple[float, float]], duration: float) -> float:
+    """The largest cz infidelity Aer builds on qubits (0, 1) with these decay times: what it makes of an error of 1."""
+    from qiskit.circuit.library import CZGate
+    from qiskit.quantum_info import average_gate_fidelity
+    from qiskit.transpiler import InstructionProperties, QubitProperties, Target
+
+    target = Target(num_qubits=2, qubit_properties=[QubitProperties(t1=t1, t2=t2) for t1, t2 in t1_t2])
+    target.add_instruction(CZGate(), {(0, 1): InstructionProperties(error=1.0, duration=duration)})
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")  # Aer warns that it caps the error, which is the point
+        model = NoiseModel.from_backend(noise_module._TargetBackend(target), readout_error=False)
+    return 1 - average_gate_fidelity(model._local_quantum_errors["cz"][(0, 1)])
+
+
+def test_the_gate_error_ceiling_is_where_aer_starts_to_cap():
+    """With decay strong enough that Aer's depolarising cap binds first, an error at the ceiling builds as stated
+    and one just above it raises; the ceiling is Aer's own, computed here without NoiseControl."""
+    from qiskit.quantum_info import average_gate_fidelity
+
+    t1, t2 = FEZ["qubit"]["t1_relaxation_time"], FEZ["qubit"]["t2_dephasing_time"]
+    fast = t1 / 40  # qubit 0 decays 40 times faster, as both its T1 and its T2
+    decay = [{"qubits": [0], "field": f"qubit.{f}", "value": fast} for f in ("t1_relaxation_time", "t2_dephasing_time")]
+    # Qubit 0's other gates get an error above what its faster decay alone now causes, so they still build.
+    graph = configs.processor_graph(configs.load_processor("ibm2016"))
+    decay += [{"qubits": [0], "field": f"gates.{g}.error_probability", "value": 0.05} for g in ("sx", "x")]
+    field = "gates.cz.error_probability"
+    decay += [{"qubits": [0, q], "field": field, "value": 0.05} for q in sorted(graph[0]) if q != 1]
+    ceiling = _aers_largest_cz_infidelity([(fast, fast), (t1, t2)], FEZ["gates"]["cz"]["duration"])
+    assert ceiling < 0.8 - 5e-4, "the case must be one where decay lowers the ceiling below dim/(dim + 1)"
+    def build(value):
+        overrides = [*decay, {"qubits": [0, 1], "field": field, "value": value}]
+        return NoiseControl("ibm2016", "fez-2025", overrides=overrides)
+
+    built = build(ceiling - 1e-9).noise_model._local_quantum_errors["cz"][(0, 1)]
+    assert 1 - average_gate_fidelity(built) == pytest.approx(ceiling - 1e-9, abs=1e-9)
+    with pytest.raises(ValueError, match=f"{field}.*above the .* Aer can build"):
+        build(ceiling + 1e-6)
+
+
 def test_numpy_numbers_are_accepted_and_exported_as_plain_ones():
     """A sweep may pass numpy numbers; the export stays plain YAML data and rebuilds the same model."""
     import yaml
@@ -379,18 +418,41 @@ def test_a_record_with_other_keys_is_refused():
         NoiseControl.from_yaml({**record, "seed": 1})
 
 
-def test_export_records_the_files_the_model_was_built_from(config_copy):
-    """A profile edited after the build leaves the export on the build's hash, and a rebuild refuses it."""
+@pytest.mark.parametrize(
+    "kind, name, old, new",
+    [
+        ("processor", "ibm2016", "label: 2016-inspired reference", "label: 2016-inspired reference, edited"),
+        ("noise", "fez-2025", "error_probability: 0.0039", "error_probability: 0.0139"),
+    ],
+)
+def test_export_records_the_files_the_model_was_built_from(config_copy, kind, name, old, new):
+    """A file edited after the build leaves the export on the build's hash, and a rebuild refuses it."""
     nc = NoiseControl("ibm2016", "fez-2025")
-    built = configs.content_hash(configs.noise_path("fez-2025"))
-    path = configs.noise_path("fez-2025")
+    path = configs.config_path(kind, name)
+    built = configs.content_hash(path)
     text = path.read_text(encoding="utf-8")
-    path.write_text(text.replace("error_probability: 0.0039", "error_probability: 0.0139", 1), encoding="utf-8")
+    path.write_text(text.replace(old, new, 1), encoding="utf-8")
     assert configs.content_hash(path) != built
     record = nc.export_as_yaml()
-    assert record["noise"]["hash"] == built
+    assert record[kind]["hash"] == built
     with pytest.raises(ValueError, match="changed since it was recorded"):
         NoiseControl.from_yaml(record)
+
+
+def test_a_build_reads_each_config_file_once(monkeypatch):
+    """The record's hash is of the content the model was built from, so the build never reads a file twice."""
+    import builtins
+
+    reads = []
+
+    def counting_open(file, *args, **kwargs):
+        reads.append(str(file))
+        return builtins.open(file, *args, **kwargs)
+
+    monkeypatch.setattr(configs, "open", counting_open, raising=False)
+    NoiseControl("ibm2016", "fez-2025")
+    config_reads = sorted(r for r in reads if "/config/processor/" in r or "/config/noise/" in r)
+    assert config_reads == sorted([str(configs.noise_path("fez-2025")), str(configs.processor_path("ibm2016"))])
 
 
 def test_settings_cannot_change_after_the_build():

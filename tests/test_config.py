@@ -130,6 +130,33 @@ def test_loading_a_malformed_noise_profile_raises_naming_the_field(config_copy, 
         configs.load_noise("fez-2025")
 
 
+FEZ_PATH = "config/noise/bp.data.noise.fez-2025.yaml"
+NOT_A_NOISE_FILE = r"is not a bp\.data\.noise\.\*\.yaml file"
+
+
+def test_an_unknown_kind_of_config_file_raises_naming_the_known_ones():
+    from bellbench import configs
+
+    with pytest.raises(ValueError, match="no kind of config file named 'widget'; known: processor, noise"):
+        configs.config_folder("widget")
+
+
+@pytest.mark.parametrize(
+    "record, message",
+    [
+        ({"path": FEZ_PATH}, "has the keys path and hash"),
+        ({"path": FEZ_PATH, "hash": "sha256:0", "extra": 1}, "has the keys path and hash"),
+        ({"path": "config/noise/fez-2025.yaml", "hash": "sha256:0"}, NOT_A_NOISE_FILE),
+        ({"path": FEZ_PATH.replace(".yaml", ".yml"), "hash": "sha256:0"}, NOT_A_NOISE_FILE),
+    ],
+)
+def test_a_malformed_file_record_is_refused(record, message):
+    from bellbench import configs
+
+    with pytest.raises(ValueError, match=message):
+        configs.name_from_record(record, "noise")
+
+
 def test_core_graphs_are_present():
     assert set(CORE_GRAPHS) <= set(PROCESSORS)
 
