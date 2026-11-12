@@ -10,6 +10,8 @@ and the make targets reach the command line.
 """
 
 import csv
+import subprocess
+import sys
 import math
 from types import SimpleNamespace
 
@@ -233,6 +235,30 @@ def test_views_are_drawn(tmp_path, diagrams, files):
     folder = run.run().write(tmp_path)
     assert files <= {p.name for p in folder.iterdir()}
     assert {p.name for p in write_views(folder)} == files
+
+
+def test_views_refuse_a_changed_file_before_drawing(config_copy):
+    run = CircuitRun("baseline-ibm2016", "boston-2026", shots=100, base_seed=SEED)
+    folder = run.run().write(config_copy / "results")
+    before = {p.name: p.read_bytes() for p in folder.iterdir()}
+    path = config_copy / "config" / "processor" / "bp.data.processor.ibm2016.yaml"
+    path.write_text(path.read_text(encoding="utf-8").replace("label: ", "label: Edited ", 1), encoding="utf-8")
+    with pytest.raises(ValueError, match="bp.data.processor.ibm2016.yaml changed since it was recorded"):
+        write_views(folder)
+    assert main(["report", str(folder)]) == 2
+    assert {p.name: p.read_bytes() for p in folder.iterdir()} == before, "a refused redraw changes no file"
+
+
+def test_writing_a_run_leaves_the_matplotlib_backend_as_it_was(tmp_path):
+    """A notebook's inline backend survives a run's write; a fresh process shows the import changes nothing either."""
+    script = (
+        "import sys, matplotlib; matplotlib.use('pdf'); "
+        "from bellbench.run import CircuitRun; "
+        f"CircuitRun('baseline-ibm2016', 'boston-2026', shots=50, base_seed=1).run().write(sys.argv[1]); "
+        "print(matplotlib.get_backend())"
+    )
+    done = subprocess.run([sys.executable, "-c", script, str(tmp_path)], capture_output=True, text=True, check=True)
+    assert done.stdout.strip().splitlines()[-1] == "pdf"
 
 
 def test_command_line(tmp_path, capsys):

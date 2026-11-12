@@ -7,7 +7,8 @@ folder's graph diagram reuses it, passing the edges a circuit used. The drawing
 fits its range to whatever positions a file gives, and a file without positions
 gets an automatic layout, so any processor file draws.
 
-Run as a module, it writes docs/assets/processor-models.png: the three core
+Importing the module leaves matplotlib's backend as it is, so a notebook keeps
+its inline plots. Run as a module, it writes docs/assets/processor-models.png: the three core
 models side by side, each captioned with its qubits, edges and the hops between
 its ports, at twice the base resolution on a white background.
 """
@@ -15,13 +16,10 @@ its ports, at twice the base resolution on a white background.
 from pathlib import Path
 
 import matplotlib
+import matplotlib.pyplot as plt
+import networkx as nx
 
-matplotlib.use("Agg")
-
-import matplotlib.pyplot as plt  # noqa: E402
-import networkx as nx  # noqa: E402
-
-from bellbench.configs import CORE_PROCESSORS, ROOT, load_processor, processor_graph  # noqa: E402
+from bellbench.configs import CORE_PROCESSORS, ROOT, load_processor, processor_graph
 
 COLORS = {"ibm2016": "#2151c7", "contemporary": "#137665", "hyperbolic": "#7139cc"}
 DEFAULT_COLOR = "#4a5568"
@@ -89,4 +87,5 @@ def main(path: Path = FIGURE_PATH) -> None:
 
 
 if __name__ == "__main__":
+    matplotlib.use("Agg")  # this process only draws files; importing the module never changes a notebook's backend
     main()

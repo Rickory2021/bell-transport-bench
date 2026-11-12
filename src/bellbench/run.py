@@ -380,11 +380,13 @@ def write_views(folder: Path) -> list[Path]:
 
     lean: the processor graph with its ports and the couplers the compiled ZZ
     circuit uses, and the compiled ZZ circuit. full adds the written circuit, the
-    XX and YY circuits and the timeline of the scheduled ZZ circuit (D-74).
+    XX and YY circuits and the timeline of the scheduled ZZ circuit
+    (docs/DESIGN.md, section 5). Before drawing anything it refuses a circuit,
+    processor or noise file that changed since the run, so no view is ever drawn
+    from files the run did not use. matplotlib's backend is left as it is, so a
+    notebook that writes a run keeps its inline plots; each figure is closed once
+    saved.
     """
-    import matplotlib
-
-    matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
     from bellbench.figures import draw_processor
@@ -392,6 +394,9 @@ def write_views(folder: Path) -> list[Path]:
     folder = Path(folder)
     record = yaml.safe_load((folder / RESULT_FILE).read_text(encoding="utf-8"))
     _check_result_format(record)
+    configs.name_from_record(record["circuit"], "circuit")
+    configs.check_file_unchanged(record["circuit"])
+    NoiseControl.args_from_record(record["noise_control"])
     proc = yaml.safe_load((configs.ROOT / record["noise_control"]["processor"]["path"]).read_text(encoding="utf-8"))
     written = []
 
@@ -717,7 +722,8 @@ def _stringify(rows: list[dict]) -> list[dict]:
 USAGE = """usage: python -m bellbench.run benchmark [NAME]     make a benchmark (default core)
        python -m bellbench.run rerun PATH           rerun a run folder or its bp.data.result.yaml;
                                                     exit 0 a match, 1 a difference, 2 a refusal
-       python -m bellbench.run report PATH          redraw a run folder's diagrams and report.md"""
+       python -m bellbench.run report PATH          redraw a run folder's diagrams and report.md;
+                                                    exit 2 when a file it was made from changed"""
 
 
 def main(argv: list[str]) -> int:
@@ -729,8 +735,16 @@ def main(argv: list[str]) -> int:
         print("\n".join(lines))
         return code
     if argv[:1] == ["report"] and len(argv) == 2:
+        import matplotlib
+
+        matplotlib.use("Agg")  # this process only draws files
         folder = Path(argv[1])
-        for path in write_views(folder.parent if folder.name == RESULT_FILE else folder):
+        try:
+            written = write_views(folder.parent if folder.name == RESULT_FILE else folder)
+        except (ValueError, FileNotFoundError) as e:
+            print(f"refused: {e}")
+            return REFUSED
+        for path in written:
             print(path)
         return 0
     print(USAGE, file=sys.stderr)
