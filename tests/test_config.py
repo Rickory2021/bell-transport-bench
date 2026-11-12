@@ -118,6 +118,11 @@ def test_loading_a_malformed_processor_file_raises_naming_the_file(config_copy):
         (lambda p: p.update(time_step="4e-9"), r"\$\.time_step"),
         (lambda p: p.update(time_step=0.0), r"\$\.time_step"),
         (lambda p: p.update(name="fez-2026"), r"\$\.name: 'fez-2026' does not match"),
+        (lambda p: p.update(time_step=float("inf")), r"\$\.time_step: inf is not a finite number"),
+        (lambda p: p.update(time_step=float("nan")), r"\$\.time_step: nan is not a finite number"),
+        (lambda p: p["gates"]["cz"].update(duration=float("nan")), r"\$\.gates\.cz\.duration: nan is not a finite"),
+        (lambda p: p["qubit"].update(t1_relaxation_time=float("inf")),
+         r"\$\.qubit\.t1_relaxation_time: inf is not a finite number"),
     ],
 )
 def test_loading_a_malformed_noise_profile_raises_naming_the_field(config_copy, change, message):
@@ -132,6 +137,15 @@ def test_loading_a_malformed_noise_profile_raises_naming_the_field(config_copy, 
 
 FEZ_PATH = "config/noise/bp.data.noise.fez-2025.yaml"
 NOT_A_NOISE_FILE = r"is not a bp\.data\.noise\.\*\.yaml file"
+
+
+def test_a_number_that_is_not_finite_is_refused_in_any_kind_of_file(config_copy):
+    from bellbench import configs
+
+    proc = _broken(lambda p: p["qubits"][0].update(position=[float("nan"), 0.0]))
+    _write(configs.processor_path("ibm2016"), proc)
+    with pytest.raises(ValueError, match=r"\$\.qubits\[0\]\.position\[0\]: nan is not a finite number"):
+        configs.load_processor("ibm2016")
 
 
 def test_an_unknown_kind_of_config_file_raises_naming_the_known_ones():

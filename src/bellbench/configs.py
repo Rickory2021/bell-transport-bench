@@ -6,8 +6,9 @@ bp.data.<kind>.<name>.yaml: a processor file in config/processor/, a noise
 profile in config/noise/, a circuit file in config/circuit/ and a benchmark
 file in config/benchmark/ (KINDS). Every load checks the file before it returns
 it: `check_config` validates it against its schema, config/bp.schema.<kind>.yaml,
-and runs `check_processor` on a processor file, and the load then checks that
-the file's name field matches its file name. A file that fails raises a
+refuses any number that is not finite (.nan or .inf, which a schema's minimum
+and maximum let through), and runs `check_processor` on a processor file, and
+the load then checks that the file's name field matches its file name. A file that fails raises a
 ValueError naming the file and the field, so a bad file fails before any model
 is built (docs/DESIGN.md, section 2).
 src/bellbench/circuits.py adds the checks a circuit file's gates need. This
@@ -31,6 +32,7 @@ and run records hold.
 
 import hashlib
 import json
+import math
 from collections.abc import Mapping
 from functools import cache
 from pathlib import Path
@@ -206,6 +208,8 @@ def check_config(kind: str, data, where: str) -> None:
     error = best_match(_validator(ROOT / "config" / f"bp.schema.{kind}.yaml").iter_errors(data))
     if error is not None:
         raise ValueError(f"{where}: {error.json_path}: {error.message}")
+    for path, value in _non_finite(data, "$"):
+        raise ValueError(f"{where}: {path}: {value} is not a finite number")
     if kind == "processor":
         try:
             check_processor(data)
@@ -268,6 +272,18 @@ def _read(kind: str, name: str) -> tuple[Path, dict]:
     if data["name"] != name:
         raise ValueError(f"{where}: $.name: {data['name']!r} does not match the file's name {name!r}")
     return path, data
+
+
+def _non_finite(data, path: str):
+    """Each number in `data` that is NaN or infinite, with its JSON path."""
+    if isinstance(data, float) and not math.isfinite(data):
+        yield path, data
+    elif isinstance(data, Mapping):
+        for key, value in data.items():
+            yield from _non_finite(value, f"{path}.{key}")
+    elif isinstance(data, list):
+        for i, value in enumerate(data):
+            yield from _non_finite(value, f"{path}[{i}]")
 
 
 class Dumper(yaml.SafeDumper):
