@@ -13,11 +13,11 @@ import csv
 
 import pytest
 import yaml
-from qiskit import QuantumCircuit
+from qiskit import ClassicalRegister, QuantumCircuit
 
 from bellbench import configs
 from bellbench import run as run_module
-from bellbench.circuits import save_circuit
+from bellbench.circuits import save_circuit, swap_chain
 from bellbench.run import (
     COMPARISON_COLUMNS,
     RESULT_FILE,
@@ -144,6 +144,21 @@ def test_a_case_whose_pair_ends_off_its_ports_is_refused(config_copy):
     assert not (config_copy / "results").exists(), "a refused benchmark writes nothing"
 
 
+def test_a_case_whose_check_fires_with_no_noise_is_refused(config_copy):
+    """A check on a qubit put in superposition keeps half the ideal shots; the kept ones still give F = 1."""
+    circuit = swap_chain("ibm2016")
+    check = ClassicalRegister(1, "check")
+    circuit.add_register(check)
+    circuit.h(1)
+    circuit.measure(1, check[0])
+    save_circuit("lossy", "Lossy", "ibm2016", circuit, "A test circuit whose check fires without noise.")
+    _write_benchmark(config_copy, "lossy", [{"id": "a", "circuit": "lossy", "noise": "boston-2026"}],
+                     [{"case": 1, "run": "a", "simulation": "ideal"}])
+    with pytest.raises(ValueError, match=r"case 1: run 'a' kept 0\.\d+ of its ideal shots, not every one"):
+        run_benchmark("lossy", config_copy / "results")
+    assert not (config_copy / "results").exists(), "a refused benchmark writes nothing"
+
+
 def test_a_case_whose_ideal_f_is_not_1_is_refused(config_copy):
     unpaired = QuantumCircuit(5)  # a superposition on one port and no entangling gate, so ideal F is about 1/4
     unpaired.h(0)
@@ -164,6 +179,18 @@ def test_a_case_whose_ideal_f_is_not_1_is_refused(config_copy):
         ([{"id": "a", "circuit": "baseline-ibm2016", "noise": "boston-2026"}],
          [{"case": 1, "run": "a", "simulation": "ideal"}, {"case": 1, "run": "a", "simulation": "noisy"}],
          "each case is filled once"),
+        ([{"id": "a", "circuit": "baseline-ibm2016", "noise": "boston-2026"}],
+         [{"case": 2, "run": "a", "simulation": "noisy"}, {"case": 3, "run": "a", "simulation": "noisy"}],
+         "cases 2 and 3 both name run 'a', noisy"),
+        ([{"id": "a", "circuit": "baseline-ibm2016", "noise": "boston-2026"}],
+         [{"case": 4, "run": "a", "simulation": "ideal"}],
+         "case 4 is the contemporary model's ideal simulation; run 'a' is on ibm2016"),
+        ([{"id": "a", "circuit": "baseline-ibm2016", "noise": "boston-2026"}],
+         [{"case": 1, "run": "a", "simulation": "noisy"}],
+         "case 1 is the ibm2016 model's ideal simulation; .* names its noisy simulation"),
+        ([{"id": "a", "circuit": "baseline-hyperbolic", "noise": "boston-2026"}],
+         [{"case": 9, "run": "a", "simulation": "ideal"}],
+         "case 9 is the hyperbolic model's noisy simulation"),
     ],
 )
 def test_a_malformed_benchmark_file_raises_naming_the_field(config_copy, runs, cases, message):

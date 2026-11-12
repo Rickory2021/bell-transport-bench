@@ -453,24 +453,57 @@ def _run_report(folder: Path, record: dict) -> str:
 
 RUN_LIST = "bp.data.runs.yaml"
 
+# The challenge's nine cases: case -> (processor model, simulation). One row per model; the columns are the ideal
+# baseline, the noisy baseline and noisy with protection (docs/CHALLENGE.md, The nine core cases).
+CASE_GRID = {
+    3 * row + column + 1: (model, "ideal" if column == 0 else "noisy")
+    for row, model in enumerate(configs.CORE_PROCESSORS)
+    for column in range(3)
+}
+
 
 def load_benchmark(name: str) -> tuple[dict, dict]:
-    """The benchmark file for `name`, checked, and its `{path, hash}` record."""
+    """The benchmark file for `name`, checked, and its `{path, hash}` record.
+
+    Besides its schema: run ids are unique, each case is filled once by a run the
+    file lists, no two cases name one run and simulation, and each case sits
+    where the challenge's grid puts it (docs/CHALLENGE.md, The nine core cases):
+    its run's circuit is on the case's model, one row per model in
+    CORE_PROCESSORS order, and cases 1, 4 and 7 are ideal, all others noisy.
+    """
     data, record = configs.load_recorded("benchmark", name)
+    where = f"{record['path']}: $.cases"
     ids = [r["id"] for r in data["runs"]]
     if len(set(ids)) != len(ids):
         raise ValueError(f"{record['path']}: $.runs: run ids must be unique; got {ids}")
     cases = [c["case"] for c in data.get("cases", [])]
     if len(set(cases)) != len(cases):
-        raise ValueError(f"{record['path']}: $.cases: each case is filled once; got {cases}")
+        raise ValueError(f"{where}: each case is filled once; got {cases}")
+    circuit_of = {r["id"]: r["circuit"] for r in data["runs"]}
+    filled = {}
     for c in data.get("cases", []):
         if c["run"] not in ids:
-            raise ValueError(f"{record['path']}: $.cases: case {c['case']} names run {c['run']!r}, which is not in runs")
+            raise ValueError(f"{where}: case {c['case']} names run {c['run']!r}, which is not in runs")
+        key = (c["run"], c["simulation"])
+        if key in filled:
+            message = f"cases {filled[key]} and {c['case']} both name run {c['run']!r}, {c['simulation']}"
+            raise ValueError(f"{where}: {message}")
+        filled[key] = c["case"]
+        model, simulation = CASE_GRID[c["case"]]
+        processor = configs.load_config("circuit", circuit_of[c["run"]])["processor"]
+        if processor != model or c["simulation"] != simulation:
+            raise ValueError(
+                f"{where}: case {c['case']} is the {model} model's {simulation} simulation; "
+                f"run {c['run']!r} is on {processor} and the case names its {c['simulation']} simulation"
+            )
     return data, record
 
 
 def run_benchmark(name: str, root: Path | None = None, shots: int | None = None) -> Path:
     """Make every run the benchmark lists and write a new folder; refuses before writing if a case fails its self-test.
+
+    The self-test: the pair ends on the ports, and the ideal simulation gives
+    F = 1 and keeps every shot.
 
     The folder is <root>/runs/benchmark/<name>/<stamp>/, and each run is written
     in it under its run id. `root` is results/ only when the git state read as the
@@ -494,6 +527,12 @@ def run_benchmark(name: str, root: Path | None = None, shots: int | None = None)
         if run.analysis["ideal"].accepted.value != 1.0:
             ideal = run.analysis["ideal"].accepted.value
             raise ValueError(f"benchmark {name!r}: case {case['case']}: run {case['run']!r} has ideal F {ideal}, not 1")
+        if run.analysis["ideal"].acceptance != 1.0:
+            kept = run.analysis["ideal"].acceptance
+            raise ValueError(
+                f"benchmark {name!r}: case {case['case']}: run {case['run']!r} kept {kept} of its ideal shots, "
+                "not every one, so a check fires with no noise"
+            )
     run_list = {"benchmark": record, "runs": list(runs), "cases": data.get("cases", [])}
     if root is None:
         clean = not start[1] and all(run.git_state == start for run in runs.values())

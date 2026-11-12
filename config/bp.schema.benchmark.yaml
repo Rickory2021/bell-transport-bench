@@ -4,8 +4,9 @@
 # of runs with one comparison table across them (docs/DESIGN.md, section 6). Each
 # run is a circuit file under a noise profile; for the core benchmark, cases map
 # the challenge's nine cases onto a run and a simulation. Checks that span fields
-# (case runs exist, ids are unique) are in src/bellbench/run.py, which runs them
-# whenever a benchmark file loads.
+# (case runs exist, ids are unique, each run and simulation fills one case, each
+# case sits where the challenge's grid puts it) are in src/bellbench/run.py, which
+# runs them whenever a benchmark file loads.
 
 $schema: "https://json-schema.org/draft/2020-12/schema"
 title: Benchmark file
