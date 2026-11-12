@@ -244,7 +244,7 @@ def test_depolarising_profile_puts_errors_only_after_cx(scale):
     assert all(_same_channel(e, expected) for e in errors["cx"].values())
     assert not nc.noise_model._local_readout_errors and nc.noise_model._default_readout_error is None
     assert not nc.noise_model._custom_noise_passes
-    assert set(nc.target.operation_names) == {"h", "cx", "measure"}
+    assert set(nc.target.operation_names) == set(load_noise("organiser-cx2")["depolarising"]["gates"]) | {"measure"}
 
 
 def test_depolarising_scale_that_exceeds_one_raises():

@@ -12,11 +12,13 @@ reference: ideal-and-noisy-example
 notes: >-
   The organisers' example notebook, section 4 (the noise model cell): a two-qubit
   depolarising channel of strength 0.02 after every CX, every other gate ideal, no
-  readout error and no idle decay.
+  readout error and no idle decay. Their recipe uses only H and CX; sdg is added,
+  ideal like H, so a run can rotate the ports into the YY basis, which the organisers
+  read from the density matrix instead of measuring.
 depolarising:
   # The gate each depolarising channel follows.
   after_gate: cx
   # Depolarising strength: with this probability, the gate's qubits are left in a fully random state.
   probability: 0.02
   # The gate set; every gate other than after_gate is ideal.
-  gates: [h, cx]
+  gates: [h, cx, sdg]
