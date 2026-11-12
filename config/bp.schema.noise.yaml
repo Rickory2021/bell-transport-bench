@@ -166,7 +166,7 @@ properties:
         items: {$ref: "#/$defs/text"}
 
 allOf:
-  - if: {properties: {kind: {const: snapshot}}}
+  - if: {required: [kind], properties: {kind: {const: snapshot}}}
     then: {required: [snapshot, time_step, qubit, gates, measure]}
-  - if: {properties: {kind: {const: depolarising}}}
+  - if: {required: [kind], properties: {kind: {const: depolarising}}}
     then: {required: [depolarising]}

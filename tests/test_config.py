@@ -11,6 +11,7 @@ source. The last section checks that src/bellbench/configs.py finds each noise
 profile by name.
 """
 
+import copy
 import math
 import statistics
 import warnings
@@ -20,7 +21,7 @@ import networkx as nx
 import pytest
 import yaml
 
-from bellbench.configs import processor_graph
+from bellbench.configs import check_processor, processor_graph
 
 ROOT = Path(__file__).resolve().parents[1]
 PROCESSOR_DIR = ROOT / "config" / "processor"
@@ -70,21 +71,62 @@ def test_processor_name_matches_file(name):
 
 @pytest.mark.parametrize("name", sorted(PROCESSORS))
 def test_processor_graph_is_well_formed(name):
-    proc = PROCESSORS[name]
-    ids = [q["id"] for q in proc["qubits"]]
-    assert ids == list(range(len(ids))), "qubit ids run 0 to n - 1, in order, each once"
-    known = set(ids)
-    a, b = proc["ports"]
-    assert a != b, "the two ports must be different qubits"
-    assert {a, b} <= known, "ports must be qubits of the graph"
-    for u, v in proc["edges"]:
-        assert u != v, f"self-loop on qubit {u}"
-        assert {u, v} <= known, f"edge ({u}, {v}) names a qubit the file does not list"
-    undirected = {frozenset(e) for e in proc["edges"]}
-    assert len(undirected) == len(proc["edges"]), "an edge is listed twice"
-    with_position = sum("position" in q for q in proc["qubits"])
-    assert with_position in (0, len(ids)), "positions for every qubit or for none"
-    assert nx.is_connected(processor_graph(proc)), "every qubit must be reachable"
+    check_processor(PROCESSORS[name])
+
+
+def _broken(change):
+    proc = copy.deepcopy(PROCESSORS["ibm2016"])
+    change(proc)
+    return proc
+
+
+@pytest.mark.parametrize(
+    "change, message",
+    [
+        (lambda p: p["qubits"][4].update(id=5), r"qubits: ids must run 0 to n - 1"),
+        (lambda p: p.update(ports=[0, 0]), r"ports: the two ports must be different"),
+        (lambda p: p.update(ports=[0, 9]), r"ports: port 9 is not a qubit"),
+        (lambda p: p["edges"].append([2, 2]), r"edges\[4\]: a self-loop on qubit 2"),
+        (lambda p: p["edges"].append([2, 7]), r"edges\[4\]: qubit 7 is not listed"),
+        (lambda p: p["edges"].append(list(reversed(p["edges"][0]))), r"edges\[4\]: the coupler .* is listed twice"),
+        (lambda p: p["qubits"][0].pop("position"), r"qubits: give a position for every qubit or for none"),
+        (lambda p: p.update(edges=p["edges"][:-1]), r"edges: the graph is not connected"),
+    ],
+)
+def test_malformed_processor_raises_naming_the_field(change, message):
+    with pytest.raises(ValueError, match=message):
+        check_processor(_broken(change))
+
+
+def _write(path, data):
+    path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+
+
+def test_loading_a_malformed_processor_file_raises_naming_the_file(config_copy):
+    from bellbench import configs
+
+    proc = _broken(lambda p: p["edges"].append(list(reversed(p["edges"][0]))))
+    _write(configs.processor_path("ibm2016"), proc)
+    with pytest.raises(ValueError, match=r"config/processor/bp\.data\.processor\.ibm2016\.yaml: edges\[4\]"):
+        configs.load_processor("ibm2016")
+
+
+@pytest.mark.parametrize(
+    "change, message",
+    [
+        (lambda p: p.pop("kind"), r"\$: 'kind' is a required property"),
+        (lambda p: p.update(time_step="4e-9"), r"\$\.time_step"),
+        (lambda p: p.update(name="fez-2026"), r"\$\.name: 'fez-2026' does not match"),
+    ],
+)
+def test_loading_a_malformed_noise_profile_raises_naming_the_field(config_copy, change, message):
+    from bellbench import configs
+
+    profile = copy.deepcopy(NOISE["fez-2025"])
+    change(profile)
+    _write(configs.noise_path("fez-2025"), profile)
+    with pytest.raises(ValueError, match=r"config/noise/bp\.data\.noise\.fez-2025\.yaml: " + message):
+        configs.load_noise("fez-2025")
 
 
 def test_core_graphs_are_present():

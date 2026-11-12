@@ -3,8 +3,10 @@
 # Validates config/processor/bp.data.processor.*.yaml: one processor model, its
 # qubits, its two ports and its coupling graph. The organisers' three graphs are
 # the core set; any other graph is a further file of the same shape. Checks that
-# span fields (ids in order, ports and edges naming real qubits, positions for
-# every qubit or none, the reference id existing) are in tests/test_config.py.
+# span fields (ids in order, ports and edges naming real qubits, each edge once,
+# positions for every qubit or none, a connected graph) are check_processor in
+# src/bellbench/configs.py, which runs whenever a file loads; tests/test_config.py
+# checks that the reference id exists.
 
 $schema: "https://json-schema.org/draft/2020-12/schema"
 title: Processor model

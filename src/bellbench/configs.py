@@ -3,9 +3,12 @@
 
 Each kind of config file lives in its own folder under config/ and is named
 bp.data.<kind>.<name>.yaml: a processor file in config/processor/ and a noise
-profile in config/noise/ (KINDS). Their shapes are checked by the schemas in
-config/ through `make bp-validate`, and what spans fields by
-tests/test_config.py. This module only reads files.
+profile in config/noise/ (KINDS). Every load checks the file before it returns
+it: `check_config` validates it against its schema, config/bp.schema.<kind>.yaml,
+and runs `check_processor` on a processor file, and the load then checks that
+the file's name field matches its file name. A file that fails raises a
+ValueError naming the file and the field, so a bad file fails before any model
+is built (docs/DESIGN.md, section 2). This module only reads files.
 
 `content_hash` identifies a config file by its parsed content, so a run can
 record which version of each file it used and a rerun can refuse one that
@@ -22,10 +25,13 @@ NoiseControl, the figures and the tests share.
 import hashlib
 import json
 from collections.abc import Mapping
+from functools import cache
 from pathlib import Path
 
 import networkx as nx
 import yaml
+from jsonschema import Draft202012Validator
+from jsonschema.exceptions import best_match
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -49,9 +55,8 @@ def config_names(kind: str) -> list[str]:
 
 
 def load_config(kind: str, name: str) -> dict:
-    """The `kind` file for `name`, as loaded YAML."""
-    with open(config_path(kind, name), encoding="utf-8") as f:
-        return yaml.safe_load(f)
+    """The `kind` file for `name`, as loaded and checked YAML."""
+    return _read(kind, name)[1]
 
 
 def config_folder(kind: str) -> Path:
@@ -120,10 +125,8 @@ def repo_path(path: Path) -> str:
 
 
 def load_recorded(kind: str, name: str) -> tuple[dict, dict]:
-    """The `kind` file for `name` as loaded YAML, and its `{path, hash}` record, hashed from that same content."""
-    path = config_path(kind, name)
-    with open(path, encoding="utf-8") as f:
-        data = yaml.safe_load(f)
+    """The `kind` file for `name` as loaded and checked YAML, and its `{path, hash}` record of that same content."""
+    path, data = _read(kind, name)
     return data, {"path": repo_path(path), "hash": hash_data(data)}
 
 
@@ -152,6 +155,55 @@ def check_unchanged(recorded: Mapping, current: Mapping) -> None:
         )
 
 
+# -- Checks ---------------------------------------------------------------------
+
+
+def check_config(kind: str, data, where: str) -> None:
+    """Raise a ValueError naming `where` and the field when `data` is not a valid `kind` file."""
+    error = best_match(_validator(ROOT / "config" / f"bp.schema.{kind}.yaml").iter_errors(data))
+    if error is not None:
+        raise ValueError(f"{where}: {error.json_path}: {error.message}")
+    if kind == "processor":
+        try:
+            check_processor(data)
+        except ValueError as e:
+            raise ValueError(f"{where}: {e}") from None
+
+
+def check_processor(proc: dict) -> None:
+    """Raise a ValueError naming the field when a schema-valid processor file is not a usable graph.
+
+    Its ids run 0 to n - 1 in order, each once; its two ports are different
+    qubits of the graph; each edge joins two different listed qubits and appears
+    once in either direction; positions are given for every qubit or for none;
+    and the graph is connected.
+    """
+    ids = [q["id"] for q in proc["qubits"]]
+    if ids != list(range(len(ids))):
+        raise ValueError(f"qubits: ids must run 0 to n - 1 in order, each once; got {ids}")
+    known = set(ids)
+    a, b = proc["ports"]
+    if a == b:
+        raise ValueError(f"ports: the two ports must be different qubits; got {proc['ports']}")
+    for p in (a, b):
+        if p not in known:
+            raise ValueError(f"ports: port {p} is not a qubit of the graph")
+    seen = set()
+    for i, (u, v) in enumerate(proc["edges"]):
+        if u == v:
+            raise ValueError(f"edges[{i}]: a self-loop on qubit {u}")
+        for q in (u, v):
+            if q not in known:
+                raise ValueError(f"edges[{i}]: qubit {q} is not listed in qubits")
+        if frozenset((u, v)) in seen:
+            raise ValueError(f"edges[{i}]: the coupler ({u}, {v}) is listed twice")
+        seen.add(frozenset((u, v)))
+    if sum("position" in q for q in proc["qubits"]) not in (0, len(ids)):
+        raise ValueError("qubits: give a position for every qubit or for none")
+    if not nx.is_connected(processor_graph(proc)):
+        raise ValueError("edges: the graph is not connected, so some qubits cannot be reached")
+
+
 # -- The processor graph -----------------------------------------------------------
 
 
@@ -162,3 +214,20 @@ def processor_graph(proc: dict) -> nx.Graph:
     graph.add_edges_from(tuple(e) for e in proc["edges"])
     return graph
 
+
+def _read(kind: str, name: str) -> tuple[Path, dict]:
+    """The `kind` file for `name`, and its content once `check_config` passes it."""
+    path = config_path(kind, name)
+    with open(path, encoding="utf-8") as f:
+        data = yaml.safe_load(f)
+    where = repo_path(path)
+    check_config(kind, data, where)
+    if data["name"] != name:
+        raise ValueError(f"{where}: $.name: {data['name']!r} does not match the file's name {name!r}")
+    return path, data
+
+
+@cache
+def _validator(schema_path: Path) -> Draft202012Validator:
+    with open(schema_path, encoding="utf-8") as f:
+        return Draft202012Validator(yaml.safe_load(f))
