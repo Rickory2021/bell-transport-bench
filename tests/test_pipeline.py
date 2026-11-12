@@ -109,6 +109,36 @@ def test_a_gate_the_profile_lacks_raises_naming_the_basis_and_gates():
         compile_bases(basis_circuits(qc, nc.ports), nc, seed=5)
 
 
+@pytest.mark.parametrize(
+    "noise, add, message",
+    [
+        ("burlington-2020", lambda qc: qc.reset(1), "uses reset, which the 'burlington-2020' profile"),
+        ("organiser-cx2", lambda qc: qc.delay(1e-6, 1, unit="s"), "uses delay, which the 'organiser-cx2' profile"),
+    ],
+)
+def test_an_operation_the_profile_lacks_raises_naming_it(noise, add, message):
+    nc = NoiseControl("ibm2016", noise)
+    qc = _baseline(nc)
+    add(qc)
+    with pytest.raises(ValueError, match=message):
+        compile_bases(basis_circuits(qc, nc.ports), nc, seed=5)
+
+
+def test_a_missing_gate_is_named_among_those_outside_the_profile():
+    nc = NoiseControl("ibm2016", "organiser-cx2")
+    qc = _baseline(nc)
+    qc.t(nc.ports[0])
+    with pytest.raises(ValueError, match=r"of its gates, \['swap', 't'\] are outside that set"):
+        compile_bases(basis_circuits(qc, nc.ports), nc, seed=5)
+
+
+def test_cost_without_a_zz_circuit_raises_naming_the_bases():
+    nc = NoiseControl("ibm2016", "boston-2026")
+    compiled = compile_bases(basis_circuits(_baseline(nc), nc.ports), nc, seed=5)
+    with pytest.raises(ValueError, match=r"cost reads the compiled ZZ circuit; got the bases \['XX', 'YY'\]"):
+        cost({b: c for b, c in compiled.items() if b != "ZZ"}, nc.ports)
+
+
 # -- Basis circuits ---------------------------------------------------------------
 
 

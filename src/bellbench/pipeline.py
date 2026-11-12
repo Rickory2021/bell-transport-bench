@@ -118,6 +118,7 @@ def compile_bases(circuits: Mapping[str, QuantumCircuit], nc: NoiseControl, seed
                 f"the {basis} circuit has {circuit.num_qubits} qubits; it must be written on the processor's "
                 f"{nc.num_qubits} physical qubits"
             )
+        _check_operations_supported(circuit, basis, nc)
         pm = generate_preset_pass_manager(
             optimization_level=OPTIMIZATION_LEVEL,
             target=nc.target,
@@ -131,10 +132,12 @@ def compile_bases(circuits: Mapping[str, QuantumCircuit], nc: NoiseControl, seed
                 stages=["translation", "optimization"], translation=pm.translation, optimization=pm.optimization
             ).run(routed)
         except TranspilerError as err:
-            gates = sorted(set(nc.target.operation_names) - {"measure", "delay", "reset"})
+            gates = sorted(set(nc.target.operation_names) - set(NON_GATES))
+            outside = sorted({i.operation.name for i in routed.data} - set(nc.target.operation_names) - set(NON_GATES))
             raise ValueError(
-                f"the {basis} circuit cannot be compiled to the {nc.noise_name!r} profile's gates {gates}; "
-                f"add the missing gate to the profile or change the circuit ({err.message})"
+                f"the {basis} circuit cannot be compiled to the {nc.noise_name!r} profile's gates {gates}: of its "
+                f"gates, {outside} are outside that set, and at least one cannot be built from it; add the missing "
+                "gate to the profile or change the circuit"
             ) from err
         out[basis] = Compiled(basis, initialised.count_ops().get("swap", 0), routed, compiled)
     return out
@@ -164,6 +167,8 @@ def cost(compiled: Mapping[str, Compiled], ports: Sequence[int]) -> dict:
       counts them per coupler for each basis, as "a-b" with a < b.
     - `pair_on_ports`: from the routed ZZ circuit.
     """
+    if "ZZ" not in compiled:
+        raise ValueError(f"cost reads the compiled ZZ circuit; got the bases {sorted(compiled)}")
     zz = compiled["ZZ"]
     swaps = zz.routed.count_ops().get("swap", 0)
     by_edge = {basis: _two_qubit_by_edge(c.compiled) for basis, c in compiled.items()}
@@ -294,6 +299,21 @@ def _check_ports(circuit: QuantumCircuit, ports: Sequence[int]) -> tuple[int, in
         if isinstance(p, bool) or not isinstance(p, int) or not 0 <= p < circuit.num_qubits:
             raise ValueError(f"port {p!r} is not a qubit of the {circuit.num_qubits}-qubit circuit")
     return ports[0], ports[1]
+
+
+def _check_operations_supported(circuit: QuantumCircuit, basis: str, nc: NoiseControl) -> None:
+    """Raise when the circuit resets, waits or measures and the profile defines no such operation.
+
+    A missing gate may still be built from the profile's gates, so only the
+    compile can tell; a missing reset, delay or measurement never can.
+    """
+    used = {i.operation.name for i in circuit.data}
+    lacking = sorted(used & {"reset", "delay", "measure"} - set(nc.target.operation_names))
+    if lacking:
+        raise ValueError(
+            f"the {basis} circuit uses {', '.join(lacking)}, which the {nc.noise_name!r} profile does not define, "
+            "so it cannot run under this profile"
+        )
 
 
 def _check_seed(seed, what: str) -> None:
