@@ -1,0 +1,50 @@
+# config/benchmark/bp.data.benchmark.biased-noise.yaml
+
+name: biased-noise
+label: Biased-noise study
+notes: >-
+  An optional study, kept apart from the core benchmark (docs/CHALLENGE.md, What is
+  fixed and what we choose): if a processor's errors were mostly phase flips and its
+  CX kept them so, would an XX check catch nearly every error on the pair? Each graph
+  runs the organisers' baseline, move_chain alone, and move_chain with bus_xx, under
+  three pauli profiles that differ only in the native two-qubit gate and the noise
+  bias: pauli-cx-biased (CX, eta 100), pauli-cz-biased (CZ, eta 100) and
+  pauli-cx-unbiased (CX, eta 0.5). On the contemporary and hyperbolic graphs bus_xx
+  runs on a spare path and reads only at the end; ibm2016 has no spare path, so there
+  it runs on the path, reads each qubit before reusing it, and needs the mid-circuit
+  measurement channel, set to 0.01 as one point of the range it is to be swept over.
+  The profiles have no readout error, decay or durations, so these numbers describe
+  gate noise alone, on one finite model each. 20,000 shots per basis, as in the core.
+shots: 20000
+base_seed: 20261116
+runs:
+  # Under pauli-cx-biased.
+  - {id: baseline-ibm2016-cx-biased, circuit: baseline-ibm2016, noise: pauli-cx-biased}
+  - {id: baseline-contemporary-cx-biased, circuit: baseline-contemporary, noise: pauli-cx-biased}
+  - {id: baseline-hyperbolic-cx-biased, circuit: baseline-hyperbolic, noise: pauli-cx-biased}
+  - {id: move-ibm2016-cx-biased, circuit: move-chain-ibm2016, noise: pauli-cx-biased}
+  - {id: move-contemporary-cx-biased, circuit: move-chain-contemporary, noise: pauli-cx-biased}
+  - {id: move-hyperbolic-cx-biased, circuit: move-chain-hyperbolic, noise: pauli-cx-biased}
+  - {id: path-xx-ibm2016-cx-biased, circuit: move-chain-path-xx-ibm2016, noise: pauli-cx-biased, conditional: {mid_circuit_measurement_error: 0.01}}
+  - {id: spare-xx-contemporary-cx-biased, circuit: move-chain-spare-xx-contemporary, noise: pauli-cx-biased}
+  - {id: spare-xx-hyperbolic-cx-biased, circuit: move-chain-spare-xx-hyperbolic, noise: pauli-cx-biased}
+  # Under pauli-cz-biased.
+  - {id: baseline-ibm2016-cz-biased, circuit: baseline-ibm2016, noise: pauli-cz-biased}
+  - {id: baseline-contemporary-cz-biased, circuit: baseline-contemporary, noise: pauli-cz-biased}
+  - {id: baseline-hyperbolic-cz-biased, circuit: baseline-hyperbolic, noise: pauli-cz-biased}
+  - {id: move-ibm2016-cz-biased, circuit: move-chain-ibm2016, noise: pauli-cz-biased}
+  - {id: move-contemporary-cz-biased, circuit: move-chain-contemporary, noise: pauli-cz-biased}
+  - {id: move-hyperbolic-cz-biased, circuit: move-chain-hyperbolic, noise: pauli-cz-biased}
+  - {id: path-xx-ibm2016-cz-biased, circuit: move-chain-path-xx-ibm2016, noise: pauli-cz-biased, conditional: {mid_circuit_measurement_error: 0.01}}
+  - {id: spare-xx-contemporary-cz-biased, circuit: move-chain-spare-xx-contemporary, noise: pauli-cz-biased}
+  - {id: spare-xx-hyperbolic-cz-biased, circuit: move-chain-spare-xx-hyperbolic, noise: pauli-cz-biased}
+  # Under pauli-cx-unbiased.
+  - {id: baseline-ibm2016-cx-unbiased, circuit: baseline-ibm2016, noise: pauli-cx-unbiased}
+  - {id: baseline-contemporary-cx-unbiased, circuit: baseline-contemporary, noise: pauli-cx-unbiased}
+  - {id: baseline-hyperbolic-cx-unbiased, circuit: baseline-hyperbolic, noise: pauli-cx-unbiased}
+  - {id: move-ibm2016-cx-unbiased, circuit: move-chain-ibm2016, noise: pauli-cx-unbiased}
+  - {id: move-contemporary-cx-unbiased, circuit: move-chain-contemporary, noise: pauli-cx-unbiased}
+  - {id: move-hyperbolic-cx-unbiased, circuit: move-chain-hyperbolic, noise: pauli-cx-unbiased}
+  - {id: path-xx-ibm2016-cx-unbiased, circuit: move-chain-path-xx-ibm2016, noise: pauli-cx-unbiased, conditional: {mid_circuit_measurement_error: 0.01}}
+  - {id: spare-xx-contemporary-cx-unbiased, circuit: move-chain-spare-xx-contemporary, noise: pauli-cx-unbiased}
+  - {id: spare-xx-hyperbolic-cx-unbiased, circuit: move-chain-spare-xx-hyperbolic, noise: pauli-cx-unbiased}

@@ -6,7 +6,9 @@ benchmark file maps cases 1, 2, 4, 5, 7 and 8; a benchmark writes a new stamped
 folder with its runs inside, a remake keeps the earlier one, and the latest is
 the current one; two makes in one second refuse; the run list fits its schema;
 comparison.csv's header is the declared columns; a run folder's views are drawn;
-and the make targets reach the command line.
+and the make targets reach the command line. The biased-noise study's circuit
+files equal what the builders make, its file runs each under each pauli
+profile, and it runs end to end.
 """
 
 import csv
@@ -19,9 +21,10 @@ import pytest
 import yaml
 from qiskit import ClassicalRegister, QuantumCircuit
 
-from bellbench import configs
+from bellbench import builders, configs
 from bellbench import run as run_module
-from bellbench.circuits import save_circuit, swap_chain
+from bellbench.circuits import load_circuit, save_circuit, swap_chain
+from bellbench.pipeline import basis_circuits, mid_circuit_measurements
 from bellbench.run import (
     COMPARISON_COLUMNS,
     RESULT_FILE,
@@ -82,6 +85,64 @@ def test_benchmark_end_to_end(tmp_path, monkeypatch):
     assert again == folder.parent / "20261116T130000Z"
     assert len(list(folder.rglob(RESULT_FILE))) == 3, "a remake keeps the earlier benchmark whole"
     assert len(list((tmp_path / "runs").rglob(RESULT_FILE))) == 6
+
+
+# -- The biased-noise study -----------------------------------------------------------
+
+# Each study circuit file, as the builders make it: move_chain on the graph's default path, then the checks.
+STUDY = {
+    "move-chain-ibm2016": ("ibm2016", ()),
+    "move-chain-contemporary": ("contemporary", ()),
+    "move-chain-hyperbolic": ("hyperbolic", ()),
+    "move-chain-path-xx-ibm2016": ("ibm2016", ({},)),
+    "move-chain-spare-xx-contemporary": ("contemporary", ({"on": "spare"},)),
+    "move-chain-spare-xx-hyperbolic": ("hyperbolic", ({"on": "spare"},)),
+}
+STUDY_PROFILES = ("pauli-cx-biased", "pauli-cz-biased", "pauli-cx-unbiased")
+
+
+@pytest.mark.parametrize("name", sorted(STUDY))
+def test_each_study_circuit_equals_what_its_builders_build(name):
+    processor, checks = STUDY[name]
+    state = builders.move_chain(builders.start(processor))
+    for kwargs in checks:
+        state = builders.bus_xx(state, **kwargs)
+    loaded = load_circuit(name)
+    assert loaded.processor == processor
+    assert loaded.circuit == state.circuit
+    assert loaded.analysis == state.analysis()
+    assert loaded.notes == state.notes()
+
+
+def test_the_study_runs_each_circuit_and_baseline_under_each_profile():
+    data, _ = load_benchmark("biased-noise")
+    runs = {(r["circuit"], r["noise"]) for r in data["runs"]}
+    circuits = set(STUDY) | {f"baseline-{p}" for p in ("ibm2016", "contemporary", "hyperbolic")}
+    assert runs == {(c, n) for c in circuits for n in STUDY_PROFILES} and len(data["runs"]) == len(runs)
+    assert "cases" not in data, "the study fills none of the challenge's nine cases"
+    assert (data["shots"], data["base_seed"]) == (20_000, 20261116)
+
+
+def test_the_study_sets_the_mid_circuit_channel_only_where_a_circuit_reads_a_qubit_then_reuses_it():
+    """The spare-path checks read only at the end and need no channel; the check on ibm2016's path does."""
+    data, _ = load_benchmark("biased-noise")
+    for r in data["runs"]:
+        loaded = load_circuit(r["circuit"])
+        ports = tuple(configs.load_processor(loaded.processor)["ports"])
+        reads_then_reuses = any(mid_circuit_measurements(c) for c in basis_circuits(loaded.circuit, ports).values())
+        channel = r.get("conditional", {}).get("mid_circuit_measurement_error")
+        assert (channel is not None) == reads_then_reuses, r["id"]
+        assert "reset_error" not in r.get("conditional", {}), "no study circuit resets"
+
+
+def test_the_study_runs_end_to_end(tmp_path):
+    """Every run compiles under its profile's gates, and every ideal simulation gives F = 1 with every shot kept."""
+    folder = run_benchmark("biased-noise", tmp_path, shots=100)
+    with open(folder / "comparison.csv", newline="", encoding="utf-8") as f:
+        rows = list(csv.DictReader(f))
+    assert len(rows) == 2 * len(load_benchmark("biased-noise")[0]["runs"])
+    for row in (r for r in rows if r["simulation"] == "ideal"):
+        assert float(row["fidelity"]) == 1.0 and float(row["acceptance"]) == 1.0, row["run"]
 
 
 @pytest.mark.parametrize(
