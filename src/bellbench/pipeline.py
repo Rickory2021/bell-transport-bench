@@ -39,6 +39,7 @@ from dataclasses import dataclass
 
 from qiskit import ClassicalRegister, QuantumCircuit
 from qiskit.transpiler import PassManager, StagedPassManager, generate_preset_pass_manager
+from qiskit.transpiler.exceptions import TranspilerError
 from qiskit.transpiler.passes import ALAPScheduleAnalysis, PadDelay
 from qiskit_aer import AerSimulator
 
@@ -119,9 +120,16 @@ def compile_bases(circuits: Mapping[str, QuantumCircuit], nc: NoiseControl, seed
         )
         initialised = StagedPassManager(stages=["init"], init=pm.init).run(circuit)
         routed = StagedPassManager(stages=["layout", "routing"], layout=pm.layout, routing=pm.routing).run(initialised)
-        compiled = StagedPassManager(
-            stages=["translation", "optimization"], translation=pm.translation, optimization=pm.optimization
-        ).run(routed)
+        try:
+            compiled = StagedPassManager(
+                stages=["translation", "optimization"], translation=pm.translation, optimization=pm.optimization
+            ).run(routed)
+        except TranspilerError as err:
+            gates = sorted(set(nc.target.operation_names) - {"measure", "delay", "reset"})
+            raise ValueError(
+                f"the {basis} circuit cannot be compiled to the {nc.noise_name!r} profile's gates {gates}; "
+                f"add the missing gate to the profile or change the circuit ({err.message})"
+            ) from err
         out[basis] = Compiled(basis, initialised.count_ops().get("swap", 0), routed, compiled)
     return out
 

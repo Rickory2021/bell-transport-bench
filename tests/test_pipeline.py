@@ -85,6 +85,27 @@ def test_organisers_recorded_fidelities_reproduce_exactly(processor):
     assert round(noisy.value, 3) == recorded
 
 
+@pytest.mark.parametrize("processor", sorted(ORGANISERS))
+def test_our_pipeline_matches_the_organisers_under_their_noise(processor):
+    """Our baseline transport, compiled by our pipeline, gives the organisers' recorded fidelity and CX count."""
+    _, cx, _, recorded = ORGANISERS[processor]
+    nc = NoiseControl(processor, "organiser-cx2")
+    compiled = compile_bases(basis_circuits(_baseline(nc), nc.ports), nc, seed=5)
+    assert cost(compiled, nc.ports)["two_qubit_gates"] == cx
+    for c in compiled.values():  # every basis compiles under the profile's gates
+        assert set(c.compiled.count_ops()) <= {"h", "cx", "sdg", "measure", "barrier"}
+    exact = fidelity_from_density(port_density_matrix(compiled["ZZ"].compiled, nc.noise_model, nc.ports))
+    assert round(exact.value, 3) == recorded
+
+
+def test_a_gate_the_profile_lacks_raises_naming_the_basis_and_gates():
+    nc = NoiseControl("ibm2016", "organiser-cx2")
+    qc = _baseline(nc)
+    qc.t(nc.ports[0])  # T cannot be made from H, CX and S dagger
+    with pytest.raises(ValueError, match=r"cannot be compiled to the 'organiser-cx2' profile's gates \['cx', 'h', 'sdg'\]"):
+        compile_bases(basis_circuits(qc, nc.ports), nc, seed=5)
+
+
 # -- Basis circuits ---------------------------------------------------------------
 
 
@@ -215,8 +236,7 @@ def test_schedule_turns_idle_time_into_delays():
 
 def test_a_depolarising_profile_is_not_scheduled():
     nc = NoiseControl("contemporary", "organiser-cx2")
-    zz_only = {"ZZ": basis_circuits(_baseline(nc), nc.ports)["ZZ"]}
-    zz = compile_bases(zz_only, nc, seed=5)["ZZ"].compiled
+    zz = compile_bases(basis_circuits(_baseline(nc), nc.ports), nc, seed=5)["ZZ"].compiled
     assert schedule(zz, nc) is zz
     assert scheduled_duration(zz, nc) is None
 
