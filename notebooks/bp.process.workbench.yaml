@@ -1,0 +1,31 @@
+# notebooks/bp.process.workbench.yaml
+#
+# Renders the workbench notebook from its template (docs/DESIGN.md, section 1).
+# The invoke supplies the default circuit and noise profile; the template reads
+# the shots and base seed from the core benchmark file when the notebook runs.
+
+vars:
+  $schema: "https://json-schema.org/draft/2020-12/schema"
+  type: object
+  additionalProperties: false
+  required: [circuit, noise]
+  properties:
+    circuit:
+      description: The circuit file the settings cell starts on.
+      type: string
+      pattern: '^[a-z0-9][a-z0-9-]*$'
+    noise:
+      description: The noise profile the settings cell starts on.
+      type: string
+      pattern: '^[a-z0-9][a-z0-9-]*$'
+
+map:
+  defaults.circuit: {var: circuit}
+  defaults.noise: {var: noise}
+
+emit:
+  ipynb:
+    render: scripts/blueprint-render/renderers/ipynb.py
+    template: notebooks/templates/workbench.py.j2
+
+output: adjacent

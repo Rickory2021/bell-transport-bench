@@ -26,6 +26,8 @@ help:
 	@echo "    make benchmark NAME=<n>          Make another benchmark"
 	@echo "    make run RUN=<path>              Rerun a run folder and compare (exit 1 on a difference)"
 	@echo "    make report RUN=<path>           Redraw a run folder's diagrams and report.md"
+	@echo "    make workbench                   Render the workbench and copy it to workspace/workbench.ipynb"
+	@echo "    make workbench FORCE=1           The same, replacing an existing workspace copy"
 	@echo ""
 	@echo "  Docs figures:"
 	@echo "    make figures                     Draw docs/assets/processor-models.png from the processor files"
@@ -59,7 +61,7 @@ bp-setup:
 
 # -- Benchmark -----------------------------------------------------------
 
-.PHONY: test benchmark run report
+.PHONY: test benchmark run report workbench
 
 NAME ?= core
 
@@ -76,6 +78,17 @@ run:
 report:
 	@test -n "$(RUN)" || { echo "usage: make report RUN=<run folder or its bp.data.result.yaml>"; exit 2; }
 	uv run python -m bellbench.run report $(RUN)
+
+WORKBENCH = notebooks/bp.output.workbench.ipynb
+
+workbench:
+	$(MAKE) -C $(BLUEPRINT_DIR) invoke PROJECT_ROOT=$(CURDIR) FILE=notebooks/bp.invoke.workbench.yaml FORCE=true OUTPUT=adjacent
+	@mkdir -p workspace
+	@if [ -e workspace/workbench.ipynb ] && [ -z "$(FORCE)" ]; then \
+		echo "workspace/workbench.ipynb exists; make workbench FORCE=1 replaces it"; \
+	else \
+		cp $(WORKBENCH) workspace/workbench.ipynb && echo "wrote workspace/workbench.ipynb"; \
+	fi
 
 # -- Docs figures --------------------------------------------------------
 # make figures needs only the Python env. make diagram needs Node, because the

@@ -5,5 +5,6 @@
 
 - **`runs/`** holds a run made while `src/` or `config/` had uncommitted changes, in the same layout as `results/runs/`: `runs/<circuit>/<noise>/<stamp>/`.
 - **`benchmarks/`** holds a benchmark made with uncommitted changes.
+- **`workbench.ipynb`** is your copy of the workbench notebook, made by `make workbench`. Edit and run it here, never the generated one in `notebooks/`; `make workbench FORCE=1` replaces it with a fresh copy.
 
 **To keep a result,** commit the change it came from and make the run again: a clean run lands in `results/`, and a result made from uncommitted code cannot be rebuilt (docs/DESIGN.md, section 5).

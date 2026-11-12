@@ -1,0 +1,6 @@
+# notebooks/bp.invoke.workbench.yaml
+#
+# The workbench's defaults: a core baseline under the core benchmark's noise profile.
+
+circuit: baseline-contemporary
+noise: boston-2026
