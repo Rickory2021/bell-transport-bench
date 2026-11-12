@@ -1,0 +1,49 @@
+# config/noise/bp.data.noise.burlington-2020.yaml
+#
+# Medians of IBM's FakeBurlingtonV2 snapshot, a five-qubit T-graph processor.
+# Validated by config/bp.schema.noise.yaml; tests/test_config.py pins every value
+# to the snapshot and every comment to the schema.
+
+name: burlington-2020
+label: FakeBurlingtonV2 medians, calibrated 2020-06-11
+kind: snapshot
+reference: qiskit-fake-provider
+snapshot:
+  class: FakeBurlingtonV2
+  package: qiskit-ibm-runtime==0.51.0
+  calibrated: "2020-06-11"
+notes: >-
+  Medians over the FakeBurlingtonV2 snapshot's 5 qubits and 8 directed CX
+  couplers, as qiskit-ibm-runtime 0.51.0 pins them; it is the earliest calibration
+  among the snapshots with the T graph. The snapshot's u1, u2 and u3 gates are
+  expressed as rz, sx and x: u2 is one pulse and u3 two. The snapshot has no
+  measurement duration, so it is borrowed and marked below. It has no reset data,
+  so a circuit that resets cannot run on this profile until a value is chosen.
+# Time step in seconds: the hardware's clock tick. Null when the snapshot records none.
+time_step: null
+qubit:
+  # T1 in seconds: how long a qubit holds 1 before relaxing to 0; it is still 1 after time t with probability exp(-t/T1).
+  t1_relaxation_time: 82.62697735235098e-6
+  # T2 in seconds: how long a qubit keeps the phase between 0 and 1; never more than 2 T1.
+  t2_dephasing_time: 93.19832447669017e-6
+  readout_error:
+    # Readout error: the probability of reading 1 when the qubit was 0.
+    reads_1_when_0: 0.023
+    # Readout error: the probability of reading 0 when the qubit was 1.
+    reads_0_when_1: 0.041
+# Native gates, by Qiskit name: the qubits each acts on (1 or 2), its error probability per use, and its duration in seconds.
+gates:
+  cx: {qubits: 2, error_probability: 0.016097735173324107, duration: 389.3333333333333e-9}
+  sx: {qubits: 1, error_probability: 0.0005738102719058851, duration: 53.33333333333333e-9, from_snapshot_gate: u2}
+  x: {qubits: 1, error_probability: 0.0011472912855835515, duration: 106.66666666666666e-9, from_snapshot_gate: u3}
+  rz: {qubits: 1, error_probability: 0.0, duration: 0.0, from_snapshot_gate: u1}
+# Measurement: its duration in seconds. Its errors are the readout errors.
+measure: {duration: 5.8133333333333335e-6}
+borrowed:
+  - field: measure.duration
+    value: 5.8133333333333335e-6
+    source: "FakeOurenseV2 median (calibrated 2021-01-20), qiskit-ibm-runtime==0.51.0"
+    why: >-
+      FakeBurlingtonV2 records no measurement duration. The earliest T-graph snapshots
+      that record one, FakeOurenseV2, FakeValenciaV2 and FakeVigoV2 (all calibrated
+      2021-01-20), all give this value.
