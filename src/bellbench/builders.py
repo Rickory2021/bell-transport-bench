@@ -49,7 +49,8 @@ from typing import Sequence
 
 from qiskit import ClassicalRegister, QuantumCircuit
 
-from bellbench.circuits import REGISTER_NAME, port_path, save_circuit
+from bellbench.circuits import REGISTER_NAME, save_circuit
+from bellbench.paths import port_path
 
 
 class BuildError(ValueError):

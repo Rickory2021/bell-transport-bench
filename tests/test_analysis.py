@@ -14,9 +14,10 @@ from qiskit import ClassicalRegister, QuantumCircuit
 
 from bellbench import analysis as analysis_module
 from bellbench.analysis import PortCounts, check_analysis, read_shots
-from bellbench.circuits import load_circuit, save_circuit, smallest_shortest_path
+from bellbench.circuits import load_circuit, save_circuit
 from bellbench.fidelity import BASES, fidelity_from_counts
 from bellbench.noise import NoiseControl
+from bellbench.paths import smallest_shortest_path
 from bellbench.pipeline import basis_circuits, compile_bases, simulate
 
 POSTSELECT = {"name": "postselect"}

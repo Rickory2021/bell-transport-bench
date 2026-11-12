@@ -18,10 +18,11 @@ import pytest
 from qiskit import QuantumCircuit, transpile
 from qiskit.transpiler import CouplingMap, generate_preset_pass_manager
 
-from bellbench.circuits import smallest_shortest_path, swap_chain
+from bellbench.circuits import swap_chain
 from bellbench.configs import load_noise
 from bellbench.fidelity import fidelity_from_counts, fidelity_from_density
 from bellbench.noise import NoiseControl
+from bellbench.paths import smallest_shortest_path
 from bellbench.pipeline import (
     PORT_REGISTER,
     basis_circuits,

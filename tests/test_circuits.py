@@ -19,9 +19,9 @@ from bellbench.circuits import (
     circuit_to_qasm,
     load_circuit,
     save_circuit,
-    smallest_shortest_path,
     swap_chain,
 )
+from bellbench.paths import smallest_shortest_path
 
 
 @pytest.mark.parametrize("processor", CORE_PROCESSORS)
@@ -34,12 +34,6 @@ def test_committed_baseline_equals_what_the_transport_builds(processor):
     assert loaded.circuit == swap_chain(processor)
     assert str(path) in loaded.notes
     assert loaded.record["path"] == f"config/circuit/bp.data.circuit.{baseline_name(processor)}.yaml"
-
-
-@pytest.mark.parametrize("processor, path", [("ibm2016", [0, 3, 4]), ("contemporary", [0, 1, 2, 3, 7])])
-def test_shortest_path_is_the_lexicographically_smallest(processor, path):
-    proc = configs.load_processor(processor)
-    assert smallest_shortest_path(configs.processor_graph(proc), *proc["ports"]) == path
 
 
 def test_swap_chain_goes_out_and_back():

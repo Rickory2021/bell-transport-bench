@@ -22,7 +22,8 @@ tick while a circuit file belongs to a processor (docs/DESIGN.md, section 7).
 
 The transport and check functions build circuits; `save_circuit` writes what
 they build as a circuit file. `swap_chain` is the baseline transport: the
-organisers' recipe of explicit SWAPs out along a port path and back (D-30).
+organisers' recipe of explicit SWAPs out along a port path, which paths.py
+chooses, and back (D-30).
 Run as a module, this writes the three core baseline circuit files.
 """
 
@@ -31,7 +32,6 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-import networkx as nx
 import yaml
 from openqasm3.parser import QASM3ParsingError
 from qiskit import QuantumCircuit, qasm3
@@ -40,6 +40,7 @@ from qiskit.qasm3 import QASM3ImporterError
 
 from bellbench import configs
 from bellbench.analysis import check_analysis
+from bellbench.paths import port_path, smallest_shortest_path
 from bellbench.pipeline import PORT_REGISTER
 
 # The roles a written circuit's classical registers take; a run adds "port". A check's bits flag an error, a
@@ -162,31 +163,6 @@ def save_circuit(
 
 
 # -- Transports ------------------------------------------------------------------
-
-
-def smallest_shortest_path(graph: nx.Graph, a: int, b: int) -> list[int]:
-    """The lexicographically smallest of the shortest paths from `a` to `b`, so the choice never depends on networkx."""
-    return min(nx.all_shortest_paths(graph, a, b))
-
-
-def port_path(processor: str, path: Sequence[int] | None = None) -> tuple[nx.Graph, list[int]]:
-    """The processor's graph and a checked path from its first port to its second along its couplers.
-
-    By default the path is the lexicographically smallest shortest path; a
-    given one must run port to port, along couplers, visiting no qubit twice.
-    """
-    proc = configs.load_processor(processor)
-    graph = configs.processor_graph(proc)
-    a, b = proc["ports"]
-    path = list(path) if path is not None else smallest_shortest_path(graph, a, b)
-    if len(path) < 2 or path[0] != a or path[-1] != b:
-        raise ValueError(f"path {path} must run from the first port {a} to the second port {b}")
-    for u, v in zip(path, path[1:]):
-        if not graph.has_edge(u, v):
-            raise ValueError(f"path {path}: qubits {u} and {v} are not a coupler of {processor!r}")
-    if len(set(path)) != len(path):
-        raise ValueError(f"path {path} visits a qubit twice")
-    return graph, path
 
 
 def swap_chain(processor: str, path: Sequence[int] | None = None) -> QuantumCircuit:
