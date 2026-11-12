@@ -41,6 +41,7 @@ rebuilds a NoiseControl from it, refusing a file whose content hash changed.
 """
 
 import math
+import numbers
 from collections.abc import Mapping, Sequence
 
 from qiskit.circuit.library import get_standard_gate_name_mapping
@@ -326,8 +327,18 @@ def _error_range(qargs, duration, qubit_values) -> tuple[float, float]:
 # -- Input checks ----------------------------------------------------------------
 
 
+def _is_number(value) -> bool:
+    """A real number other than a bool, numpy numbers included."""
+    return isinstance(value, numbers.Real) and not isinstance(value, bool)
+
+
+def _is_id(value) -> bool:
+    """An integer qubit id other than a bool, numpy integers included."""
+    return isinstance(value, numbers.Integral) and not isinstance(value, bool)
+
+
 def _check_scale(scale) -> float:
-    if isinstance(scale, bool) or not isinstance(scale, (int, float)) or not math.isfinite(scale) or scale <= 0:
+    if not _is_number(scale) or not math.isfinite(scale) or scale <= 0:
         raise ValueError(f"scale must be a finite number greater than 0 (the ideal simulation covers no noise); got {scale!r}")
     return float(scale)
 
@@ -349,14 +360,16 @@ def _check_overrides(overrides, profile, graph) -> tuple[dict, ...]:
         if not isinstance(o, Mapping) or set(o) != {"qubits", "field", "value"}:
             raise ValueError(f"an override has exactly the keys qubits, field and value; got {o!r}")
         field, value = o["field"], o["value"]
-        qubits = [o["qubits"]] if isinstance(o["qubits"], int) else list(o["qubits"])
-        if not qubits or any(isinstance(q, bool) or not isinstance(q, int) for q in qubits):
+        qubits = [o["qubits"]] if _is_id(o["qubits"]) else list(o["qubits"])
+        if not qubits or not all(_is_id(q) for q in qubits):
             raise ValueError(f"override of {field!r}: qubits must be one qubit id or a list of ids; got {o['qubits']!r}")
+        qubits = [int(q) for q in qubits]
         for q in qubits:
             if q not in graph:
                 raise ValueError(f"override of {field!r}: qubit {q} is not on the processor graph")
-        if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+        if not _is_number(value) or not math.isfinite(value):
             raise ValueError(f"override of {field!r}: value must be a finite number; got {value!r}")
+        value = float(value)
 
         gate = _override_gate(field)
         if field in QUBIT_FIELDS:
@@ -402,9 +415,9 @@ def _check_conditional(conditional) -> dict:
     for channel, value in conditional.items():
         if value is None:
             continue
-        if isinstance(value, bool) or not isinstance(value, (int, float)) or not 0 <= value <= 1:
+        if not _is_number(value) or not 0 <= value <= 1:
             raise ValueError(f"conditional {channel} must be null or a probability between 0 and 1; got {value!r}")
-        channels[channel] = value
+        channels[channel] = float(value)
     for channel, value in channels.items():
         if value is not None:
             raise NotImplementedError(

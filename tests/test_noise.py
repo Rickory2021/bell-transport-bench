@@ -140,7 +140,7 @@ def test_scale_touches_errors_and_decay_rates_only():
     assert all(props.error == 0 for props in doubled.target["rz"].values())
 
 
-@pytest.mark.parametrize("scale", [0, -1, float("nan"), float("inf"), True, "2"])
+@pytest.mark.parametrize("scale", [0, -1, float("nan"), float("inf"), True, np.bool_(True), "2"])
 def test_invalid_scale_raises(scale):
     with pytest.raises(ValueError, match="scale"):
         NoiseControl("ibm2016", "fez-2025", scale=scale)
@@ -211,6 +211,23 @@ def test_gate_error_up_to_aers_maximum_builds_as_stated(gate, qubits, highest):
     above = 0.8 if gate == "cz" else 2 / 3
     with pytest.raises(ValueError, match=f"{field}.*above the .* Aer can build"):
         NoiseControl("ibm2016", "fez-2025", overrides=[{"qubits": qubits, "field": field, "value": above}])
+
+
+def test_numpy_numbers_are_accepted_and_exported_as_plain_ones():
+    """A sweep may pass numpy numbers; the export stays plain YAML data and rebuilds the same model."""
+    import yaml
+
+    nc = NoiseControl(
+        "ibm2016",
+        "fez-2025",
+        scale=np.int64(2),
+        overrides=[{"qubits": [np.int64(3), np.int64(4)], "field": "gates.cz.error_probability", "value": np.float64(0.01)}],
+    )
+    record = yaml.safe_load(yaml.safe_dump(nc.export_as_yaml()))
+    assert record == nc.export_as_yaml()
+    assert type(record["scale"]) is float and type(record["overrides"][0]["value"]) is float
+    assert all(type(q) is int for q in record["overrides"][0]["qubits"])
+    assert NoiseControl.from_yaml(record).noise_model == nc.noise_model
 
 
 def test_same_override_twice_raises():
