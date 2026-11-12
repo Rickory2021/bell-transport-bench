@@ -30,11 +30,16 @@ would otherwise cap T2, or drop or cap that gate's error, without a warning.
 
 An override is `{qubits, field, value}`, its field named by the profile's own
 key path (OVERRIDE_FIELDS); a two-qubit override names a coupler and applies in
-both directions, and durations cannot be overridden. NoiseControl validates and
-records the conditional channels (CONDITIONAL_CHANNELS), and raises
-NotImplementedError when either is set, until we build that channel with the
-first check that needs it; a run whose circuit resets or measures mid-circuit
-reads `conditional` and stops while the matching channel is unset.
+both directions, and durations cannot be overridden.
+
+The conditional channels (CONDITIONAL_CHANNELS) are an input of their own, each
+None or a probability, swept over a range rather than given a claimed value;
+the scale leaves them alone. `reset_error` is the probability that a reset
+leaves its qubit in |1>, applied after the decay that the reset's duration
+already brings. A run whose circuit resets, or measures a qubit and acts on it
+again, stops while the matching channel is None (docs/DESIGN.md, section 4).
+`mid_circuit_measurement_error` raises NotImplementedError when set, until it
+is built.
 
 NoiseControl records each config file's path and content hash when it builds,
 and its scale, overrides and conditional channels cannot change afterwards.
@@ -51,7 +56,7 @@ from qiskit.circuit.library import get_standard_gate_name_mapping
 from qiskit.providers import BackendV2, Options
 from qiskit.quantum_info import average_gate_fidelity
 from qiskit.transpiler import InstructionProperties, QubitProperties, Target
-from qiskit_aer.noise import NoiseModel, ReadoutError, depolarizing_error, thermal_relaxation_error
+from qiskit_aer.noise import NoiseModel, ReadoutError, depolarizing_error, pauli_error, thermal_relaxation_error
 
 from bellbench.configs import check_unchanged, load_recorded, name_from_record, processor_graph
 
@@ -211,7 +216,21 @@ def _build_snapshot(nc: NoiseControl):
     for q in range(nc.num_qubits):
         p10, p01 = qubit_values[q][READS_1_WHEN_0], qubit_values[q][READS_0_WHEN_1]
         noise_model.add_readout_error(ReadoutError([[1 - p10, p10], [p01, 1 - p01]]), [q])
+    reset_error = nc.conditional["reset_error"]
+    if reset_error is not None and "reset" in profile:
+        _add_after(noise_model, _bit_flip(reset_error), "reset", nc.num_qubits)
     return target, noise_model
+
+
+def _bit_flip(p: float):
+    return pauli_error([("X", p), ("I", 1 - p)])
+
+
+def _add_after(noise_model: NoiseModel, error, instruction: str, num_qubits: int) -> None:
+    """Add `error` after whatever `instruction` already carries on each qubit; Aer composes the second error after
+    the first, and its warning that it did so is turned off, since that is the point."""
+    for q in range(num_qubits):
+        noise_model.add_quantum_error(error, instruction, [q], warnings=False)
 
 
 def _build_depolarising(nc: NoiseControl):
@@ -409,7 +428,7 @@ def _override_gate(field) -> str | None:
 
 
 def _check_conditional(conditional) -> dict:
-    """Validate and return both conditional channels; setting either raises until it is built."""
+    """Validate and return both conditional channels; setting the mid-circuit one raises until it is built."""
     channels = dict.fromkeys(CONDITIONAL_CHANNELS)
     if conditional is None:
         return channels
@@ -422,7 +441,7 @@ def _check_conditional(conditional) -> dict:
             raise ValueError(f"conditional {channel} must be null or a probability between 0 and 1; got {value!r}")
         channels[channel] = float(value)
     for channel, value in channels.items():
-        if value is not None:
+        if channel == "mid_circuit_measurement_error" and value is not None:
             raise NotImplementedError(
                 f"conditional channel {channel} is not built yet; it is built together with the first check "
                 "that needs it, so a value is never accepted and silently ignored"

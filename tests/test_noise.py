@@ -329,10 +329,41 @@ def test_a_kind_the_schema_lacks_is_refused_when_the_profile_loads(config_copy):
 # -- Conditional channels -------------------------------------------------------
 
 
-@pytest.mark.parametrize("channel", CONDITIONAL_CHANNELS)
-def test_setting_a_conditional_channel_raises_until_it_is_built(channel):
-    with pytest.raises(NotImplementedError, match=channel):
-        NoiseControl("ibm2016", "fez-2025", conditional={channel: 0.01})
+def test_setting_the_mid_circuit_channel_raises_until_it_is_built():
+    with pytest.raises(NotImplementedError, match="mid_circuit_measurement_error"):
+        NoiseControl("ibm2016", "fez-2025", conditional={"mid_circuit_measurement_error": 0.01})
+
+
+def _after_reset(nc: NoiseControl) -> float:
+    """Qubit 0's |1> population right after a reset of |1>, exactly, under the model."""
+    from qiskit_aer import AerSimulator
+
+    qc = QuantumCircuit(1)
+    qc.x(0)
+    qc.reset(0)
+    qc.save_density_matrix([0])
+    rho = AerSimulator(method="density_matrix", noise_model=nc.noise_model).run(qc).result().data()["density_matrix"]
+    return rho.data[1, 1].real
+
+
+@pytest.mark.parametrize("p", [0.0, 0.3, 1.0])
+@pytest.mark.parametrize("scale", [1, 2])
+def test_reset_error_leaves_the_qubit_in_one_with_its_probability(p, scale):
+    """Exactly p: the flip comes after the reset's own decay, which leaves |0> alone, and the scale leaves p alone.
+    Were the flip before the decay, the population would be p times the decay over the reset's 2.232 us."""
+    nc = NoiseControl("ibm2016", "boston-2026", scale=scale, conditional={"reset_error": p})
+    assert _after_reset(nc) == pytest.approx(p, abs=1e-12)
+    assert nc.export_as_yaml()["conditional"] == {"reset_error": p, "mid_circuit_measurement_error": None}
+
+
+def test_reset_error_keeps_the_resets_decay():
+    from qiskit_aer.noise import pauli_error
+
+    nc = NoiseControl("ibm2016", "boston-2026", conditional={"reset_error": 0.3})
+    built = nc.noise_model._local_quantum_errors["reset"][(0,)]
+    assert not _same_channel(built, pauli_error([("X", 0.3), ("I", 0.7)])), "the decay is still part of the reset"
+    unset = NoiseControl("ibm2016", "boston-2026")
+    assert _after_reset(unset) == pytest.approx(0.0, abs=1e-12)
 
 
 @pytest.mark.parametrize("conditional", [{"reset_error": 1.5}, {"reset_error": True}, {"leakage": 0.01}, [0.01]])

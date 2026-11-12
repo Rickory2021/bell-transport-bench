@@ -119,6 +119,20 @@ def test_a_reset_or_a_reused_measured_qubit_stops_while_its_channel_is_unset(con
         CircuitRun(name, "boston-2026", shots=100).run()
 
 
+@pytest.mark.parametrize("p, low, high", [(0.0, 0.9, 1.0), (1.0, 0.0, 0.1)])
+def test_a_reset_runs_once_its_channel_is_set(config_copy, p, low, high):
+    """Qubit 1 is reset and then read: the ideal run keeps every shot, and the noisy one keeps a shot only when
+    the reset left it in |0>, so about 1 - p of them, readout errors aside."""
+    def build(qc, check):
+        qc.reset(1)
+        qc.measure(1, check[0])
+
+    name = _save_checked(build)
+    run = CircuitRun(name, "boston-2026", shots=2000, conditional={"reset_error": p}).run()
+    assert run.analysis["ideal"].acceptance == 1.0
+    assert low <= run.analysis["noisy"].acceptance <= high
+
+
 def test_a_router_swap_through_a_measured_qubit_makes_its_measurement_mid_circuit(config_copy):
     """Written last on qubit 3, the read is followed in the compiled circuit by the SWAP the router adds to bring
     ports 0 and 4 together through qubit 3, the 2016 graph's only route between them. The barrier keeps the read
