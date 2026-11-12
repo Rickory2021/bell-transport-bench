@@ -4,7 +4,8 @@
 Covers docs/DESIGN.md, section 4: parity with Aer's own FakeFez model apart from
 readout, idle decay, asymmetric readout, what the scale factor touches, the
 invalid inputs that must raise, the conditional channels, the depolarising
-cross-check profile, and the export round trip with its content hashes.
+cross-check profile, the pauli kind with its noise bias, and the export round
+trip with its content hashes.
 Some checks read the noise model's per-instruction errors through Aer's private
 `_local_quantum_errors` and `_local_readout_errors`, which hold exactly what a
 simulation applies.
@@ -18,14 +19,16 @@ import warnings
 import numpy as np
 import pytest
 from qiskit import QuantumCircuit
-from qiskit.quantum_info import SuperOp
+from qiskit.quantum_info import Chi, Pauli, SuperOp
 from qiskit_aer import AerSimulator
-from qiskit_aer.noise import NoiseModel, depolarizing_error
+from qiskit_aer.noise import NoiseModel, depolarizing_error, pauli_error
 
 from bellbench import configs
 from bellbench import noise as noise_module
 from bellbench.configs import content_hash, load_noise, noise_names, processor_names
-from bellbench.noise import CONDITIONAL_CHANNELS, NoiseControl
+from bellbench.circuits import swap_chain
+from bellbench.noise import CONDITIONAL_CHANNELS, MID_CIRCUIT_LABEL, NoiseControl
+from bellbench.pipeline import basis_circuits, compile_bases, port_density_matrix
 
 FEZ = load_noise("fez-2025")
 
@@ -404,6 +407,144 @@ def test_depolarising_profile_puts_errors_only_after_cx(scale):
 def test_depolarising_scale_that_exceeds_one_raises():
     with pytest.raises(ValueError, match="depolarising.probability"):
         NoiseControl("ibm2016", "organiser-cx2", scale=60)
+
+
+# -- The pauli kind --------------------------------------------------------------
+
+
+def _pauli_profile(name="pauli-test", after_gate="cx", probability=0.01, bias=100.0, gates=None, **pauli):
+    """Write a pauli profile into the copied config/ (the config_copy fixture) and return its name."""
+    import yaml
+
+    data = {
+        "name": name,
+        "label": "A pauli profile for a test",
+        "kind": "pauli",
+        "reference": "ideal-and-noisy-example",
+        "notes": "Written by tests/test_noise.py.",
+        "pauli": {
+            "after_gate": after_gate,
+            "probability": probability,
+            "bias": bias,
+            "gates": gates or ["h", after_gate, "sdg"],
+            **pauli,
+        },
+    }
+    path = configs.ROOT / "config" / "noise" / f"bp.data.noise.{name}.yaml"
+    path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+    return name
+
+
+def _per_qubit(error, qubit: int) -> dict[str, float]:
+    """The probability of X, Y and Z on one qubit of a two-qubit Pauli channel, read from its chi matrix, whose
+    diagonal holds each Pauli's probability (index a + 4 b for Pauli a on qubit 0 and b on qubit 1, in I X Y Z)."""
+    diagonal = np.real(np.diag(Chi(SuperOp(error)).data))
+    diagonal = diagonal / diagonal.sum()
+    pick = (lambda a, b: a) if qubit == 0 else (lambda a, b: b)
+    return {
+        label: float(sum(diagonal[a + 4 * b] for a in range(4) for b in range(4) if pick(a, b) == k))
+        for k, label in ((1, "X"), (2, "Y"), (3, "Z"))
+    }
+
+
+@pytest.mark.parametrize("bias", [0.5, 3.0, 100.0])
+def test_pauli_split_gives_each_qubit_probability_p_and_noise_bias_eta(config_copy, bias):
+    nc = NoiseControl("contemporary", _pauli_profile(probability=0.01, bias=bias))
+    errors = nc.noise_model._local_quantum_errors
+    assert set(errors) == {"cx"}
+    assert set(errors["cx"]) == {qargs for a, b in nc.edges for qargs in ((a, b), (b, a))}
+    for qubit in (0, 1):
+        p = _per_qubit(errors["cx"][(0, 1)], qubit)
+        assert sum(p.values()) == pytest.approx(0.01, abs=1e-12)
+        assert p["X"] == pytest.approx(p["Y"], abs=1e-15)
+        assert p["Z"] / (p["X"] + p["Y"]) == pytest.approx(bias, rel=1e-9)
+
+
+def test_unbiased_pauli_noise_is_depolarising_on_each_qubit(config_copy):
+    """At eta = 0.5 each Pauli has probability p/3, which is Aer's one-qubit depolarising channel of parameter 4p/3,
+    since that parameter leaves each of X, Y and Z with a quarter of it. The two-qubit error is two independent
+    copies, not Aer's two-qubit depolarising channel."""
+    nc = NoiseControl("ibm2016", _pauli_profile(probability=0.03, bias=0.5))
+    one = depolarizing_error(4 * 0.03 / 3, 1)
+    assert _same_channel(nc.noise_model._local_quantum_errors["cx"][(0, 3)], one.tensor(one))
+    assert not _same_channel(nc.noise_model._local_quantum_errors["cx"][(0, 3)], depolarizing_error(0.06, 2))
+
+
+def test_pauli_profile_has_no_readout_error_decay_or_durations(config_copy):
+    nc = NoiseControl("hyperbolic", _pauli_profile(gates=["h", "cx", "sdg", "x"]))
+    assert not nc.noise_model._local_readout_errors and nc.noise_model._default_readout_error is None
+    assert set(nc.target.operation_names) == {"h", "cx", "sdg", "x", "measure"}
+    assert nc.has_durations is False
+
+
+@pytest.mark.parametrize("scale", [1, 2.5])
+def test_pauli_scale_multiplies_the_probability_and_leaves_the_bias(config_copy, scale):
+    nc = NoiseControl("ibm2016", _pauli_profile(probability=0.01, bias=100.0), scale=scale)
+    p = _per_qubit(nc.noise_model._local_quantum_errors["cx"][(0, 3)], 0)
+    assert sum(p.values()) == pytest.approx(0.01 * scale, abs=1e-12)
+    assert p["Z"] / (p["X"] + p["Y"]) == pytest.approx(100.0, rel=1e-9)
+
+
+def test_pauli_scale_that_exceeds_one_raises(config_copy):
+    with pytest.raises(ValueError, match=r"pauli.probability is 1.5 after scale 150"):
+        NoiseControl("ibm2016", _pauli_profile(probability=0.01), scale=150)
+
+
+def test_pauli_profile_takes_no_overrides(config_copy):
+    o = {"qubits": [0], "field": "qubit.t1_relaxation_time", "value": 1e-4}
+    with pytest.raises(ValueError, match="a pauli noise profile takes no overrides"):
+        NoiseControl("ibm2016", _pauli_profile(), overrides=[o])
+
+
+def test_pauli_profile_carries_the_mid_circuit_channel_and_holds_no_reset(config_copy):
+    nc = NoiseControl("ibm2016", _pauli_profile(), conditional={"mid_circuit_measurement_error": 0.02})
+    assert set(nc.noise_model._local_quantum_errors) == {"cx", MID_CIRCUIT_LABEL}
+    assert "reset" not in nc.target.operation_names
+
+
+@pytest.mark.parametrize(
+    "pauli, message",
+    [
+        ({"bias": 0}, r"\$\.pauli\.bias: 0 is less than or equal to the minimum of 0"),
+        ({"bias": -1.0}, r"\$\.pauli\.bias: -1\.0 is less than or equal"),
+        ({"probability": 1.5}, r"\$\.pauli\.probability: 1\.5 is greater than the maximum of 1"),
+        ({"extra": 1}, r"\$\.pauli: Additional properties are not allowed"),
+    ],
+)
+def test_the_schema_refuses_a_bad_pauli_block(config_copy, pauli, message):
+    with pytest.raises(ValueError, match=message):
+        NoiseControl("ibm2016", _pauli_profile(**pauli))
+
+
+def test_a_pauli_profile_with_no_pauli_block_is_refused(config_copy):
+    _edit_profile("organiser-cx2", lambda p: p.update(kind="pauli"))
+    with pytest.raises(ValueError, match="'pauli' is a required property"):
+        NoiseControl("ibm2016", "organiser-cx2")
+
+
+def test_a_pauli_profile_whose_after_gate_is_not_in_its_gates_raises(config_copy):
+    with pytest.raises(ValueError, match="after_gate 'cx' is not in its gates"):
+        NoiseControl("ibm2016", _pauli_profile(gates=["h", "cz", "sdg"]))
+
+
+def _correlators(processor: str, noise: str) -> dict[str, float]:
+    """The baseline pair's exact correlators under `noise`, from its compiled ZZ circuit's port density matrix."""
+    nc = NoiseControl(processor, noise)
+    compiled = compile_bases(basis_circuits(swap_chain(processor), nc.ports), nc, seed=5)["ZZ"].compiled
+    rho = port_density_matrix(compiled, nc.noise_model, nc.ports)
+    return {basis: float(np.real(rho.expectation_value(Pauli(basis)))) for basis in ("XX", "ZZ")}
+
+
+@pytest.mark.parametrize("processor", ["contemporary", "hyperbolic"])
+def test_biased_noise_spares_zz_under_cx_and_reaches_it_under_cz(config_copy, processor):
+    """At eta = 100 with CX native, a Z error stays a Z, which leaves ZZ alone, so ZZ falls far less than XX. With CZ
+    native, a CX compiles as H CZ H, and the second H turns a Z on the target into an X, which flips ZZ: ZZ then falls
+    by a sizeable share of what XX falls (about 0.6 here, near unbiased noise's), measured, not assumed."""
+    cx = _correlators(processor, _pauli_profile("biased-cx", "cx", probability=0.02, bias=100.0))
+    cz = _correlators(processor, _pauli_profile("biased-cz", "cz", probability=0.02, bias=100.0))
+    assert (1 - cx["ZZ"]) < 0.02 * (1 - cx["XX"])
+    assert (1 - cz["ZZ"]) > 0.4 * (1 - cz["XX"])
+    assert cz["ZZ"] < cx["ZZ"] and cz["XX"] > cx["XX"]
 
 
 # -- Export, rebuild and hashes --------------------------------------------------

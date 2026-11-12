@@ -9,7 +9,7 @@ overrides and the conditional channels, into what a run needs
 - `target`: Qiskit's description of the processor, which compilation uses.
 - `noise_model`: the Aer noise model the noisy simulation uses.
 - `has_durations`: whether the model has timings, so a run schedules its
-  circuit before simulating; a depolarising profile has none.
+  circuit before simulating; a depolarising or pauli profile has none.
 
 How each profile kind becomes a model:
 
@@ -21,6 +21,12 @@ How each profile kind becomes a model:
 - **depolarising**: the Target holds only the graph and the gate set, and the
   model is one depolarising error after the named gate on every directed edge,
   with no readout error and no decay.
+- **pauli**: as depolarising, with a Pauli error instead: after the named gate,
+  each qubit it acts on independently takes X, Y or Z with total probability p,
+  split by the noise bias eta as p_X = p_Y = p / (2 (eta + 1)) and
+  p_Z = p - 2 p_X, so that p_Z / (p_X + p_Y) = eta. The scale multiplies p and
+  leaves eta alone. A native CX keeps a Z error a Z; with CZ native, a CX
+  compiles as H CZ H, and the second H turns a Z on the target into an X.
 
 NoiseControl checks every value after the overrides and the scale, and raises a
 ValueError naming the field instead of capping an invalid one: a probability
@@ -305,7 +311,23 @@ def _build_depolarising(nc: NoiseControl):
     return _build_gate_set(nc, depolarizing_error)
 
 
-_BUILDERS = {"snapshot": _build_snapshot, "depolarising": _build_depolarising}
+def _build_pauli(nc: NoiseControl):
+    bias = nc.profile["pauli"]["bias"]
+    return _build_gate_set(nc, lambda p, n: _pauli_per_qubit(p, bias, n))
+
+
+def _pauli_per_qubit(p: float, bias: float, num_qubits: int) -> QuantumError:
+    """An independent Pauli error on each of `num_qubits` qubits, each with total probability `p` and noise bias
+    `bias` = p_Z / (p_X + p_Y): p_X = p_Y = p / (2 (bias + 1)) and p_Z = p - 2 p_X."""
+    px = p / (2 * (bias + 1))
+    one = pauli_error([("X", px), ("Y", px), ("Z", p - 2 * px), ("I", 1 - p)])
+    error = one
+    for _ in range(num_qubits - 1):
+        error = error.tensor(one)
+    return error
+
+
+_BUILDERS = {"snapshot": _build_snapshot, "depolarising": _build_depolarising, "pauli": _build_pauli}
 
 
 # -- Values: profile, then overrides, then scale --------------------------------

@@ -228,6 +228,10 @@ COMMENTED = (
     "depolarising.after_gate",
     "depolarising.probability",
     "depolarising.gates",
+    "pauli.after_gate",
+    "pauli.probability",
+    "pauli.bias",
+    "pauli.gates",
 )
 
 

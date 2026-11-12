@@ -5,8 +5,9 @@
 # one value per quantity, the median over a pinned IBM fake-backend snapshot's
 # qubits and directed couplers, and its own native gate set, so any profile pairs
 # with any processor graph. A depolarising profile holds a single channel after a
-# named gate, such as the organisers' cross-check. Times are in seconds, errors
-# are probabilities. Keys are descriptive; gate names are Qiskit's, since
+# named gate, such as the organisers' cross-check, and a pauli profile a Pauli
+# error with a chosen noise bias after a named gate, for the biased-noise study.
+# Times are in seconds, errors are probabilities. Keys are descriptive; gate names are Qiskit's, since
 # circuits compile to those instructions.
 #
 # Each value field's description is also the comment above that field in every
@@ -63,8 +64,10 @@ properties:
     pattern: '^[a-z0-9][a-z0-9-]*$'
   label: {$ref: "#/$defs/text"}
   kind:
-    description: snapshot, medians of a fake-backend snapshot; depolarising, one depolarising channel after a named gate.
-    enum: [snapshot, depolarising]
+    description: >-
+      snapshot, medians of a fake-backend snapshot; depolarising, one depolarising channel after a named gate;
+      pauli, a Pauli error with a chosen noise bias on each qubit of a named gate.
+    enum: [snapshot, depolarising, pauli]
   reference:
     description: The source's id in docs/bp.data.references.yaml.
     type: string
@@ -165,9 +168,31 @@ properties:
         type: array
         minItems: 1
         items: {$ref: "#/$defs/text"}
+  pauli:
+    type: object
+    required: [after_gate, probability, bias, gates]
+    additionalProperties: false
+    properties:
+      after_gate:
+        description: The gate each Pauli error follows, on every qubit it acts on.
+        $ref: "#/$defs/text"
+      probability:
+        description: "The probability that each qubit the gate acts on takes a Pauli error (X, Y or Z), independently of its other qubit."
+        $ref: "#/$defs/probability"
+      bias:
+        description: "Noise bias eta = p_Z / (p_X + p_Y), above 0; 0.5 is unbiased, as depolarising noise is."
+        type: number
+        exclusiveMinimum: 0
+      gates:
+        description: The gate set; every gate other than after_gate is ideal.
+        type: array
+        minItems: 1
+        items: {$ref: "#/$defs/text"}
 
 allOf:
   - if: {required: [kind], properties: {kind: {const: snapshot}}}
     then: {required: [snapshot, time_step, qubit, gates, measure]}
   - if: {required: [kind], properties: {kind: {const: depolarising}}}
     then: {required: [depolarising]}
+  - if: {required: [kind], properties: {kind: {const: pauli}}}
+    then: {required: [pauli]}
