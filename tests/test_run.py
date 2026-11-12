@@ -133,6 +133,41 @@ def test_a_reset_runs_once_its_channel_is_set(config_copy, p, low, high):
     assert low <= run.analysis["noisy"].acceptance <= high
 
 
+def _vacancy_then_zz(reset: bool):
+    """Read qubit 3 once the pair has left it (a vacancy check), optionally reset it, then reuse it as the ancilla
+    of a ZZ parity check on the ports 0 and 4, read last. With no error both checks read 0."""
+    def build(qc, check):
+        zz = ClassicalRegister(1, "check_zz")
+        qc.add_register(zz)
+        qc.measure(3, check[0])
+        if reset:
+            qc.reset(3)
+        qc.cx(0, 3)
+        qc.cx(4, 3)
+        qc.measure(3, zz[0])
+
+    return build
+
+
+def test_a_protected_circuit_runs_end_to_end_once_both_channels_are_set(config_copy):
+    name = _save_checked(_vacancy_then_zz(reset=True))
+    conditional = {"reset_error": 0.01, "mid_circuit_measurement_error": 0.01}
+    run = CircuitRun(name, "boston-2026", shots=2000, conditional=conditional).run()
+    ideal, noisy = run.analysis["ideal"], run.analysis["noisy"]
+    assert ideal.accepted.value == 1.0 and ideal.acceptance == 1.0
+    assert 0.5 < noisy.acceptance < 1.0 and noisy.accepted.value > noisy.raw.value
+    assert run.registers == ["check", "check_zz", "port"]
+
+
+@pytest.mark.parametrize("p, low, high", [(0.0, 0.8, 1.0), (1.0, 0.0, 0.1)])
+def test_a_reused_qubit_carries_the_mid_circuit_error_into_its_next_check(config_copy, p, low, high):
+    """With no reset between, a flip after the vacancy read starts the ZZ ancilla in |1>, so its check fires."""
+    name = _save_checked(_vacancy_then_zz(reset=False))
+    run = CircuitRun(name, "boston-2026", shots=2000, conditional={"mid_circuit_measurement_error": p}).run()
+    assert run.analysis["ideal"].acceptance == 1.0
+    assert low <= run.analysis["noisy"].acceptance <= high
+
+
 def test_a_router_swap_through_a_measured_qubit_makes_its_measurement_mid_circuit(config_copy):
     """Written last on qubit 3, the read is followed in the compiled circuit by the SWAP the router adds to bring
     ports 0 and 4 together through qubit 3, the 2016 graph's only route between them. The barrier keeps the read

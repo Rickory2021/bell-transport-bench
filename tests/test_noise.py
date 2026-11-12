@@ -329,9 +329,15 @@ def test_a_kind_the_schema_lacks_is_refused_when_the_profile_loads(config_copy):
 # -- Conditional channels -------------------------------------------------------
 
 
-def test_setting_the_mid_circuit_channel_raises_until_it_is_built():
-    with pytest.raises(NotImplementedError, match="mid_circuit_measurement_error"):
-        NoiseControl("ibm2016", "fez-2025", conditional={"mid_circuit_measurement_error": 0.01})
+@pytest.mark.parametrize("noise", ["boston-2026", "organiser-cx2"])
+def test_the_mid_circuit_channel_is_a_bit_flip_on_its_marker(noise):
+    from qiskit_aer.noise import pauli_error
+
+    nc = NoiseControl("ibm2016", noise, conditional={"mid_circuit_measurement_error": 0.2})
+    errors = nc.noise_model._local_quantum_errors[noise_module.MID_CIRCUIT_LABEL]
+    assert set(errors) == {(q,) for q in range(nc.num_qubits)}
+    assert all(_same_channel(e, pauli_error([("X", 0.2), ("I", 0.8)])) for e in errors.values())
+    assert noise_module.MID_CIRCUIT_LABEL not in NoiseControl("ibm2016", noise).noise_model._local_quantum_errors
 
 
 def _after_reset(nc: NoiseControl) -> float:

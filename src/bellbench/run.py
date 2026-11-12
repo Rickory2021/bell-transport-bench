@@ -62,6 +62,7 @@ from bellbench.pipeline import (
     compile_bases,
     cost,
     derive_seed,
+    mark_mid_circuit_measurements,
     mid_circuit_measurements,
     schedule,
     scheduled_duration,
@@ -140,6 +141,8 @@ class CircuitRun:
         self.cost = cost(self.compiled, self.nc.ports)
         scheduled = {basis: schedule(c.compiled, self.nc) for basis, c in self.compiled.items()}
         self.duration = scheduled_duration(scheduled["ZZ"], self.nc)
+        if self.nc.conditional["mid_circuit_measurement_error"] is not None:
+            scheduled = {basis: mark_mid_circuit_measurements(c) for basis, c in scheduled.items()}
         for name, noise_model in (("ideal", None), ("noisy", self.nc.noise_model)):
             method = (methods or {}).get(name, "automatic")
             sim = simulate(scheduled, noise_model, self.shots, self.seeds[name], method)

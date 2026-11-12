@@ -36,10 +36,15 @@ The conditional channels (CONDITIONAL_CHANNELS) are an input of their own, each
 None or a probability, swept over a range rather than given a claimed value;
 the scale leaves them alone. `reset_error` is the probability that a reset
 leaves its qubit in |1>, applied after the decay that the reset's duration
-already brings. A run whose circuit resets, or measures a qubit and acts on it
-again, stops while the matching channel is None (docs/DESIGN.md, section 4).
-`mid_circuit_measurement_error` raises NotImplementedError when set, until it
-is built.
+already brings. `mid_circuit_measurement_error` is the probability that a
+qubit measured and then acted on again comes out of the read flipped: the
+readout error already covers the recorded bit, so the error is on the qubit
+alone. Aer applies an error attached to `measure` before the read, to record
+and qubit together, so this one enters as an identity labelled
+MID_CIRCUIT_LABEL that `pipeline.mark_mid_circuit_measurements` puts after
+each such read once the circuit is scheduled. A run whose circuit resets, or
+measures a qubit and acts on it again, stops while the matching channel is
+None (docs/DESIGN.md, section 4).
 
 NoiseControl records each config file's path and content hash when it builds,
 and its scale, overrides and conditional channels cannot change afterwards.
@@ -70,6 +75,7 @@ GATE_ERROR_FIELD = "gates.{gate}.error_probability"
 OVERRIDE_FIELDS = QUBIT_FIELDS + (GATE_ERROR_FIELD,)
 
 CONDITIONAL_CHANNELS = ("reset_error", "mid_circuit_measurement_error")
+MID_CIRCUIT_LABEL = "mid_circuit_measurement"  # the identity after a read whose qubit is acted on again
 
 STANDARD_GATES = get_standard_gate_name_mapping()
 
@@ -219,7 +225,15 @@ def _build_snapshot(nc: NoiseControl):
     reset_error = nc.conditional["reset_error"]
     if reset_error is not None and "reset" in profile:
         _add_after(noise_model, _bit_flip(reset_error), "reset", nc.num_qubits)
+    _add_mid_circuit_error(nc, noise_model)
     return target, noise_model
+
+
+def _add_mid_circuit_error(nc: NoiseControl, noise_model: NoiseModel) -> None:
+    p = nc.conditional["mid_circuit_measurement_error"]
+    if p is not None:
+        for q in range(nc.num_qubits):
+            noise_model.add_quantum_error(_bit_flip(p), MID_CIRCUIT_LABEL, [q])
 
 
 def _bit_flip(p: float):
@@ -252,6 +266,7 @@ def _build_depolarising(nc: NoiseControl):
     error = depolarizing_error(probability, after_op.num_qubits)
     for qargs in _qargs(after_op.num_qubits, nc):
         noise_model.add_quantum_error(error, after, list(qargs))
+    _add_mid_circuit_error(nc, noise_model)
     return target, noise_model
 
 
@@ -428,7 +443,7 @@ def _override_gate(field) -> str | None:
 
 
 def _check_conditional(conditional) -> dict:
-    """Validate and return both conditional channels; setting the mid-circuit one raises until it is built."""
+    """Validate and return both conditional channels, each None or a probability."""
     channels = dict.fromkeys(CONDITIONAL_CHANNELS)
     if conditional is None:
         return channels
@@ -440,12 +455,6 @@ def _check_conditional(conditional) -> dict:
         if not _is_number(value) or not 0 <= value <= 1:
             raise ValueError(f"conditional {channel} must be null or a probability between 0 and 1; got {value!r}")
         channels[channel] = float(value)
-    for channel, value in channels.items():
-        if channel == "mid_circuit_measurement_error" and value is not None:
-            raise NotImplementedError(
-                f"conditional channel {channel} is not built yet; it is built together with the first check "
-                "that needs it, so a value is never accepted and silently ignored"
-            )
     return channels
 
 

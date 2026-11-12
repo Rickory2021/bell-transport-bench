@@ -26,6 +26,7 @@ from bellbench.pipeline import (
     compile_bases,
     cost,
     derive_seed,
+    mark_mid_circuit_measurements,
     mid_circuit_measurements,
     pair_on_ports,
     port_density_matrix,
@@ -298,6 +299,39 @@ def test_a_measurement_is_mid_circuit_only_when_its_own_qubit_is_used_again(afte
     qc.measure(1, 0)
     after(qc)
     assert mid_circuit_measurements(qc) == ([(1, 1)] if mid else [])
+
+
+def test_only_a_mid_circuit_measurement_gets_the_marker():
+    from bellbench.noise import MID_CIRCUIT_LABEL
+
+    qc = QuantumCircuit(3, 3)
+    qc.measure(1, 0)  # read, then acted on again: marked
+    qc.delay(100, 1, unit="ns")
+    qc.x(1)
+    qc.measure(2, 1)  # final: not marked
+    qc.measure(1, 2)  # final: not marked
+    marked = mark_mid_circuit_measurements(qc)
+    ops = [(i.operation.name, i.operation.label, qc.find_bit(i.qubits[0]).index) for i in marked.data]
+    assert ops[:2] == [("measure", None, 1), ("id", MID_CIRCUIT_LABEL, 1)]
+    assert sum(label == MID_CIRCUIT_LABEL for _, label, _ in ops) == 1
+    assert len(qc.data) == 5, "the circuit it was given is unchanged"
+
+
+@pytest.mark.parametrize("p, flipped", [(0.0, False), (1.0, True)])
+def test_the_mid_circuit_error_flips_the_qubit_after_the_read_not_the_record(p, flipped):
+    """Qubit 1 starts in |0> and is read twice: the error lands between the reads, so it shows in the second."""
+    from qiskit_aer import AerSimulator
+
+    nc = NoiseControl("ibm2016", "boston-2026", conditional={"mid_circuit_measurement_error": p})
+    qc = QuantumCircuit(nc.num_qubits, 2)
+    qc.measure(1, 0)
+    qc.measure(1, 1)
+    job = AerSimulator(noise_model=nc.noise_model).run(mark_mid_circuit_measurements(qc), shots=2000, seed_simulator=1)
+    counts = job.result().get_counts()
+    first_read_1 = sum(n for key, n in counts.items() if key[-1] == "1") / 2000
+    second_read_1 = sum(n for key, n in counts.items() if key[-2] == "1") / 2000
+    assert first_read_1 < 0.05, "the record of the first read keeps only its readout error"
+    assert (second_read_1 > 0.95) if flipped else (second_read_1 < 0.05)
 
 
 # -- Schedule ----------------------------------------------------------------------

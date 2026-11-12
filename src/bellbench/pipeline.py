@@ -14,7 +14,9 @@ section 5). CircuitRun calls them in order:
 3. `cost` takes the run's cost before scheduling: SWAPs from the routed
    circuit, everything else from the compiled ZZ circuit.
 4. `schedule` turns idle time into timed delays, so qubits decay while they
-   wait; a profile without durations is not scheduled.
+   wait; a profile without durations is not scheduled. When the
+   mid-circuit measurement channel is set, `mark_mid_circuit_measurements`
+   then puts its marker after each read whose qubit is acted on again.
 5. `simulate` runs the three basis circuits in one Aer job and returns each
    basis's port counts with the seed and method Aer used.
 
@@ -44,7 +46,7 @@ from qiskit.transpiler.passes import ALAPScheduleAnalysis, PadDelay
 from qiskit_aer import AerSimulator
 
 from bellbench.fidelity import BASES
-from bellbench.noise import NoiseControl
+from bellbench.noise import MID_CIRCUIT_LABEL, NoiseControl
 
 OPTIMIZATION_LEVEL = 1
 PORT_REGISTER = "port"
@@ -315,6 +317,19 @@ def mid_circuit_measurements(circuit: QuantumCircuit) -> list[tuple[int, int]]:
         if inst.operation.name == "measure":
             pending[inst.qubits[0]] = k
     return sorted(out)
+
+
+def mark_mid_circuit_measurements(circuit: QuantumCircuit) -> QuantumCircuit:
+    """A copy of a scheduled circuit with an identity labelled MID_CIRCUIT_LABEL right after each mid-circuit
+    measurement, on its qubit, where the noise model puts the mid-circuit measurement error. It takes no time, so
+    the schedule stands; a final measurement, the ports' included, gets none."""
+    from qiskit.circuit import CircuitInstruction
+    from qiskit.circuit.library import IGate
+
+    marked = circuit.copy()
+    for k, q in reversed(mid_circuit_measurements(circuit)):
+        marked.data.insert(k + 1, CircuitInstruction(IGate(label=MID_CIRCUIT_LABEL), (marked.qubits[q],)))
+    return marked
 
 
 def _check_operations_supported(circuit: QuantumCircuit, basis: str, nc: NoiseControl) -> None:
