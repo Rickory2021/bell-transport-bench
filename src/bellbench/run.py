@@ -13,27 +13,32 @@ A run stops before simulating when its circuit resets or measures before the
 end while the matching conditional channel is unset, so neither is ever
 silently perfect (D-48).
 
-`write` makes the run folder, <root>/runs/<circuit>/<noise>/<stamp>/, with root
-results/ for a run made from committed code and config, workspace/ otherwise
-(D-76, D-78). It holds bp.data.result.yaml, the settings and records, checked
-against config/bp.schema.result.yaml; simulations.csv, one row of numbers per
-simulation; and counts.csv, every outcome with each register's bits in a column
-of its own. Seeds derive from the run's labels, never from its folder name
-(D-76), so a remade run repeats them.
+`write` makes the run folder: <root>/runs/workbench/<circuit>/<noise>/<stamp>/
+for a run made on its own, or the folder a benchmark names for each of its runs.
+<root> is results/ for a run made from committed code and config, workspace/
+otherwise. A run folder holds bp.data.result.yaml, the settings and records,
+checked against config/bp.schema.result.yaml; simulations.csv, one row of
+numbers per simulation; and counts.csv, every outcome with a column for each
+register role, empty where the circuit has no such register. Seeds derive from
+the run's labels, never from its folder name, so a remade run repeats them.
 
 `rerun` rebuilds a run from its folder and compares (D-79): `make run RUN=<path>`.
 `write_views` draws a run folder's diagrams and report.md from its files, so the
 views can be remade at any time (D-74): `make report RUN=<path>`.
 `run_benchmark` makes every run a benchmark file lists, checks the core
-benchmark's self-test, and writes <root>/benchmarks/<name>/ with its run list,
-comparison.csv and report.md (D-81, D-86): `make benchmark NAME=<name>`.
+benchmark's self-test, and writes a new folder,
+<root>/runs/benchmark/<name>/<stamp>/, holding each run in a folder named by its
+run id, the run list bp.data.runs.yaml (checked against
+config/bp.schema.runs.yaml), comparison.csv and report.md:
+`make benchmark NAME=<name>`. A remake never changes or deletes an earlier
+folder, and `current_benchmark` finds the latest.
 """
 
 import csv
 import datetime
 import math
 import platform
-import shutil
+import re
 import subprocess
 import sys
 from importlib.metadata import version
@@ -43,7 +48,7 @@ import yaml
 from qiskit import qasm2
 
 from bellbench import configs
-from bellbench.circuits import load_circuit
+from bellbench.circuits import ROLES, load_circuit
 from bellbench.fidelity import BASES, fidelity_from_counts
 from bellbench.noise import NoiseControl
 from bellbench.pipeline import (
@@ -63,6 +68,26 @@ SIMULATIONS = ("ideal", "noisy")
 DIAGRAMS = ("lean", "full")
 PACKAGES = ("qiskit", "qiskit-aer", "qiskit-ibm-runtime", "numpy")
 WILSON_Z = 1.959963984540054  # a 95% interval
+STAMP = "%Y%m%dT%H%M%SZ"  # the UTC time that names run and benchmark folders
+
+# The CSV contract: the columns of each CSV a run or benchmark writes, in order.
+# The writers take their headers from here and nowhere else, and the workbench
+# and the submission notebook read these names, so a column is added only when
+# the value it holds is built, and never renamed in place.
+SIMULATION_COLUMNS = (
+    "simulation",
+    "fidelity", "fidelity_se", "fidelity_raw", "fidelity_raw_se", "se_method",
+    *(f"corr_{b}" for b in BASES),
+    "acceptance", "acceptance_low", "acceptance_high",
+    *(f"shots_{kind}_{b}" for b in BASES for kind in ("raw", "accepted")),
+)
+COUNT_COLUMNS = ("simulation", "basis", *ROLES, PORT_REGISTER, "count")
+COMPARISON_COLUMNS = (
+    "case", "run", "circuit", "processor", "noise", "scale", "overrides",
+    *SIMULATION_COLUMNS,
+    "swaps", "router_swaps", "two_qubit_gates", "depth", "qubits_used", "scheduled_duration",
+    "two_qubit_gates_per_accepted_pair",
+)
 
 
 class CircuitRun:
@@ -174,22 +199,31 @@ class CircuitRun:
 
     # -- Writing -------------------------------------------------------------------
 
-    def write(self, root: Path | None = None) -> Path:
-        """Write the run folder under `root`, by default results/ or workspace/ as the git state says."""
+    def write(self, root: Path | None = None, folder: Path | None = None) -> Path:
+        """Write the run folder and return it.
+
+        By default the folder is <root>/runs/workbench/<circuit>/<noise>/<stamp>/,
+        with `root` results/ or workspace/ as the git state says. A benchmark
+        passes `folder` instead, which must not exist yet.
+        """
         record = self.export_as_yaml()
         configs.check_config("result", record, "the run record")
-        if root is None:
-            root = configs.ROOT / ("workspace" if record["provenance"]["uncommitted"] else "results")
-        stamp = datetime.datetime.now(datetime.UTC).strftime("%Y%m%dT%H%M%SZ")
-        if self.nc.scale != 1:
-            stamp += f"-x{self.nc.scale:g}"
-        if self.settings_hash:
-            stamp += f"-{self.settings_hash}"
-        folder = Path(root) / "runs" / self.circuit.name / self.nc.noise_name / stamp
+        if folder is None:
+            if root is None:
+                root = configs.ROOT / ("workspace" if record["provenance"]["uncommitted"] else "results")
+            stamp = _stamp()
+            if self.nc.scale != 1:
+                stamp += f"-x{self.nc.scale:g}"
+            if self.settings_hash:
+                stamp += f"-{self.settings_hash}"
+            folder = Path(root) / "runs" / "workbench" / self.circuit.name / self.nc.noise_name / stamp
+        elif root is not None:
+            raise ValueError("write takes a root or a folder, not both")
+        folder = Path(folder)
         folder.mkdir(parents=True, exist_ok=False)
         (folder / RESULT_FILE).write_text(yaml.dump(record, Dumper=_Dumper, sort_keys=False), encoding="utf-8")
-        _write_csv(folder / "simulations.csv", self.simulation_rows())
-        _write_csv(folder / "counts.csv", self.count_rows())
+        _write_csv(folder / "simulations.csv", self.simulation_rows(), SIMULATION_COLUMNS)
+        _write_csv(folder / "counts.csv", self.count_rows(), COUNT_COLUMNS)
         write_views(folder)
         return folder
 
@@ -198,13 +232,14 @@ class CircuitRun:
         return [self.analysis[name].row(name) for name in SIMULATIONS]
 
     def count_rows(self) -> list[dict]:
-        """Every outcome of every basis circuit, each register's bits in a column of its own."""
+        """Every outcome of every basis circuit, a column for each register role, empty where the circuit lacks it."""
         rows = []
         for name in SIMULATIONS:
             for basis in BASES:
                 for key, n in self.simulations[name].raw[basis].items():
                     bits = dict(zip(reversed(self.registers), key.split(" ")))
-                    rows.append({"simulation": name, "basis": basis, **{r: bits[r] for r in self.registers}, "count": n})
+                    registers = {r: bits.get(r, "") for r in (*ROLES, PORT_REGISTER)}
+                    rows.append({"simulation": name, "basis": basis, **registers, "count": n})
         return rows
 
 
@@ -362,7 +397,8 @@ def _run_report(folder: Path, record: dict) -> str:
     rows = _read_csv(folder / "simulations.csv")
     c = record["cost"]
     lines = [
-        f"# Run {folder.parent.parent.name} under {folder.parent.name}",
+        f"# Run {configs.name_from_record(record['circuit'], 'circuit')} under "
+        f"{configs.name_from_record(record['noise_control']['noise'], 'noise')}",
         "",
         f"- **Circuit file:** `{record['circuit']['path']}`",
         f"- **Noise profile:** `{record['noise_control']['noise']['path']}`, scale {record['noise_control']['scale']:g}",
@@ -398,7 +434,7 @@ def _run_report(folder: Path, record: dict) -> str:
 
 # -- Benchmarks -------------------------------------------------------------------------
 
-RUN_LIST = "runs.yaml"
+RUN_LIST = "bp.data.runs.yaml"
 
 
 def load_benchmark(name: str) -> tuple[dict, dict]:
@@ -417,10 +453,12 @@ def load_benchmark(name: str) -> tuple[dict, dict]:
 
 
 def run_benchmark(name: str, root: Path | None = None, shots: int | None = None) -> Path:
-    """Make every run the benchmark lists and write its folder; refuses before writing when a case fails its self-test.
+    """Make every run the benchmark lists and write a new folder; refuses before writing if a case fails its self-test.
 
-    Remaking a benchmark deletes the runs its previous run list named and
-    replaces its folder (D-78). `shots` overrides the file's, for tests only.
+    The folder is <root>/runs/benchmark/<name>/<stamp>/, with `root` results/ or
+    workspace/ as the git state says, and each run is written in it under its run
+    id. Earlier folders are never changed or deleted. `shots` overrides the
+    file's, for tests only.
     """
     data, record = load_benchmark(name)
     runs = {}
@@ -436,27 +474,35 @@ def run_benchmark(name: str, root: Path | None = None, shots: int | None = None)
         if run.analysis["ideal"].accepted.value != 1.0:
             ideal = run.analysis["ideal"].accepted.value
             raise ValueError(f"benchmark {name!r}: case {case['case']}: run {case['run']!r} has ideal F {ideal}, not 1")
+    run_list = {"benchmark": record, "runs": list(runs), "cases": data.get("cases", [])}
     if root is None:
         root = configs.ROOT / ("workspace" if _git_state()[1] else "results")
-    root = Path(root)
-    folder = root / "benchmarks" / name
-    if (folder / RUN_LIST).exists():
-        previous = yaml.safe_load((folder / RUN_LIST).read_text(encoding="utf-8"))
-        for path in previous["runs"].values():
-            shutil.rmtree(root / path, ignore_errors=True)
-    shutil.rmtree(folder, ignore_errors=True)
-    folders = {run_id: run.write(root) for run_id, run in runs.items()}
-    folder.mkdir(parents=True)
-    run_list = {
-        "benchmark": record,
-        "runs": {run_id: f.relative_to(root).as_posix() for run_id, f in folders.items()},
-        "cases": data.get("cases", []),
-    }
+    folder = Path(root) / "runs" / "benchmark" / name / _stamp()
+    configs.check_config("runs", run_list, (folder / RUN_LIST).as_posix())
+    try:
+        folder.mkdir(parents=True, exist_ok=False)
+    except FileExistsError:
+        message = f"{folder} exists: benchmark {name!r} was made this second already; make it again"
+        raise FileExistsError(message) from None
+    for run_id, run in runs.items():
+        run.write(folder=folder / run_id)
     (folder / RUN_LIST).write_text(yaml.safe_dump(run_list, sort_keys=False), encoding="utf-8")
     rows = comparison_rows(runs, data)
-    _write_csv(folder / "comparison.csv", rows)
+    _write_csv(folder / "comparison.csv", rows, COMPARISON_COLUMNS)
     (folder / "report.md").write_text(_benchmark_report(data, rows), encoding="utf-8")
     return folder
+
+
+def current_benchmark(name: str, root: Path | None = None) -> Path:
+    """The benchmark's current folder: the one with the latest stamp under <root>/runs/benchmark/<name>/.
+
+    `root` defaults to results/, where the benchmarks made from committed code are.
+    """
+    parent = (configs.ROOT / "results" if root is None else Path(root)) / "runs" / "benchmark" / name
+    stamps = sorted(p for p in parent.glob("*") if p.is_dir() and re.fullmatch(r"\d{8}T\d{6}Z", p.name))
+    if not stamps:
+        raise FileNotFoundError(f"no {name!r} benchmark in {parent}; make benchmark NAME={name} makes one")
+    return stamps[-1]
 
 
 def comparison_rows(runs: dict, data: dict) -> list[dict]:
@@ -517,6 +563,11 @@ def _check_conditional_channels(circuit, nc: NoiseControl) -> None:
             )
 
 
+def _stamp() -> str:
+    """The UTC time now, as STAMP names run and benchmark folders."""
+    return datetime.datetime.now(datetime.UTC).strftime(STAMP)
+
+
 def _git_state() -> tuple[str | None, bool]:
     """The commit, and whether src/ or config/ has uncommitted changes; outside git, (None, True)."""
     try:
@@ -532,9 +583,14 @@ def _git_state() -> tuple[str | None, bool]:
     return commit, bool(status.strip())
 
 
-def _write_csv(path: Path, rows: list[dict]) -> None:
+def _write_csv(path: Path, rows: list[dict], columns) -> None:
+    """Write `rows` under the header `columns`; a row with a key outside them, or one missing, raises."""
+    for row in rows:
+        if set(row) != set(columns):
+            extra, missing = sorted(set(row) - set(columns)), sorted(set(columns) - set(row))
+            raise ValueError(f"{path.name}: a row does not fit the declared columns; extra {extra}, missing {missing}")
     with open(path, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=list(rows[0]))
+        writer = csv.DictWriter(f, fieldnames=columns, lineterminator="\n")
         writer.writeheader()
         writer.writerows(rows)
 

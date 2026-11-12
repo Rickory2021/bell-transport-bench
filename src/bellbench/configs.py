@@ -169,8 +169,9 @@ def check_unchanged(recorded: Mapping, current: Mapping) -> None:
 def check_config(kind: str, data, where: str) -> None:
     """Raise a ValueError naming `where` and the field when `data` does not fit config/bp.schema.<kind>.yaml.
 
-    `kind` is a kind of config file, or `result` for a run record, which a run
-    writes outside config/ but checks against a schema in it.
+    `kind` is a kind of config file, `result` for a run record or `runs` for a
+    benchmark's run list, which a run or a benchmark writes outside config/ but
+    checks against a schema in it.
     """
     error = best_match(_validator(ROOT / "config" / f"bp.schema.{kind}.yaml").iter_errors(data))
     if error is not None:

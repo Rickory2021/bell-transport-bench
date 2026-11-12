@@ -101,7 +101,7 @@ def folder(tmp_path):
 
 
 def test_run_folder_holds_its_record_and_numbers(folder, tmp_path):
-    assert folder.relative_to(tmp_path).parts[:3] == ("runs", "baseline-ibm2016", "boston-2026")
+    assert folder.relative_to(tmp_path).parts[:4] == ("runs", "workbench", "baseline-ibm2016", "boston-2026")
     record = yaml.safe_load((folder / RESULT_FILE).read_text(encoding="utf-8"))
     assert record["circuit"]["path"] == "config/circuit/bp.data.circuit.baseline-ibm2016.yaml"
     assert record["registers"] == ["port"] and record["cost"]["pair_on_ports"] is True

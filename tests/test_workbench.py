@@ -38,7 +38,7 @@ def test_the_code_cells_run_in_order(config_copy, with_example):
             namespace["SHOTS"] = 50  # the settings cell sets the core benchmark's shots; a test needs few
     circuit = "chain-04567" if with_example else "baseline-contemporary"
     folder = namespace["folder"]
-    assert folder.relative_to(configs.ROOT).parts[:4] == ("workspace", "runs", circuit, "boston-2026")
+    assert folder.relative_to(configs.ROOT).parts[:5] == ("workspace", "runs", "workbench", circuit, "boston-2026")
     assert namespace["run"].base_seed == namespace["core"]["base_seed"]
 
 
