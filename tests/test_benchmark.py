@@ -249,6 +249,17 @@ def test_views_refuse_a_changed_file_before_drawing(config_copy):
     assert {p.name: p.read_bytes() for p in folder.iterdir()} == before, "a refused redraw changes no file"
 
 
+@pytest.mark.parametrize(
+    "current, switch_to",
+    [
+        ("TkAgg", "agg"), ("QtAgg", "agg"), ("macosx", "agg"),
+        ("module://matplotlib_inline.backend_inline", None), ("agg", None), ("pdf", None),
+    ],
+)
+def test_views_draw_with_agg_only_under_a_gui_backend(current, switch_to):
+    assert run_module._drawing_backend(current) == switch_to
+
+
 def test_writing_a_run_leaves_the_matplotlib_backend_as_it_was(tmp_path):
     """A notebook's inline backend survives a run's write; a fresh process shows the import changes nothing either."""
     script = (

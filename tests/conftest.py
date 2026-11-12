@@ -1,11 +1,20 @@
 # tests/conftest.py
-"""Fixtures shared by the test files."""
+"""Fixtures shared by the test files, and a backend that only draws to files.
+
+The suite saves figures and never shows them, so it draws with Agg whatever
+backend the machine defaults to. A GUI default such as TkAgg (WSLg sets DISPLAY)
+makes window objects that Python's garbage collector may free on one of Aer's
+worker threads, which kills the test process.
+"""
 
 import shutil
 
+import matplotlib
 import pytest
 
 from bellbench import configs
+
+matplotlib.use("Agg")
 
 
 @pytest.fixture

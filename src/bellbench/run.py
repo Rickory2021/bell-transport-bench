@@ -383,10 +383,16 @@ def write_views(folder: Path) -> list[Path]:
     XX and YY circuits and the timeline of the scheduled ZZ circuit
     (docs/DESIGN.md, section 5). Before drawing anything it refuses a circuit,
     processor or noise file that changed since the run, so no view is ever drawn
-    from files the run did not use. matplotlib's backend is left as it is, so a
-    notebook that writes a run keeps its inline plots; each figure is closed once
-    saved.
+    from files the run did not use. A notebook's inline backend, or any other that
+    only draws, is left as it is, so the notebook keeps its plots; a GUI backend
+    such as TkAgg is switched to Agg (see `_drawing_backend`). Each figure is
+    closed once saved.
     """
+    import matplotlib
+
+    switch_to = _drawing_backend(matplotlib.get_backend())
+    if switch_to is not None:
+        matplotlib.use(switch_to)
     import matplotlib.pyplot as plt
 
     from bellbench.figures import draw_processor
@@ -665,6 +671,21 @@ def _check_conditional_channels(name: str, compiled: dict, nc: NoiseControl) -> 
                 "but the conditional channel mid_circuit_measurement_error is unset, so the qubit would come out "
                 "of each read perfect; set it, as a value swept over a range, or measure the qubit last"
             )
+
+
+def _drawing_backend(current: str) -> str | None:
+    """"agg" when `current` is a GUI backend, else None, to leave it as it is.
+
+    A GUI backend (Tk, Qt, GTK, wx, macOS) gives each figure window objects that
+    must be freed on the thread that made them. Aer runs its jobs on worker
+    threads, and Python's garbage collector can free those objects there, which
+    kills the process (Tk: "Fatal Python error: Illegal instruction"). Views are
+    only saved to files, so drawing them with Agg loses nothing.
+    """
+    from matplotlib.backends import BackendFilter, backend_registry
+
+    gui = set(backend_registry.list_builtin(BackendFilter.INTERACTIVE)) - {"nbagg", "notebook", "webagg"}
+    return "agg" if current.lower() in gui else None
 
 
 def _check_result_format(record: dict) -> None:
