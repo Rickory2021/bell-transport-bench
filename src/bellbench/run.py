@@ -309,12 +309,16 @@ REFUSED, MATCH, DIFFER = 2, 0, 1
 def rerun(path: Path) -> tuple[int, list[str]]:
     """Rebuild the run at `path` (its folder or its result file), compare, and return the exit code and lines.
 
-    2 when a referenced file changed, 1 when a circuit or a number differs, 0
-    when they all match; a different commit or package version is reported
-    either way. Nothing is written into the run folder.
+    2 when the path holds no run record or a referenced file changed, 1 when a
+    circuit or a number differs, 0 when they all match; a different commit or
+    package version is reported either way. Nothing is written into the run
+    folder. `make run` exits 2 whenever this returns 1 or 2, as make does for any
+    failed recipe; the printed lines say which.
     """
     folder = Path(path)
     folder = folder.parent if folder.name == RESULT_FILE else folder
+    if not (folder / RESULT_FILE).is_file():
+        return REFUSED, [f"refused: {folder / RESULT_FILE} does not exist; give a run folder or its {RESULT_FILE}"]
     record = yaml.safe_load((folder / RESULT_FILE).read_text(encoding="utf-8"))
     try:
         run = CircuitRun.from_yaml(record)
@@ -629,7 +633,8 @@ def _stringify(rows: list[dict]) -> list[dict]:
 
 
 USAGE = """usage: python -m bellbench.run benchmark [NAME]     make a benchmark (default core)
-       python -m bellbench.run rerun PATH           rerun a run folder or its bp.data.result.yaml
+       python -m bellbench.run rerun PATH           rerun a run folder or its bp.data.result.yaml;
+                                                    exit 0 a match, 1 a difference, 2 a refusal
        python -m bellbench.run report PATH          redraw a run folder's diagrams and report.md"""
 
 

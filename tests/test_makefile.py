@@ -67,3 +67,8 @@ def test_make_workbench_renders_the_notebook_and_copies_it_to_workspace():
     printed = _make("-n", "workbench", env={})
     assert "FILE=notebooks/bp.invoke.workbench.yaml" in printed
     assert "cp notebooks/bp.output.workbench.ipynb workspace/workbench.ipynb" in printed
+
+
+def test_make_help_states_the_codes_make_run_exits_with():
+    printed = _make("help", env={})
+    assert "make exits 0 on a match, 2 for a" in printed and "Error 1 a difference, Error 2 a refusal" in printed

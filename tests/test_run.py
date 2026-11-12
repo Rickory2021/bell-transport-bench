@@ -296,6 +296,14 @@ def test_a_rerun_refuses_a_changed_file(config_copy, path):
     assert code == 2 and f"{path} changed since it was recorded" in lines[0]
 
 
+@pytest.mark.parametrize("name", ["missing", f"missing/{RESULT_FILE}"])
+def test_a_rerun_refuses_a_path_with_no_run_record(tmp_path, name):
+    code, lines = rerun(tmp_path / name)
+    assert code == 2 and lines == [f"refused: {tmp_path / 'missing' / RESULT_FILE} does not exist; "
+                                   f"give a run folder or its {RESULT_FILE}"]
+    assert run_module.main(["rerun", str(tmp_path / name)]) == 2
+
+
 def test_a_run_of_an_earlier_result_format_is_refused(folder):
     """A run recorded in OpenQASM 2 (format 1) is history: a rerun or a redraw names the commit that can rebuild it."""
     path = folder / RESULT_FILE
