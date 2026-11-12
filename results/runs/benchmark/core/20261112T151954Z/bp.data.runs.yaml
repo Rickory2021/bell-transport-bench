@@ -1,0 +1,26 @@
+benchmark:
+  path: config/benchmark/bp.data.benchmark.core.yaml
+  hash: sha256:f6309d4f32dbcc2444e7987c20bead680c9c3c60c424c618511efbd4f6c6c217
+runs:
+- ibm2016
+- contemporary
+- hyperbolic
+cases:
+- case: 1
+  run: ibm2016
+  simulation: ideal
+- case: 2
+  run: ibm2016
+  simulation: noisy
+- case: 4
+  run: contemporary
+  simulation: ideal
+- case: 5
+  run: contemporary
+  simulation: noisy
+- case: 7
+  run: hyperbolic
+  simulation: ideal
+- case: 8
+  run: hyperbolic
+  simulation: noisy
