@@ -75,12 +75,23 @@ def test_gates_round_trip_through_openqasm_3():
     "build, message",
     [
         (lambda: QuantumCircuit(4), r"needs one register q\[5\]"),
-        (lambda: _with_register("port"), "classical register 'port' is not one of check, flag"),
+        (lambda: _with_register("port"), "classical register 'port' is not named by a role"),
+        (lambda: _with_register("checks"), "classical register 'checks' is not named by a role"),
+        (lambda: _with_register("frame_y"), "classical register 'frame_y' is not named by a role"),
+        (lambda: _with_register("check_"), "classical register 'check_' is not named by a role"),
     ],
 )
 def test_gates_that_do_not_fit_raise_naming_the_field(build, message):
     with pytest.raises(ValueError, match=r"\$\.circuit: " + message):
         circuit_from_qasm(circuit_to_qasm(build()), 5)
+
+
+@pytest.mark.parametrize(
+    "name", ["check", "flag", "frame_z", "frame_x", "check_zz", "flag_zz", "frame_z_bus", "check_vac_3"]
+)
+def test_registers_named_by_a_role_load(name):
+    circuit = _with_register(name)
+    assert [r.name for r in circuit_from_qasm(circuit_to_qasm(circuit), 5).cregs] == [name]
 
 
 def test_unparseable_gates_raise():

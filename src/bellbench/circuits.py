@@ -10,7 +10,8 @@ regenerates them from a transport's name, so the file shows exactly what runs.
 `load_circuit` reads a file, which configs.py checks against its schema, and
 then checks what spans fields: the gates parse, the circuit has one register q
 with the processor's qubit count, and every classical register is named by its
-role (ROLES). A run adds each basis's rotation and the port measurement into a
+role (ROLES), alone or followed by an underscore and a name for the check, such
+as check_zz. A run adds each basis's rotation and the port measurement into a
 register named port, so a written circuit never uses that name.
 
 The transport and check functions build circuits; `save_circuit` writes what
@@ -19,6 +20,7 @@ organisers' recipe of explicit SWAPs out along a port path and back (D-30).
 Run as a module, this writes the three core baseline circuit files.
 """
 
+import re
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -31,8 +33,10 @@ from qiskit.qasm3 import QASM3ImporterError
 
 from bellbench import configs
 
-# The classical registers a written circuit may hold, by role; a run adds "port".
-ROLES = ("check", "flag")
+# The roles a written circuit's classical registers take; a run adds "port". A check's bits flag an error, a
+# flag's bits catch a fault in a check, and frame_z or frame_x bits say a Z or an X is owed on the first port.
+ROLES = ("check", "flag", "frame_z", "frame_x")
+REGISTER_NAME = re.compile(rf"(?:{'|'.join(ROLES)})(?:_[a-z0-9]+)*")
 CORE_PROCESSORS = ("ibm2016", "contemporary", "hyperbolic")
 
 
@@ -69,10 +73,10 @@ def circuit_from_qasm(text: str, num_qubits: int, where: str = "circuit") -> Qua
         got = ", ".join(f"{r.name}[{r.size}]" for r in circuit.qregs) or "none"
         raise ValueError(f"{where}: $.circuit: needs one register q[{num_qubits}], the processor's qubits; got {got}")
     for reg in circuit.cregs:
-        if reg.name not in ROLES:
+        if not REGISTER_NAME.fullmatch(reg.name):
             raise ValueError(
-                f"{where}: $.circuit: classical register {reg.name!r} is not one of {', '.join(ROLES)}; "
-                "the run adds the port register itself"
+                f"{where}: $.circuit: classical register {reg.name!r} is not named by a role ({', '.join(ROLES)}), "
+                "alone or followed by _ and a name such as check_zz; the run adds the port register itself"
             )
     return circuit
 

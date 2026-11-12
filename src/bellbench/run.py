@@ -18,8 +18,8 @@ for a run made on its own, or the folder a benchmark names for each of its runs.
 <root> is results/ for a run made from committed code and config, workspace/
 otherwise. A run folder holds bp.data.result.yaml, the settings and records,
 checked against config/bp.schema.result.yaml; simulations.csv, one row of
-numbers per simulation; and counts.csv, every outcome with a column for each
-register role, empty where the circuit has no such register. Seeds derive from
+numbers per simulation; and counts.csv, every outcome as the key Qiskit writes,
+one bit string per register in reverse of the record's register order. Seeds derive from
 the run's labels, never from its folder name, so a remade run repeats them.
 
 `rerun` rebuilds a run from its folder and compares (D-79): `make run RUN=<path>`.
@@ -48,7 +48,7 @@ import yaml
 from qiskit import qasm3
 
 from bellbench import configs
-from bellbench.circuits import ROLES, circuit_to_qasm, load_circuit
+from bellbench.circuits import circuit_to_qasm, load_circuit
 from bellbench.fidelity import BASES, fidelity_from_counts
 from bellbench.noise import NoiseControl
 from bellbench.pipeline import (
@@ -62,7 +62,7 @@ from bellbench.pipeline import (
     simulate,
 )
 
-RESULT_FORMAT = 2  # 1: circuits in OpenQASM 2; 2: circuits in OpenQASM 3
+RESULT_FORMAT = 2  # 1: OpenQASM 2 and a counts.csv column per role; 2: OpenQASM 3 and the full outcome key
 RESULT_FILE = "bp.data.result.yaml"
 SIMULATIONS = ("ideal", "noisy")
 DIAGRAMS = ("lean", "full")
@@ -81,7 +81,7 @@ SIMULATION_COLUMNS = (
     "acceptance", "acceptance_low", "acceptance_high",
     *(f"shots_{kind}_{b}" for b in BASES for kind in ("raw", "accepted")),
 )
-COUNT_COLUMNS = ("simulation", "basis", *ROLES, PORT_REGISTER, "count")
+COUNT_COLUMNS = ("simulation", "basis", "outcome", "count")
 COMPARISON_COLUMNS = (
     "case", "run", "circuit", "processor", "noise", "scale", "overrides",
     *SIMULATION_COLUMNS,
@@ -233,15 +233,13 @@ class CircuitRun:
         return [self.analysis[name].row(name) for name in SIMULATIONS]
 
     def count_rows(self) -> list[dict]:
-        """Every outcome of every basis circuit, a column for each register role, empty where the circuit lacks it."""
-        rows = []
-        for name in SIMULATIONS:
-            for basis in BASES:
-                for key, n in self.simulations[name].raw[basis].items():
-                    bits = dict(zip(reversed(self.registers), key.split(" ")))
-                    registers = {r: bits.get(r, "") for r in (*ROLES, PORT_REGISTER)}
-                    rows.append({"simulation": name, "basis": basis, **registers, "count": n})
-        return rows
+        """Every outcome of every basis circuit, keyed as Qiskit writes it: one bit string per register, last first."""
+        return [
+            {"simulation": name, "basis": basis, "outcome": key, "count": n}
+            for name in SIMULATIONS
+            for basis in BASES
+            for key, n in self.simulations[name].raw[basis].items()
+        ]
 
 
 # -- Analysis ------------------------------------------------------------------------

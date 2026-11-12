@@ -42,5 +42,7 @@ properties:
     description: Free text saying how the circuit was built (the transport, the path, the checks) and anything a reader should know.
     $ref: "#/$defs/text"
   circuit:
-    description: "The gates, as an OpenQASM 3 program on one register q with the processor's qubit count; classical registers named check or flag only."
+    description: >-
+      The gates, as an OpenQASM 3 program on one register q with the processor's qubit count; classical registers
+      named by role (check, flag, frame_z or frame_x), alone or followed by an underscore and a name.
     $ref: "#/$defs/text"
