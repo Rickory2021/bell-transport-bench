@@ -304,6 +304,60 @@ def test_a_rerun_refuses_a_path_with_no_run_record(tmp_path, name):
     assert run_module.main(["rerun", str(tmp_path / name)]) == 2
 
 
+def _edit_record(folder, change):
+    path = folder / RESULT_FILE
+    record = yaml.safe_load(path.read_text(encoding="utf-8"))
+    change(record)
+    path.write_text(yaml.safe_dump(record), encoding="utf-8")
+
+
+@pytest.mark.parametrize(
+    "change, line",
+    [
+        (lambda r: r.update(scheduled_duration=r["scheduled_duration"] * 2), "DIFFERS: scheduled duration"),
+        (lambda r: r["simulations"]["noisy"]["seeds"].update(XX=1), "DIFFERS: simulator seeds and methods"),
+        (lambda r: r["simulations"]["ideal"]["methods"].update(XX="density_matrix"),
+         "DIFFERS: simulator seeds and methods"),
+    ],
+)
+def test_a_rerun_reports_a_changed_duration_or_simulator_record(folder, change, line):
+    _edit_record(folder, change)
+    code, lines = rerun(folder)
+    assert code == 1 and line in lines
+
+
+def test_a_rerun_runs_with_the_recorded_seeds(folder, monkeypatch):
+    """A changed derivation, such as a new label, leaves an earlier run rerunnable: the record's seeds are used,
+    and the change is reported without counting as a difference."""
+    derive = run_module.derive_seed
+    monkeypatch.setattr(run_module, "derive_seed", lambda *args: derive(*args) + 1)
+    code, lines = rerun(folder)
+    assert code == 0, lines
+    assert "DIFFERS: seeds the labels derive now" in lines
+
+
+def test_a_rerun_with_edited_recorded_seeds_differs_in_its_counts(folder):
+    _edit_record(folder, lambda r: r["seeds"].update(noisy=r["seeds"]["noisy"] + 1))
+    code, lines = rerun(folder)
+    assert code == 1 and "DIFFERS: counts" in lines and "DIFFERS: seeds the labels derive now" in lines
+
+
+@pytest.mark.parametrize(
+    "path, broken",
+    [
+        ("config/noise/bp.data.noise.boston-2026.yaml", "\nbogus_field: 1\n"),
+        ("config/circuit/bp.data.circuit.baseline-ibm2016.yaml", "\nprocessor: no-such-graph\n"),
+        ("config/processor/bp.data.processor.ibm2016.yaml", "\n: not yaml: [\n"),
+    ],
+)
+def test_a_changed_file_that_no_longer_loads_is_refused_for_the_change(config_copy, path, broken):
+    folder = CircuitRun("baseline-ibm2016", "boston-2026", shots=100).run().write(config_copy / "results")
+    edited = config_copy / path
+    edited.write_text(edited.read_text(encoding="utf-8") + broken, encoding="utf-8")
+    code, lines = rerun(folder)
+    assert code == 2 and f"{path} changed since it was recorded" in lines[0], lines
+
+
 def test_a_run_of_an_earlier_result_format_is_refused(folder):
     """A run recorded in OpenQASM 2 (format 1) is history: a rerun or a redraw names the commit that can rebuild it."""
     path = folder / RESULT_FILE

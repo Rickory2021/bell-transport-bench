@@ -63,7 +63,7 @@ from qiskit.quantum_info import average_gate_fidelity
 from qiskit.transpiler import InstructionProperties, QubitProperties, Target
 from qiskit_aer.noise import NoiseModel, ReadoutError, depolarizing_error, pauli_error, thermal_relaxation_error
 
-from bellbench.configs import check_unchanged, load_recorded, name_from_record, processor_graph
+from bellbench.configs import check_file_unchanged, check_unchanged, load_recorded, name_from_record, processor_graph
 
 T1 = "qubit.t1_relaxation_time"
 T2 = "qubit.t2_dephasing_time"
@@ -154,12 +154,18 @@ class NoiseControl:
 
     @staticmethod
     def args_from_record(record: Mapping) -> tuple:
-        """The processor, noise, scale, overrides and conditional channels an `export_as_yaml` mapping names."""
+        """The processor, noise, scale, overrides and conditional channels an `export_as_yaml` mapping names.
+
+        Refuses a processor or noise file whose content changed since the record,
+        before anything is built from it.
+        """
         expected = {"processor", "noise", "scale", "overrides", "conditional"}
         if set(record) != expected:
             raise ValueError(f"a NoiseControl record has the keys {sorted(expected)}; got {sorted(record)}")
         processor = name_from_record(record["processor"], "processor")
         noise = name_from_record(record["noise"], "noise")
+        for kind in ("processor", "noise"):
+            check_file_unchanged(record[kind])
         return processor, noise, record["scale"], record["overrides"], record["conditional"]
 
     def check_record(self, record: Mapping) -> None:

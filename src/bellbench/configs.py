@@ -19,7 +19,9 @@ changed (docs/DESIGN.md, section 5). Editing a comment or the formatting leaves
 the hash unchanged. `load_recorded` loads a file and records it as
 `{path, hash}`, hashing the very content it returns, so the record describes
 what the caller builds from. `name_from_record` turns a record back into a
-name, and `check_unchanged` refuses a file whose content changed since then.
+name, and `check_unchanged` refuses a file whose content changed since then;
+`check_file_unchanged` does so from the file itself, before anything is built
+from it.
 
 `processor_graph` is the one builder of a processor's coupling graph, which
 NoiseControl, the figures and the tests share. `CORE_PROCESSORS` names the
@@ -164,6 +166,22 @@ def name_from_record(record: Mapping, kind: str) -> str:
     if repo_path(config_path(kind, name)) != record["path"]:
         raise ValueError(f"the {kind} record's path {record['path']!r} is not where {kind} files live")
     return name
+
+
+def check_file_unchanged(recorded: Mapping) -> None:
+    """Refuse the file at a `{path, hash}` record's path when its content no longer has the recorded hash.
+
+    Run before a rebuild, so a changed file is refused for the change even when
+    it would no longer load; a file that no longer parses has changed too.
+    """
+    try:
+        current = {"path": recorded["path"], "hash": content_hash(ROOT / recorded["path"])}
+    except yaml.YAMLError:
+        raise ValueError(
+            f"{recorded['path']} changed since it was recorded: it no longer parses as YAML; "
+            "a rerun needs the file the run used"
+        ) from None
+    check_unchanged(recorded, current)
 
 
 def check_unchanged(recorded: Mapping, current: Mapping) -> None:

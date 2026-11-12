@@ -29,7 +29,8 @@ numbers per simulation; and counts.csv, every outcome as the key Qiskit writes,
 one bit string per register in reverse of the record's register order. Seeds derive from
 the run's labels, never from its folder name, so a remade run repeats them.
 
-`rerun` rebuilds a run from its folder and compares (D-79): `make run RUN=<path>`.
+`rerun` rebuilds a run from its folder with the recorded seeds and compares:
+`make run RUN=<path>` (docs/DESIGN.md, section 5).
 `write_views` draws a run folder's diagrams and report.md from its files, so the
 views can be remade at any time (D-74): `make report RUN=<path>`.
 `run_benchmark` makes every run a benchmark file lists, checks the core
@@ -122,6 +123,7 @@ class CircuitRun:
         self.shots, self.base_seed, self.diagrams = shots, base_seed, diagrams
         self.labels = (circuit, noise, repr(self.nc.scale), self.settings_hash or "none")
         self.seeds = {step: derive_seed(base_seed, *self.labels, step) for step in ("transpile", *SIMULATIONS)}
+        self.derived_seeds = dict(self.seeds)  # what the labels give; from_yaml may run with recorded seeds instead
         self.compiled = self.cost = self.duration = self.git_state = None
         self.simulations, self.analysis = {}, {}
 
@@ -199,18 +201,23 @@ class CircuitRun:
 
     @classmethod
     def from_yaml(cls, record: dict) -> "CircuitRun":
-        """Rebuild a run from its record; refuses a referenced file whose content changed since."""
+        """Rebuild a run from its record; refuses a referenced file whose content changed since.
+
+        Each file's hash is compared before the build and again after it. The run
+        uses the recorded seeds; `derived_seeds` keeps what its labels give now, so
+        a rerun can report a derivation that changed.
+        """
         configs.check_config("result", record, "the run record")
         _check_result_format(record)
         circuit = configs.name_from_record(record["circuit"], "circuit")
+        configs.check_file_unchanged(record["circuit"])
         nc_record = record["noise_control"]
         _, noise, scale, overrides, conditional = NoiseControl.args_from_record(nc_record)
         shots, base_seed, diagrams = record["shots"], record["base_seed"], record["diagrams"]
         run = cls(circuit, noise, shots, base_seed, scale, overrides, conditional, diagrams)
         configs.check_unchanged(record["circuit"], run.circuit.record)
         run.nc.check_record(nc_record)
-        if run.seeds != record["seeds"]:
-            raise ValueError(f"the recorded seeds {record['seeds']} are not the ones the run's labels give {run.seeds}")
+        run.derived_seeds, run.seeds = run.seeds, dict(record["seeds"])
         return run
 
     # -- Writing -------------------------------------------------------------------
@@ -309,9 +316,12 @@ REFUSED, MATCH, DIFFER = 2, 0, 1
 def rerun(path: Path) -> tuple[int, list[str]]:
     """Rebuild the run at `path` (its folder or its result file), compare, and return the exit code and lines.
 
-    2 when the path holds no run record or a referenced file changed, 1 when a
-    circuit or a number differs, 0 when they all match; a different commit or
-    package version is reported either way. Nothing is written into the run
+    It runs with the recorded seeds and simulator methods, and compares the
+    circuits, the cost, the scheduled duration, the seeds and methods Aer
+    reported for each basis, the counts and the numbers. 2 when the path holds
+    no run record or a referenced file changed, 1 when any of those differs, 0
+    when they all match; a different commit, package version or seed derivation
+    is reported either way without changing the code. Nothing is written into the run
     folder. `make run` exits 2 whenever this returns 1 or 2, as make does for any
     failed recipe; the printed lines say which.
     """
@@ -341,8 +351,11 @@ def rerun(path: Path) -> tuple[int, list[str]]:
     for basis in BASES:
         compare(f"compiled {basis} circuit", record["compiled"][basis], new["compiled"][basis])
     compare("cost", record["cost"], new["cost"])
+    compare("scheduled duration", record["scheduled_duration"], new["scheduled_duration"])
+    compare("simulator seeds and methods", record["simulations"], new["simulations"])
     compare("counts", _read_csv(folder / "counts.csv"), _stringify(run.count_rows()))
     compare("simulations", _read_csv(folder / "simulations.csv"), _stringify(run.simulation_rows()))
+    compare("seeds the labels derive now", record["seeds"], run.derived_seeds, counts=False)
     compare("commit", record["provenance"]["commit"], new["provenance"]["commit"], counts=False)
     compare("package versions", record["provenance"]["packages"], new["provenance"]["packages"], counts=False)
     return (DIFFER if differ else MATCH), lines
