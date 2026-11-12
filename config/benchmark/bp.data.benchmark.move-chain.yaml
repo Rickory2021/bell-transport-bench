@@ -1,0 +1,47 @@
+# config/benchmark/bp.data.benchmark.move-chain.yaml
+
+name: move-chain
+label: Move chain with an XX check, the nine cases
+notes: >-
+  The challenge's nine cases (docs/CHALLENGE.md, The nine core cases) with one
+  protection strategy filled in, under boston-2026 as in the core benchmark, so the
+  three graphs differ only in connectivity. Cases 1, 2, 4, 5, 7 and 8 are the
+  organisers' baseline, the reference, exactly as the core benchmark runs it. Cases
+  3, 6 and 9 are the protection: move_chain carries the pair to the ports with two CX
+  gates a hop instead of a SWAP's three, then bus_xx reads the ports' XX parity
+  through a bus of extra qubits and postselection discards each shot where it reads
+  -1. The check catches a phase flip on one port and is blind to a bit flip, to the
+  same flip on both ports and to an error on the bus. On the contemporary and
+  hyperbolic graphs the bus sits on a spare path that shares no qubit with the pair
+  and reads only at the end; ibm2016 has no spare path, so there the bus sits on the
+  pair's own path, reads each qubit as vacant before reusing it, and needs the
+  mid-circuit measurement channel, set to 0.01 as one point of the range it is to be
+  swept over. The move chain also runs without the check, filling no case, so the
+  table separates what the cheaper transport buys from what the check buys. Every
+  run takes 20,000 shots per basis, as in the core; protected runs are not yet given
+  more shots in proportion to their acceptance.
+shots: 20000
+base_seed: 20261116
+runs:
+  # The reference: the organisers' baseline.
+  - {id: baseline-ibm2016, circuit: baseline-ibm2016, noise: boston-2026}
+  - {id: baseline-contemporary, circuit: baseline-contemporary, noise: boston-2026}
+  - {id: baseline-hyperbolic, circuit: baseline-hyperbolic, noise: boston-2026}
+  # The move chain alone, filling no case.
+  - {id: move-ibm2016, circuit: move-chain-ibm2016, noise: boston-2026}
+  - {id: move-contemporary, circuit: move-chain-contemporary, noise: boston-2026}
+  - {id: move-hyperbolic, circuit: move-chain-hyperbolic, noise: boston-2026}
+  # The protection: the move chain with its XX check.
+  - {id: path-xx-ibm2016, circuit: move-chain-path-xx-ibm2016, noise: boston-2026, conditional: {mid_circuit_measurement_error: 0.01}}
+  - {id: spare-xx-contemporary, circuit: move-chain-spare-xx-contemporary, noise: boston-2026}
+  - {id: spare-xx-hyperbolic, circuit: move-chain-spare-xx-hyperbolic, noise: boston-2026}
+cases:
+  - {case: 1, run: baseline-ibm2016, simulation: ideal}
+  - {case: 2, run: baseline-ibm2016, simulation: noisy}
+  - {case: 3, run: path-xx-ibm2016, simulation: noisy}
+  - {case: 4, run: baseline-contemporary, simulation: ideal}
+  - {case: 5, run: baseline-contemporary, simulation: noisy}
+  - {case: 6, run: spare-xx-contemporary, simulation: noisy}
+  - {case: 7, run: baseline-hyperbolic, simulation: ideal}
+  - {case: 8, run: baseline-hyperbolic, simulation: noisy}
+  - {case: 9, run: spare-xx-hyperbolic, simulation: noisy}

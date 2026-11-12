@@ -124,16 +124,17 @@ def test_the_study_runs_each_circuit_and_baseline_under_each_profile():
     assert (data["shots"], data["base_seed"]) == (20_000, 20261116)
 
 
-def test_the_study_sets_the_mid_circuit_channel_only_where_a_circuit_reads_a_qubit_then_reuses_it():
+@pytest.mark.parametrize("benchmark", ["biased-noise", "move-chain"])
+def test_the_mid_circuit_channel_is_set_only_where_a_circuit_reads_a_qubit_then_reuses_it(benchmark):
     """The spare-path checks read only at the end and need no channel; the check on ibm2016's path does."""
-    data, _ = load_benchmark("biased-noise")
+    data, _ = load_benchmark(benchmark)
     for r in data["runs"]:
         loaded = load_circuit(r["circuit"])
         ports = tuple(configs.load_processor(loaded.processor)["ports"])
         reads_then_reuses = any(mid_circuit_measurements(c) for c in basis_circuits(loaded.circuit, ports).values())
         channel = r.get("conditional", {}).get("mid_circuit_measurement_error")
         assert (channel is not None) == reads_then_reuses, r["id"]
-        assert "reset_error" not in r.get("conditional", {}), "no study circuit resets"
+        assert "reset_error" not in r.get("conditional", {}), "no circuit here resets"
 
 
 def test_the_study_runs_end_to_end(tmp_path):
@@ -144,6 +145,35 @@ def test_the_study_runs_end_to_end(tmp_path):
     assert len(rows) == 2 * len(load_benchmark("biased-noise")[0]["runs"])
     for row in (r for r in rows if r["simulation"] == "ideal"):
         assert float(row["fidelity"]) == 1.0 and float(row["acceptance"]) == 1.0, row["run"]
+
+
+# -- The move-chain benchmark -----------------------------------------------------------
+
+
+def test_the_move_chain_benchmark_fills_the_nine_cases_with_the_baseline_and_the_xx_check():
+    """Each row's ideal and noisy cases are the organisers' baseline, its protected case the move chain with its XX
+    check, and the move chain alone runs beside them filling no case, all under the core's noise profile."""
+    data, _ = load_benchmark("move-chain")
+    runs = {r["id"]: r for r in data["runs"]}
+    expected = {}
+    for row, processor in enumerate(configs.CORE_PROCESSORS):
+        xx = "move-chain-path-xx-ibm2016" if processor == "ibm2016" else f"move-chain-spare-xx-{processor}"
+        expected |= {3 * row + 1: f"baseline-{processor}", 3 * row + 2: f"baseline-{processor}", 3 * row + 3: xx}
+    assert {c["case"]: runs[c["run"]]["circuit"] for c in data["cases"]} == expected
+    uncased = {runs[i]["circuit"] for i in runs} - {runs[c["run"]]["circuit"] for c in data["cases"]}
+    assert uncased == {f"move-chain-{p}" for p in configs.CORE_PROCESSORS}
+    assert {r["noise"] for r in data["runs"]} == {load_benchmark("core")[0]["runs"][0]["noise"]}
+    assert (data["shots"], data["base_seed"]) == (20_000, 20261116)
+
+
+def test_the_move_chain_benchmark_runs_end_to_end(tmp_path):
+    """Every case passes the self-test: the pair ends on the ports, and every ideal simulation gives F = 1 with
+    every shot kept."""
+    folder = run_benchmark("move-chain", tmp_path, shots=100)
+    table = read_table(folder / "comparison.csv")
+    assert sorted(table["case"].dropna()) == list(range(1, 10))
+    ideal = table[table["simulation"] == "ideal"]
+    assert (ideal["fidelity"] == 1.0).all() and (ideal["acceptance"] == 1.0).all()
 
 
 @pytest.mark.parametrize(
