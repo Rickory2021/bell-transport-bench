@@ -224,6 +224,35 @@ def test_a_file_name_gives_back_its_name_and_nothing_else(file, name):
         assert configs.file_name("noise", name) == file
 
 
+def test_a_file_with_an_empty_name_is_refused_by_name_where_files_are_listed(config_copy):
+    from bellbench import configs
+
+    (config_copy / "config" / "noise" / "bp.data.noise..yaml").write_text("name: ''\n", encoding="utf-8")
+    message = r"config/noise/bp\.data\.noise\.\.yaml: the file's name is empty"
+    with pytest.raises(ValueError, match=message):
+        configs.config_names("noise")
+    with pytest.raises(ValueError, match=message):
+        configs.noise_path("no-such-profile")
+
+
+@pytest.mark.parametrize(
+    "content, cause",
+    [
+        (b"name: fez\n\xff\n", "UnicodeDecodeError"),  # bytes that are not UTF-8
+        (b"name: fez-2025\n1: a number key beside text keys\n", "TypeError"),  # the keys cannot be sorted
+        (b"&a [*a]\n", "ValueError: Circular reference detected"),  # an alias that holds itself
+    ],
+)
+def test_a_recorded_file_that_can_no_longer_be_hashed_is_refused_as_changed(config_copy, content, cause):
+    from bellbench import configs
+
+    _, recorded = configs.load_recorded("noise", "fez-2025")
+    configs.noise_path("fez-2025").write_bytes(content)
+    message = rf"{FEZ_PATH} changed since it was recorded: it can no longer be read and hashed \({cause}"
+    with pytest.raises(ValueError, match=message):
+        configs.check_file_unchanged(recorded)
+
+
 def test_core_graphs_are_present():
     assert set(CORE_GRAPHS) <= set(PROCESSORS)
 

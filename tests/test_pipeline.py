@@ -119,6 +119,29 @@ def test_a_gate_the_profile_lacks_raises_naming_the_basis_and_gates():
         compile_bases(basis_circuits(qc, nc.ports), nc, seed=5)
 
 
+def _mystery3():
+    from qiskit.circuit import Gate
+
+    return Gate("mystery3", 3, [])  # a three-qubit gate with no definition, so nothing can build it
+
+
+@pytest.mark.parametrize(
+    "noise, add, outside",
+    [
+        ("organiser-cx2", lambda qc: qc.ccx(1, 2, 3), "ccx"),  # CCX needs T, which H, CX and S dagger lack
+        ("boston-2026", lambda qc: qc.append(_mystery3(), [1, 2, 3]), "mystery3"),
+    ],
+)
+def test_a_three_qubit_gate_the_profile_cannot_build_raises_naming_the_basis_and_gates(noise, add, outside):
+    """The init stage breaks a gate on three or more qubits into smaller ones, so its failure is wrapped too."""
+    nc = NoiseControl("ibm2016", noise)
+    qc = _baseline(nc)
+    add(qc)
+    message = rf"the XX circuit cannot be compiled to the '{noise}' profile's gates .*: of its gates, \[.*'{outside}'"
+    with pytest.raises(ValueError, match=message):
+        compile_bases(basis_circuits(qc, nc.ports), nc, seed=5)
+
+
 @pytest.mark.parametrize(
     "noise, add, message",
     [

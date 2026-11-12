@@ -67,8 +67,16 @@ def config_path(kind: str, name: str) -> Path:
 
 
 def config_names(kind: str) -> list[str]:
-    """The names of every `kind` file, sorted."""
-    return sorted(name_from_file(kind, p.name) for p in config_folder(kind).glob(file_name(kind, "*")))
+    """The names of every `kind` file, sorted; raises a ValueError naming a file whose name is empty."""
+    names = []
+    for path in sorted(config_folder(kind).glob(file_name(kind, "*"))):
+        name = name_from_file(kind, path.name)
+        if name is None:  # the glob's * also matches an empty name
+            raise ValueError(
+                f"{repo_path(path)}: the file's name is empty; name it {file_name(kind, '<name>')} or remove it"
+            )
+        names.append(name)
+    return sorted(names)
 
 
 def load_config(kind: str, name: str) -> dict:
@@ -174,7 +182,8 @@ def check_file_unchanged(recorded: Mapping) -> None:
     """Refuse the file at a `{path, hash}` record's path when its content no longer has the recorded hash.
 
     Run before a rebuild, so a changed file is refused for the change even when
-    it would no longer load; a file that no longer parses has changed too.
+    it would no longer load; a file that can no longer be read, parsed or hashed
+    has changed too, and the refusal names the cause.
     """
     try:
         current = {"path": recorded["path"], "hash": content_hash(ROOT / recorded["path"])}
@@ -182,6 +191,11 @@ def check_file_unchanged(recorded: Mapping) -> None:
         raise ValueError(
             f"{recorded['path']} changed since it was recorded: it no longer parses as YAML; "
             "a rerun needs the file the run used"
+        ) from None
+    except Exception as e:  # bytes that are not UTF-8, a key that cannot be sorted, an alias to itself, no access
+        raise ValueError(
+            f"{recorded['path']} changed since it was recorded: it can no longer be read and hashed "
+            f"({type(e).__name__}: {e}); a rerun needs the file the run used"
         ) from None
     check_unchanged(recorded, current)
 

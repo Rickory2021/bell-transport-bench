@@ -131,22 +131,31 @@ def compile_bases(circuits: Mapping[str, QuantumCircuit], nc: NoiseControl, seed
             initial_layout=list(range(nc.num_qubits)),
             seed_transpiler=seed,
         )
-        initialised = StagedPassManager(stages=["init"], init=pm.init).run(circuit)
+        try:  # the init stage translates too: it breaks every gate on three or more qubits into smaller ones
+            initialised = StagedPassManager(stages=["init"], init=pm.init).run(circuit)
+        except TranspilerError as err:
+            raise _cannot_compile(basis, circuit, nc) from err
         routed = StagedPassManager(stages=["layout", "routing"], layout=pm.layout, routing=pm.routing).run(initialised)
         try:
             compiled = StagedPassManager(
                 stages=["translation", "optimization"], translation=pm.translation, optimization=pm.optimization
             ).run(routed)
         except TranspilerError as err:
-            gates = sorted(set(nc.target.operation_names) - set(NON_GATES))
-            outside = sorted({i.operation.name for i in routed.data} - set(nc.target.operation_names) - set(NON_GATES))
-            raise ValueError(
-                f"the {basis} circuit cannot be compiled to the {nc.noise_name!r} profile's gates {gates}: of its "
-                f"gates, {outside} are outside that set, and at least one cannot be built from it; add the missing "
-                "gate to the profile or change the circuit"
-            ) from err
+            raise _cannot_compile(basis, routed, nc) from err
         out[basis] = Compiled(basis, initialised.count_ops().get("swap", 0), routed, compiled)
     return out
+
+
+def _cannot_compile(basis: str, circuit: QuantumCircuit, nc: NoiseControl) -> ValueError:
+    """The error for a circuit whose gates the profile's gates cannot build, naming the basis, the profile and the
+    gates outside its set; it replaces Qiskit's translation error."""
+    gates = sorted(set(nc.target.operation_names) - set(NON_GATES))
+    outside = sorted({i.operation.name for i in circuit.data} - set(nc.target.operation_names) - set(NON_GATES))
+    return ValueError(
+        f"the {basis} circuit cannot be compiled to the {nc.noise_name!r} profile's gates {gates}: of its "
+        f"gates, {outside} are outside that set, and at least one cannot be built from it; add the missing "
+        "gate to the profile or change the circuit"
+    )
 
 
 def pair_on_ports(routed: QuantumCircuit, ports: Sequence[int]) -> bool:

@@ -88,15 +88,23 @@ def circuit_from_qasm(
         circuit = qasm3.loads(text)
     except (QASM3ImporterError, QASM3ParsingError) as e:
         raise ValueError(f"{where}: $.circuit: the gates do not parse as OpenQASM 3: {e}") from None
+    except Exception as e:  # a gate given one qubit twice, an index past its register, a text with no statement
+        raise ValueError(f"{where}: $.circuit: the gates do not build a circuit: {type(e).__name__}: {e}") from None
     if [(r.name, r.size) for r in circuit.qregs] != [("q", num_qubits)]:
         got = ", ".join(f"{r.name}[{r.size}]" for r in circuit.qregs) or "none"
         raise ValueError(f"{where}: $.circuit: needs one register q[{num_qubits}], the processor's qubits; got {got}")
+    named = f"named by a role ({', '.join(ROLES)}), alone or followed by _ and a name such as check_zz"
     for reg in circuit.cregs:
         if not REGISTER_NAME.fullmatch(reg.name):
             raise ValueError(
-                f"{where}: $.circuit: classical register {reg.name!r} is not named by a role ({', '.join(ROLES)}), "
-                "alone or followed by _ and a name such as check_zz; the run adds the port register itself"
+                f"{where}: $.circuit: classical register {reg.name!r} is not {named}; "
+                "the run adds the port register itself"
             )
+    loose = [i for i, bit in enumerate(circuit.clbits) if not circuit.find_bit(bit).registers]
+    if loose:
+        raise ValueError(
+            f"{where}: $.circuit: classical bit(s) {loose} sit in no register; declare each in a register {named}"
+        )
     for inst in circuit.data:
         op, qubits = inst.operation, [circuit.find_bit(q).index for q in inst.qubits]
         if isinstance(op, ControlFlowOp):
@@ -139,6 +147,11 @@ def save_circuit(
     path = configs.config_folder("circuit") / configs.file_name("circuit", name)
     if path.exists() and not overwrite:
         raise FileExistsError(f"{configs.repo_path(path)} exists; pass overwrite=True to replace it")
+    if analysis is not None and not isinstance(analysis, Mapping):
+        raise ValueError(
+            f"{configs.repo_path(path)}: $.analysis: an analysis is a mapping {{name, settings}}, such as "
+            f"{{'name': 'postselect'}}; got {analysis!r}"
+        )
     data = {
         "name": name,
         "label": label,

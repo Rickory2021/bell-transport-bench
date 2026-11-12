@@ -194,6 +194,34 @@ def test_an_overwrite_that_does_not_fit_restores_the_earlier_file(config_copy):
     assert load_circuit("trial").circuit == swap_chain("ibm2016")
 
 
+HEADER = 'OPENQASM 3.0;\ninclude "stdgates.inc";\nqubit[5] q;\n'
+
+
+@pytest.mark.parametrize(
+    "text, message",
+    [
+        (HEADER + "cx q[1], q[1];\n", "the gates do not build a circuit: CircuitError"),  # one qubit twice
+        (HEADER + "h q[7];\n", "the gates do not build a circuit: IndexError"),  # past the register
+        ("// no statement\n", "the gates do not build a circuit: AttributeError"),
+        (HEADER + "bit c;\nc = measure q[1];\n", r"classical bit\(s\) \[0\] sit in no register; declare each in a "
+         "register named by a role"),
+    ],
+)
+def test_malformed_gates_name_the_file_and_the_field(config_copy, text, message):
+    path = config_copy / "config" / "circuit" / "bp.data.circuit.malformed.yaml"
+    data = yaml.safe_load(configs.config_path("circuit", "baseline-ibm2016").read_text(encoding="utf-8"))
+    path.write_text(yaml.safe_dump({**data, "name": "malformed", "circuit": text}), encoding="utf-8")
+    with pytest.raises(ValueError, match=r"config/circuit/bp\.data\.circuit\.malformed\.yaml: \$\.circuit: " + message):
+        load_circuit("malformed")
+
+
+def test_an_analysis_given_as_text_is_refused_naming_the_field(config_copy):
+    message = r"config/circuit/bp\.data\.circuit\.trial\.yaml: \$\.analysis: an analysis is a mapping"
+    with pytest.raises(ValueError, match=message):
+        save_circuit("trial", "Trial", "ibm2016", swap_chain("ibm2016"), "A test circuit.", analysis="parity")
+    assert not (config_copy / "config" / "circuit" / "bp.data.circuit.trial.yaml").exists()
+
+
 def test_a_circuit_file_naming_an_unknown_processor_raises(config_copy):
     path = config_copy / "config" / "circuit" / "bp.data.circuit.orphan.yaml"
     data = yaml.safe_load(configs.config_path("circuit", "baseline-ibm2016").read_text(encoding="utf-8"))
