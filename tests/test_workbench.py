@@ -19,7 +19,7 @@ from bellbench import configs
 ROOT = Path(__file__).resolve().parents[1]
 NOTEBOOK = ROOT / "notebooks" / "bp.output.workbench.ipynb"
 BLUEPRINT = ROOT / "scripts" / "blueprint-render"
-EXAMPLE = ("# circuit = ", "# save_circuit(", "# CIRCUIT = ")
+EXAMPLE = ("# circuit = ", "# notes = ", "# save_circuit(", "# CIRCUIT = ")
 
 
 def _code_cells():
