@@ -41,7 +41,7 @@ properties:
           minItems: 1
           items: {$ref: "#/$defs/text"}
         year:
-          description: Four-digit year. The loader reads bare years as strings.
+          description: Four-digit year. Validation reads a bare year as a string.
           type: string
           pattern: '^\d{4}$'
         kind:
