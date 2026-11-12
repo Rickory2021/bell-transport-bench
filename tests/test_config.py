@@ -116,6 +116,7 @@ def test_loading_a_malformed_processor_file_raises_naming_the_file(config_copy):
     [
         (lambda p: p.pop("kind"), r"\$: 'kind' is a required property"),
         (lambda p: p.update(time_step="4e-9"), r"\$\.time_step"),
+        (lambda p: p.update(time_step=0.0), r"\$\.time_step"),
         (lambda p: p.update(name="fez-2026"), r"\$\.name: 'fez-2026' does not match"),
     ],
 )

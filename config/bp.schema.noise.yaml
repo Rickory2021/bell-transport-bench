@@ -97,7 +97,8 @@ properties:
   time_step:
     description: "Time step in seconds: the hardware's clock tick. Null when the snapshot records none."
     oneOf:
-      - $ref: "#/$defs/seconds"
+      - type: number
+        exclusiveMinimum: 0
       - type: "null"
   qubit:
     type: object
