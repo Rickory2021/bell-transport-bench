@@ -4,7 +4,10 @@
 # Delegates to scripts/flatten-sync/ for project export and watch, and to
 # scripts/blueprint-render/ for bp file validation and rendering.
 
-PROFILE ?= default
+# Plain = rather than ?=, so an environment variable of the same name never
+# replaces a default; a value on the command line still does. WSL, for one,
+# exports NAME as the machine's hostname.
+PROFILE = default
 FLATTEN_DIR = scripts/flatten-sync
 BLUEPRINT_DIR = scripts/blueprint-render
 
@@ -63,7 +66,7 @@ bp-setup:
 
 .PHONY: test benchmark run report workbench
 
-NAME ?= core
+NAME = core
 
 test:
 	uv run --group dev pytest -q
