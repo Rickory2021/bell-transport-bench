@@ -199,6 +199,20 @@ def test_invalid_override_raises(override, message):
         NoiseControl("ibm2016", "fez-2025", overrides=[override])
 
 
+@pytest.mark.parametrize("gate, qubits, highest", [("cz", [0, 1], 0.79), ("sx", [0], 0.66)])
+def test_gate_error_up_to_aers_maximum_builds_as_stated(gate, qubits, highest):
+    """Aer builds a gate error up to dim/(dim + 1), a little less with decay, and caps one above it."""
+    from qiskit.quantum_info import average_gate_fidelity
+
+    field = f"gates.{gate}.error_probability"
+    nc = NoiseControl("ibm2016", "fez-2025", overrides=[{"qubits": qubits, "field": field, "value": highest}])
+    built = nc.noise_model._local_quantum_errors[gate][tuple(qubits)]
+    assert 1 - average_gate_fidelity(built) == pytest.approx(highest, abs=1e-9)
+    above = 0.8 if gate == "cz" else 2 / 3
+    with pytest.raises(ValueError, match=f"{field}.*above the .* Aer can build"):
+        NoiseControl("ibm2016", "fez-2025", overrides=[{"qubits": qubits, "field": field, "value": above}])
+
+
 def test_same_override_twice_raises():
     o = {"qubits": [1, 0], "field": "gates.cz.error_probability", "value": 0.01}
     with pytest.raises(ValueError, match="twice"):

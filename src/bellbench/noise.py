@@ -24,8 +24,9 @@ How each profile kind becomes a model:
 
 Values are checked after the overrides and the scale, and an invalid one raises
 a ValueError naming its field instead of being capped: a probability outside 0
-to 1, T2 above 2 T1, or a gate error below what the gate's decay alone causes.
-Aer would otherwise cap T2, or drop that gate's error, without a warning.
+to 1, T2 above 2 T1, a gate error below what the gate's decay alone causes, or a
+gate error above the largest one Aer can build for that gate. Aer would
+otherwise cap T2, or drop or cap that gate's error, without a warning.
 
 An override is `{qubits, field, value}`, its field named by the profile's own
 key path (OVERRIDE_FIELDS); a two-qubit override names a coupler and applies in
@@ -274,23 +275,39 @@ def _check_values(qubit_values, gate_errors, profile) -> None:
         field = GATE_ERROR_FIELD.format(gate=gate)
         for qargs, error in by_qargs.items():
             _check_probability(f"{field} on qubits {qargs}", error)
-            floor = _decay_error(qargs, duration, qubit_values)
+            floor, ceiling = _error_range(qargs, duration, qubit_values)
             if error < floor:
                 raise ValueError(
                     f"{field} on qubits {qargs} is {error:.6g}, below the {floor:.6g} its {duration:.6g} s "
                     "of decay alone causes; Aer would drop the gate error"
                 )
+            if error > ceiling:
+                raise ValueError(
+                    f"{field} on qubits {qargs} is {error:.6g}, above the {ceiling:.6g} Aer can build for a "
+                    f"{len(qargs)}-qubit gate with {duration:.6g} s of decay; Aer would cap the gate error"
+                )
 
 
-def _decay_error(qargs, duration, qubit_values) -> float:
-    """The average gate infidelity that T1 and T2 decay alone cause over `duration`, as Aer computes it."""
-    if not duration:
-        return 0.0
-    error = None
-    for q in qargs:
-        single = thermal_relaxation_error(qubit_values[q][T1], qubit_values[q][T2], duration)
-        error = single if error is None else error.expand(single)
-    return 1 - average_gate_fidelity(error)
+def _error_range(qargs, duration, qubit_values) -> tuple[float, float]:
+    """The lowest and highest gate error Aer builds as stated, as average gate infidelities.
+
+    The lowest is the infidelity that T1 and T2 decay alone cause over `duration`.
+    Aer models the rest of the error as a depolarising channel after that decay,
+    and caps it twice: the error at dim/(dim + 1), the infidelity of a fully
+    random channel, and the depolarising parameter at 4^n/(4^n - 1). The highest
+    error is whichever cap binds first, and equals dim/(dim + 1) with no decay.
+    """
+    n, dim = len(qargs), 2 ** len(qargs)
+    decay = 0.0
+    if duration:
+        error = None
+        for q in qargs:
+            single = thermal_relaxation_error(qubit_values[q][T1], qubit_values[q][T2], duration)
+            error = single if error is None else error.expand(single)
+        decay = 1 - average_gate_fidelity(error)
+    max_depolarising = 4**n / (4**n - 1)
+    ceiling = min(dim / (dim + 1), decay + max_depolarising * (dim * (1 - decay) - 1) / dim)
+    return decay, ceiling
 
 
 # -- Input checks ----------------------------------------------------------------
