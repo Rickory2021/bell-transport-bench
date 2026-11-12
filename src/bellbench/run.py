@@ -244,7 +244,9 @@ class CircuitRun:
 
         By default the folder is <root>/runs/workbench/<circuit>/<noise>/<stamp>/,
         with `root` results/ or workspace/ as the git state says. A benchmark
-        passes `folder` instead, which must not exist yet.
+        passes `folder` instead, which must not exist yet. A circuit, processor or
+        noise file that changed since the run was built is refused before the
+        folder is made, so a refused write leaves no folder.
         """
         record = self.export_as_yaml()
         configs.check_config("result", record, "the run record")
@@ -260,6 +262,7 @@ class CircuitRun:
         elif root is not None:
             raise ValueError("write takes a root or a folder, not both")
         folder = Path(folder)
+        _check_recorded_files(record)  # before the folder exists, so a refusal leaves nothing behind
         folder.mkdir(parents=True, exist_ok=False)
         (folder / RESULT_FILE).write_text(yaml.dump(record, Dumper=configs.Dumper, sort_keys=False), encoding="utf-8")
         _write_csv(folder / "simulations.csv", self.simulation_rows(), SIMULATION_COLUMNS)
@@ -380,6 +383,13 @@ def rerun(path: Path) -> tuple[int, list[str]]:
 
 # -- Views ----------------------------------------------------------------------------
 
+def _check_recorded_files(record: dict) -> None:
+    """Refuse a circuit, processor or noise file that a run record names and that changed since the run."""
+    configs.name_from_record(record["circuit"], "circuit")
+    configs.check_file_unchanged(record["circuit"])
+    NoiseControl.args_from_record(record["noise_control"])
+
+
 def write_views(folder: Path) -> list[Path]:
     """Draw a run folder's diagrams and report.md from its record and numbers; returns the files written.
 
@@ -388,54 +398,77 @@ def write_views(folder: Path) -> list[Path]:
     XX and YY circuits and the timeline of the scheduled ZZ circuit
     (docs/DESIGN.md, section 5). Before drawing anything it refuses a circuit,
     processor or noise file that changed since the run, so no view is ever drawn
-    from files the run did not use. A notebook's inline backend, or any other that
-    only draws, is left as it is, so the notebook keeps its plots; a GUI backend
-    such as TkAgg is switched to Agg (see `_drawing_backend`). Each figure is
-    closed once saved.
+    from files the run did not use. Each view is drawn on its own matplotlib
+    Figure, never through pyplot, so matplotlib's backend is never switched and no
+    window object is made: a notebook keeps its inline plots, and a GUI backend
+    such as TkAgg has nothing that Aer's worker threads could free.
     """
-    import matplotlib
-
-    switch_to = _drawing_backend(matplotlib.get_backend())
-    if switch_to is not None:
-        matplotlib.use(switch_to)
-    import matplotlib.pyplot as plt
+    from qiskit.visualization import timeline_drawer
 
     from bellbench.figures import draw_processor
 
     folder = Path(folder)
     record = yaml.safe_load((folder / RESULT_FILE).read_text(encoding="utf-8"))
     _check_result_format(record)
-    configs.name_from_record(record["circuit"], "circuit")
-    configs.check_file_unchanged(record["circuit"])
-    NoiseControl.args_from_record(record["noise_control"])
+    _check_recorded_files(record)
     proc = yaml.safe_load((configs.ROOT / record["noise_control"]["processor"]["path"]).read_text(encoding="utf-8"))
     written = []
 
     def save(fig, name):
         fig.savefig(folder / name, dpi=150, facecolor="white", bbox_inches="tight", metadata={"Software": None})
-        plt.close(fig)
         written.append(folder / name)
 
-    fig, ax = plt.subplots(figsize=(4, 4.3), facecolor="white")
     used = [tuple(int(q) for q in edge.split("-")) for edge in record["cost"]["two_qubit_gates_by_edge"]["ZZ"]]
-    draw_processor(ax, proc, used_edges=used)
-    save(fig, "graph.png")
+    save(_figure(lambda ax: draw_processor(ax, proc, used_edges=used), lambda ax: (4, 4.3)), "graph.png")
     drawings = {"circuit-zz.png": record["compiled"]["ZZ"]}
     if record["diagrams"] == "full":
         drawings |= {"written.png": record["written"], "circuit-xx.png": record["compiled"]["XX"],
                      "circuit-yy.png": record["compiled"]["YY"]}
     for name, text in drawings.items():
         circuit = qasm3.loads(text)
-        save(circuit.draw("mpl", idle_wires=False, fold=40), name)
+        # qiskit draws a global phase through pyplot even on a given axis, which would make a window object; the
+        # phase changes no measured outcome, so the views leave it out.
+        circuit.global_phase = 0
+        save(_figure(lambda ax: circuit.draw("mpl", idle_wires=False, fold=40, ax=ax), _circuit_size), name)
     if record["diagrams"] == "full" and record["scheduled_duration"] is not None:
-        from qiskit.visualization import timeline_drawer
-
         nc = NoiseControl.from_yaml(record["noise_control"])
-        zz = qasm3.loads(record["compiled"]["ZZ"])
-        save(timeline_drawer(schedule(zz, nc), target=nc.target), "timeline.png")
+        scheduled = schedule(qasm3.loads(record["compiled"]["ZZ"]), nc)
+        save(_figure(lambda ax: timeline_drawer(scheduled, target=nc.target, axis=ax), _timeline_size), "timeline.png")
     (folder / "report.md").write_text(_run_report(folder, record), encoding="utf-8")
     written.append(folder / "report.md")
     return written
+
+
+def _figure(draw, size):
+    """A matplotlib Figure, made without pyplot, holding what `draw(ax)` puts on an axis.
+
+    `size(ax)` gives the figure's size in inches from an axis the drawing was
+    first made on, so a drawer that sizes its own figure from its content keeps
+    that size here.
+    """
+    from matplotlib.figure import Figure
+
+    probe = Figure()
+    ax = probe.add_subplot()
+    draw(ax)
+    fig = Figure(figsize=size(ax), facecolor="white")
+    draw(fig.add_subplot())
+    return fig
+
+
+def _circuit_size(ax) -> tuple[float, float]:
+    """The size qiskit's circuit drawer gives a figure of its own: its axis limits times its scale factor."""
+    (x0, x1), (y0, y1) = ax.get_xlim(), ax.get_ylim()
+    return (x1 - x0) * 0.8361111, (y1 - y0) * 0.8361111
+
+
+def _timeline_size(ax) -> tuple[float, float]:
+    """The size qiskit's timeline drawer gives a figure of its own, from its default style and the axis height."""
+    from qiskit.visualization.timeline.stylesheet import default_style
+
+    style = default_style()
+    y0, y1 = ax.get_ylim()
+    return style["formatter.general.fig_width"], style["formatter.general.fig_unit_height"] * (y1 - y0)
 
 
 def _run_report(folder: Path, record: dict) -> str:
@@ -469,7 +502,7 @@ def _run_report(folder: Path, record: dict) -> str:
         "|---|---|---|---|---|---|",
         f"| {c['swaps']} ({c['router_swaps']}) | {c['two_qubit_gates']} | {c['depth']} | {len(c['qubits_used'])} | "
         + (f"{duration * 1e6:.3f} µs" if duration is not None else "not scheduled")
-        + f" | {'yes' if c['pair_on_ports'] else 'NO'} |",
+        + f" | {_pair_arrived(c['pair_on_ports'], rows)} |",
         "",
         f"Standard error method: {rows[0]['se_method']}.",
         "",
@@ -482,6 +515,13 @@ def _run_report(folder: Path, record: dict) -> str:
                 "",
             ]
     return "\n".join(lines)
+
+
+def _pair_arrived(on_ports: bool, rows: list[dict]) -> str:
+    """"yes" when the layout puts the pair on the ports and the ideal F is 1, else "NO" with the ideal F, since a
+    circuit the router leaves alone can keep the layout on the ports without ever making the pair there."""
+    ideal = float(next(r["fidelity"] for r in rows if r["simulation"] == "ideal"))
+    return "yes" if on_ports and ideal == 1.0 else f"NO (ideal F {ideal:.4f})"
 
 
 # -- Benchmarks -------------------------------------------------------------------------
@@ -507,7 +547,7 @@ def load_benchmark(name: str) -> tuple[dict, dict]:
     its run's circuit is on the case's model, one row per model in
     CORE_PROCESSORS order, and cases 1, 4 and 7 are ideal, all others noisy.
     A protected case, 3, 6 or 9, needs a run whose circuit measures into a
-    check register, so it cannot repeat its baseline (D-128).
+    check register, so it cannot repeat its baseline.
     """
     data, record = configs.load_recorded("benchmark", name)
     where = f"{record['path']}: $.cases"
@@ -692,21 +732,6 @@ def _check_conditional_channels(name: str, compiled: dict, nc: NoiseControl) -> 
             )
 
 
-def _drawing_backend(current: str) -> str | None:
-    """"agg" when `current` is a GUI backend, else None, to leave it as it is.
-
-    A GUI backend (Tk, Qt, GTK, wx, macOS) gives each figure window objects that
-    must be freed on the thread that made them. Aer runs its jobs on worker
-    threads, and Python's garbage collector can free those objects there, which
-    kills the process (Tk: "Fatal Python error: Illegal instruction"). Views are
-    only saved to files, so drawing them with Agg loses nothing.
-    """
-    from matplotlib.backends import BackendFilter, backend_registry
-
-    gui = set(backend_registry.list_builtin(BackendFilter.INTERACTIVE)) - {"nbagg", "notebook", "webagg"}
-    return "agg" if current.lower() in gui else None
-
-
 def _check_result_format(record: dict) -> None:
     """Refuse a run recorded in another result format: its circuits and CSVs are in an older shape."""
     if record["result_format"] != RESULT_FORMAT:
@@ -800,9 +825,6 @@ def main(argv: list[str]) -> int:
         print("\n".join(lines))
         return code
     if argv[:1] == ["report"] and len(argv) == 2:
-        import matplotlib
-
-        matplotlib.use("Agg")  # this process only draws files
         folder = Path(argv[1])
         try:
             written = write_views(folder.parent if folder.name == RESULT_FILE else folder)

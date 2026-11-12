@@ -15,6 +15,7 @@ import csv
 import subprocess
 import sys
 import math
+import re
 from types import SimpleNamespace
 
 import pytest
@@ -320,6 +321,27 @@ def test_a_protected_case_needs_a_circuit_that_measures_a_check(config_copy, reg
         assert load_benchmark("protected")[0]["cases"][0]["case"] == 9
 
 
+def _report_row(folder) -> str:
+    """The report's cost row, which ends with the pair's arrival."""
+    return [line for line in (folder / "report.md").read_text(encoding="utf-8").splitlines() if " µs | " in line][0]
+
+
+def test_the_report_says_the_pair_arrived_only_when_the_ideal_f_is_1(config_copy):
+    """A pair never made on the ports, in a circuit the router leaves alone, keeps the layout on the ports; the
+    report pairs that with the ideal F and says NO."""
+    unmade = QuantumCircuit(5)
+    unmade.h(0)
+    unmade.cx(0, 3)  # a pair on 0 and 3, a neighbour, never moved to the second port, 4
+    save_circuit("unmade", "Unmade", "ibm2016", unmade, "A test circuit whose pair never reaches the second port.")
+    folder = CircuitRun("unmade", "boston-2026", shots=500, base_seed=SEED).run().write(config_copy / "results")
+    record = yaml.safe_load((folder / "bp.data.result.yaml").read_text(encoding="utf-8"))
+    assert record["cost"]["pair_on_ports"] is True, "the layout alone says the pair is on the ports"
+    assert re.search(r"\| NO \(ideal F 0\.\d{4}\) \|$", _report_row(folder))
+    baseline = CircuitRun("baseline-ibm2016", "boston-2026", shots=500, base_seed=SEED).run()
+    baseline = baseline.write(config_copy / "results")
+    assert _report_row(baseline).endswith("| yes |")
+
+
 @pytest.mark.parametrize("diagrams, files", [
     ("lean", {"graph.png", "circuit-zz.png", "report.md"}),
     ("full", {"graph.png", "circuit-zz.png", "written.png", "circuit-xx.png", "circuit-yy.png", "timeline.png", "report.md"}),
@@ -343,15 +365,32 @@ def test_views_refuse_a_changed_file_before_drawing(config_copy):
     assert {p.name: p.read_bytes() for p in folder.iterdir()} == before, "a refused redraw changes no file"
 
 
-@pytest.mark.parametrize(
-    "current, switch_to",
-    [
-        ("TkAgg", "agg"), ("QtAgg", "agg"), ("macosx", "agg"),
-        ("module://matplotlib_inline.backend_inline", None), ("agg", None), ("pdf", None),
-    ],
-)
-def test_views_draw_with_agg_only_under_a_gui_backend(current, switch_to):
-    assert run_module._drawing_backend(current) == switch_to
+def test_views_draw_without_pyplot_or_a_backend_switch(tmp_path, monkeypatch):
+    """Every view is drawn on its own Figure: pyplot makes no figure, so a GUI backend gets no window object
+    for Aer's worker threads to free, and nothing switches or resolves the backend."""
+    import matplotlib
+    import matplotlib.pyplot as plt
+
+    def refuse(*args, **kwargs):
+        raise AssertionError("a view went through pyplot or switched the backend")
+
+    monkeypatch.setattr(plt, "new_figure_manager", refuse)  # every pyplot figure is made through it
+    monkeypatch.setattr(plt, "switch_backend", refuse)
+    monkeypatch.setattr(matplotlib, "use", refuse)
+    folder = CircuitRun("baseline-contemporary", "boston-2026", shots=50, base_seed=SEED, diagrams="full").run().write(
+        tmp_path
+    )
+    assert {"graph.png", "circuit-zz.png", "written.png", "circuit-xx.png", "circuit-yy.png", "timeline.png"} <= {
+        p.name for p in folder.iterdir()
+    }
+    # qiskit draws a global phase through pyplot; the exporter drops it today, so a record edited to hold one tests
+    # that the views leave it out.
+    path = folder / "bp.data.result.yaml"
+    record = yaml.safe_load(path.read_text(encoding="utf-8"))
+    record["compiled"]["ZZ"] = record["compiled"]["ZZ"].replace(" q;\n", " q;\ngphase(1.0);\n", 1)
+    assert "gphase" in record["compiled"]["ZZ"]
+    path.write_text(yaml.safe_dump(record, sort_keys=False), encoding="utf-8")
+    write_views(folder)
 
 
 def test_writing_a_run_leaves_the_matplotlib_backend_as_it_was(tmp_path):
