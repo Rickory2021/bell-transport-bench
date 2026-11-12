@@ -2,13 +2,15 @@
 """Find, load and hash the config files in config/ by kind and name.
 
 Each kind of config file lives in its own folder under config/ and is named
-bp.data.<kind>.<name>.yaml: a processor file in config/processor/ and a noise
-profile in config/noise/ (KINDS). Every load checks the file before it returns
-it: `check_config` validates it against its schema, config/bp.schema.<kind>.yaml,
-and runs `check_processor` on a processor file, and the load then checks that
-the file's name field matches its file name. A file that fails raises a
-ValueError naming the file and the field, so a bad file fails before any model
-is built (docs/DESIGN.md, section 2). This module only reads files.
+bp.data.<kind>.<name>.yaml: a processor file in config/processor/, a noise
+profile in config/noise/ and a circuit file in config/circuit/ (KINDS). Every
+load checks the file before it returns it: `check_config` validates it against
+its schema, config/bp.schema.<kind>.yaml, and runs `check_processor` on a
+processor file, and the load then checks that the file's name field matches its
+file name. A file that fails raises a ValueError naming the file and the field,
+so a bad file fails before any model is built (docs/DESIGN.md, section 2).
+src/bellbench/circuits.py adds the checks a circuit file's gates need. This
+module only reads files.
 
 `content_hash` identifies a config file by its parsed content, so a run can
 record which version of each file it used and a rerun can refuse one that
@@ -36,7 +38,7 @@ from jsonschema.exceptions import best_match
 ROOT = Path(__file__).resolve().parents[2]
 
 # Each kind of config file, and what an error message calls one; its files live in config/<kind>/.
-KINDS = {"processor": "processor file", "noise": "noise profile"}
+KINDS = {"processor": "processor file", "noise": "noise profile", "circuit": "circuit file"}
 
 
 def config_path(kind: str, name: str) -> Path:

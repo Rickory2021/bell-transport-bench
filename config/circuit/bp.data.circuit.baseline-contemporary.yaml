@@ -1,0 +1,24 @@
+# config/circuit/bp.data.circuit.baseline-contemporary.yaml
+
+name: baseline-contemporary
+label: Baseline, Contemporary IBM-style
+processor: contemporary
+analysis: postselect
+notes: >-
+  The baseline transport (swap_chain in src/bellbench/circuits.py), the organisers'
+  recipe: H on the first port, explicit SWAPs out along the path [0, 1, 2, 3, 7],
+  the lexicographically smallest shortest path between the ports, CX onto the second
+  port, and the same SWAPs back, so the pair ends on the ports. No checks, so postselection
+  keeps every shot.
+circuit: |
+  OPENQASM 2.0;
+  include "qelib1.inc";
+  qreg q[9];
+  h q[0];
+  swap q[0],q[1];
+  swap q[1],q[2];
+  swap q[2],q[3];
+  cx q[3],q[7];
+  swap q[2],q[3];
+  swap q[1],q[2];
+  swap q[0],q[1];

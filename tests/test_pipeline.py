@@ -12,11 +12,11 @@ rounds to their recorded values.
 
 import math
 
-import networkx as nx
 import pytest
 from qiskit import QuantumCircuit, transpile
 from qiskit.transpiler import CouplingMap, generate_preset_pass_manager
 
+from bellbench.circuits import swap_chain
 from bellbench.configs import load_noise
 from bellbench.fidelity import fidelity_from_counts, fidelity_from_density
 from bellbench.noise import NoiseControl
@@ -111,18 +111,8 @@ def test_a_gate_the_profile_lacks_raises_naming_the_basis_and_gates():
 
 
 def _baseline(nc: NoiseControl) -> QuantumCircuit:
-    """The pair made on the first port, moved next to the second with SWAPs, joined by CX, and moved back."""
-    a, b = nc.ports
-    path = nx.shortest_path(nc.graph, a, b)
-    qc = QuantumCircuit(nc.num_qubits)
-    qc.h(a)
-    hops = list(zip(path[:-2], path[1:-1]))
-    for u, v in hops:
-        qc.swap(u, v)
-    qc.cx(path[-2], b)
-    for u, v in reversed(hops):
-        qc.swap(u, v)
-    return qc
+    """The core baseline the run uses: the swap-chain transport on the processor's smallest shortest path."""
+    return swap_chain(nc.processor_name)
 
 
 def test_basis_circuits_rotate_and_measure_the_ports():
