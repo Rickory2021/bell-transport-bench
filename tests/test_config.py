@@ -7,7 +7,8 @@ fields or files: each processor graph is well formed and matches the challenge's
 counts, every reference id exists, every comment in a noise file matches the
 schema description it copies, and every value in a snapshot noise profile equals
 the median of the pinned snapshot it cites, so a profile cannot drift from its
-source.
+source. The last section checks that src/bellbench/configs.py finds each noise
+profile by name.
 """
 
 import math
@@ -256,6 +257,20 @@ def test_snapshot_profile_matches_snapshot(name):
             assert _close(prof[timed]["duration"], snap[timed]), f"{timed} duration"
 
 
+@pytest.mark.parametrize("name", SNAPSHOT_PROFILES)
+def test_snapshot_reference_links_the_pinned_file(name):
+    """A snapshot profile's reference links its properties file at the tag its package pin names."""
+    from qiskit_ibm_runtime import fake_provider
+
+    prof = NOISE[name]
+    version = prof["snapshot"]["package"].split("==")[1]
+    backend = getattr(fake_provider, prof["snapshot"]["class"])
+    path = f"/{version}/qiskit_ibm_runtime/fake_provider/backends/{Path(backend.dirname).name}/{backend.props_filename}"
+    (ref,) = [r for r in _load(REFERENCES)["references"] if r["id"] == prof["reference"]]
+    assert ref["url"] == "https://github.com/Qiskit/qiskit-ibm-runtime/blob" + path
+    assert ref["download"] == "https://raw.githubusercontent.com/Qiskit/qiskit-ibm-runtime" + path
+
+
 def test_borrowed_measure_duration_matches_its_source():
     """Burlington's measurement duration is borrowed; it must equal the snapshots it names."""
     prof = NOISE["burlington-2020"]
@@ -265,3 +280,22 @@ def test_borrowed_measure_duration_matches_its_source():
         snap = _snapshot_medians(class_name)
         assert snap["calibrated"] == "2021-01-20"
         assert _close(snap["measure"], entry["value"]), class_name
+
+
+# -- Loading by name ------------------------------------------------------------
+
+
+def test_noise_profiles_load_by_name():
+    from bellbench import configs
+
+    assert configs.noise_names() == sorted(NOISE)
+    for name in NOISE:
+        assert configs.load_noise(name) == NOISE[name]
+        assert configs.noise_path(name) == NOISE_FILES[name]
+
+
+def test_unknown_noise_profile_names_the_known_ones():
+    from bellbench import configs
+
+    with pytest.raises(FileNotFoundError, match="fez-2025"):
+        configs.noise_path("no-such-profile")

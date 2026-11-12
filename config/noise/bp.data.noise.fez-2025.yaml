@@ -7,7 +7,7 @@
 name: fez-2025
 label: FakeFez medians, calibrated 2025-02-26
 kind: snapshot
-reference: qiskit-fake-provider
+reference: ibm-fakefez-snapshot
 snapshot:
   class: FakeFez
   package: qiskit-ibm-runtime==0.51.0

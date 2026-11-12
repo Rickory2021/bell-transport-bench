@@ -1,0 +1,41 @@
+# config/noise/bp.data.noise.boston-2026.yaml
+#
+# Medians of IBM's FakeBoston snapshot (Heron r3). Validated by
+# config/bp.schema.noise.yaml; tests/test_config.py pins every value to the
+# snapshot and every comment to the schema.
+
+name: boston-2026
+label: FakeBoston medians, calibrated 2026-04-17
+kind: snapshot
+reference: ibm-fakeboston-snapshot
+snapshot:
+  class: FakeBoston
+  package: qiskit-ibm-runtime==0.51.0
+  calibrated: "2026-04-17"
+notes: >-
+  Medians over the FakeBoston snapshot's 156 qubits and 352 directed CZ couplers, as
+  qiskit-ibm-runtime 0.51.0 pins them. Every qubit and coupler of a processor
+  graph takes these values.
+# Time step in seconds: the hardware's clock tick. Null when the snapshot records none.
+time_step: 4.0e-9
+qubit:
+  # T1 in seconds: how long a qubit holds 1 before relaxing to 0; it is still 1 after time t with probability exp(-t/T1).
+  t1_relaxation_time: 292.43565062547934e-6
+  # T2 in seconds: how long a qubit keeps the phase between 0 and 1; never more than 2 T1.
+  t2_dephasing_time: 352.96959961159655e-6
+  readout_error:
+    # Readout error: the probability of reading 1 when the qubit was 0.
+    reads_1_when_0: 0.00390625
+    # Readout error: the probability of reading 0 when the qubit was 1.
+    reads_0_when_1: 0.0048828125
+# Native gates, by Qiskit name: the qubits each acts on (1 or 2), its error probability per use, and its duration in seconds.
+gates:
+  cz: {qubits: 2, error_probability: 0.0012747211439835399, duration: 68.0e-9}
+  sx: {qubits: 1, error_probability: 0.00014470700669960387, duration: 32.0e-9}
+  x: {qubits: 1, error_probability: 0.00014470700669960387, duration: 32.0e-9}
+  rz: {qubits: 1, error_probability: 0.0, duration: 0.0}
+# Measurement: its duration in seconds. Its errors are the readout errors.
+measure: {duration: 2.2e-6}
+# Reset to 0: its duration in seconds.
+reset: {duration: 2.232e-6}
+borrowed: []

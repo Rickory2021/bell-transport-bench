@@ -7,7 +7,7 @@
 name: burlington-2020
 label: FakeBurlingtonV2 medians, calibrated 2020-06-11
 kind: snapshot
-reference: qiskit-fake-provider
+reference: ibm-fakeburlingtonv2-snapshot
 snapshot:
   class: FakeBurlingtonV2
   package: qiskit-ibm-runtime==0.51.0
@@ -42,7 +42,7 @@ measure: {duration: 5.8133333333333335e-6}
 borrowed:
   - field: measure.duration
     value: 5.8133333333333335e-6
-    source: "FakeOurenseV2 median (calibrated 2021-01-20), qiskit-ibm-runtime==0.51.0"
+    source: "FakeOurenseV2 median (calibrated 2021-01-20), qiskit-ibm-runtime==0.51.0; reference ibm-fakeourensev2-snapshot"
     why: >-
       FakeBurlingtonV2 records no measurement duration. The earliest T-graph snapshots
       that record one, FakeOurenseV2, FakeValenciaV2 and FakeVigoV2 (all calibrated
