@@ -93,3 +93,104 @@ def test_a_built_circuit_saves_with_its_analysis_and_how_it_was_built(config_cop
     assert loaded.analysis == state.analysis()
     assert loaded.circuit == state.circuit
     assert "ghz_measure(reset=False)" in loaded.notes and str(state.path) in loaded.notes
+
+
+# -- Checks ---------------------------------------------------------------------------
+
+SEQUENCES = {
+    "vacancy": [builders.vacancy],
+    "bus_zz": [builders.bus_zz],
+    "bus_xx": [builders.bus_xx],
+    "bus_zz, then bus_xx": [lambda s: builders.bus_zz(s, reset=True), builders.bus_xx],
+    "vacancy, then bus_zz": [builders.vacancy, builders.bus_zz],
+}
+
+
+def protected(processor: str, transport: str, checks: list) -> builders.BuildState:
+    state = builders.start(processor)
+    state = builders.ghz_measure(state, reset=True) if transport == "ghz_measure" else TRANSPORTS[transport](state)
+    for check in checks:
+        state = check(state)
+    return state
+
+
+@pytest.mark.parametrize("processor", CORE_PROCESSORS)
+@pytest.mark.parametrize("transport", sorted(TRANSPORTS))
+@pytest.mark.parametrize("sequence", sorted(SEQUENCES))
+def test_every_check_sequence_after_every_transport_keeps_the_pair_exact(processor, transport, sequence):
+    result = ideal(protected(processor, transport, SEQUENCES[sequence]))
+    assert result["F"] == 1.0 and result["kept"] == 1.0 and result["cost"]["pair_on_ports"] is True
+
+
+def kept_fraction(state: builders.BuildState) -> float:
+    nc = NoiseControl(state.processor, "boston-2026")
+    compiled = compile_bases(basis_circuits(state.circuit, nc.ports), nc, seed=5)
+    sim = simulate({b: c.compiled for b, c in compiled.items()}, None, shots=SHOTS, seed=3)
+    layout = [(r.name, r.size) for r in compiled["ZZ"].compiled.cregs]
+    ports = read_shots(state.analysis(), sim.raw, layout, SHOTS)
+    return sum(sum(ports.kept[b].values()) for b in BASES) / (3 * SHOTS)
+
+
+@pytest.mark.parametrize(
+    "error, where, check, kept",
+    [
+        ("x", "port", builders.bus_zz, 0.0),  # a bit flip on one port makes ZZ = -1
+        ("z", "port", builders.bus_zz, 1.0),  # blind: a phase flip leaves ZZ alone
+        ("z", "port", builders.bus_xx, 0.0),  # a phase flip on one port makes XX = -1
+        ("x", "port", builders.bus_xx, 1.0),  # blind: a bit flip leaves XX alone
+        ("x", "interior", builders.vacancy, 0.0),  # an excitation left on the path
+        ("x", "interior", builders.bus_zz, 0.0),  # caught by the vacancy read before the bus is reused
+        ("z", "interior", builders.vacancy, 1.0),  # blind: a phase on an empty qubit is no excitation
+        # bus_xx's own parity cannot see an excitation on its last bus qubit, which turns the pair into Psi+ with
+        # XX still +1: only the vacancy read before the bus is reused catches it.
+        ("x", "last interior", builders.bus_xx, 0.0),
+    ],
+)
+def test_each_check_catches_what_it_states_and_misses_its_blind_spots(error, where, check, kept):
+    """One deliberate Pauli placed after the transport, on the hyperbolic graph's path 0-1-9-12."""
+    state = builders.ghz_uncompute(builders.start("hyperbolic"))
+    qubit = {"port": state.ports[0], "interior": state.interior[0], "last interior": state.interior[-1]}[where]
+    getattr(state.circuit, error)(qubit)
+    assert kept_fraction(check(state)) == kept
+
+
+@pytest.mark.parametrize(
+    "check, registers",
+    [
+        (builders.bus_zz, ["check_vac_zz", "check_zz", "frame_z_zz"]),
+        (builders.bus_xx, ["check_vac_xx", "check_xx"]),
+    ],
+)
+def test_a_bus_check_reads_its_qubits_as_vacant_before_reusing_them(check, registers):
+    state = check(builders.ghz_uncompute(builders.start("hyperbolic")))
+    assert [r.name for r in state.circuit.cregs] == registers
+    assert state.checks[:2] == [[f"{registers[0]}[0]"], [f"{registers[0]}[1]"]]
+
+
+def test_a_check_before_a_transport_is_refused():
+    with pytest.raises(builders.BuildError, match="follows a transport"):
+        builders.vacancy(builders.start("ibm2016"))
+
+
+@pytest.mark.parametrize(
+    "build",
+    [
+        lambda: builders.vacancy(builders.ghz_measure(builders.start("hyperbolic"))),
+        lambda: builders.bus_xx(builders.bus_zz(builders.ghz_uncompute(builders.start("hyperbolic")))),
+    ],
+)
+def test_a_check_on_measured_qubits_is_refused_until_they_are_reset(build):
+    with pytest.raises(builders.BuildError, match="are not in |0>; give the step that measured them reset=True"):
+        build()
+
+
+def test_a_repeated_check_gets_a_register_of_its_own():
+    state = builders.vacancy(builders.vacancy(builders.ghz_uncompute(builders.start("ibm2016"))))
+    assert [r.name for r in state.circuit.cregs] == ["check_vac", "check_vac_2"]
+    assert ideal(state)["F"] == 1.0
+
+
+def test_bus_xx_after_ghz_measure_folds_in_the_frame():
+    state = builders.bus_xx(builders.ghz_measure(builders.start("hyperbolic"), reset=True))
+    assert state.checks[-1] == ["check_xx[0]", "check_xx[1]", "frame_z_ghz[0]", "frame_z_ghz[1]"]
+    assert ideal(state)["F"] == 1.0

@@ -26,6 +26,21 @@ half onto a qubit known to be in |0> with two CX gates where a SWAP takes three:
 
 Every transport leaves the interior of the path in |0>, except ghz_measure,
 which leaves it measured unless it resets it.
+
+The checks follow the transport, in the order called, and use the interior of
+the path:
+
+- `vacancy` reads each interior qubit, which must be in |0>.
+- `bus_zz` collects the ports' ZZ parity on the interior, read as one check.
+- `bus_xx` turns the interior into a GHZ ancilla and reads the ports' XX parity.
+
+A check reuses an interior qubit only after reading it as a vacancy check, so
+an excitation left there is caught rather than carried into the check; a kept
+shot then has the qubit in |0> again. A check that leaves its qubits measured
+takes `reset` to return them to |0> for a later check, and a run then needs the
+reset channel; reading a qubit and acting on it again needs the mid-circuit
+measurement channel. Each check folds into its parity the frame bits that flip
+it, as a check measured after a frame bit must, and states what it cannot see.
 """
 
 from dataclasses import dataclass, field
@@ -200,6 +215,70 @@ def ghz_measure(state: BuildState, reset: bool = False) -> BuildState:
     return state
 
 
+# -- Checks ----------------------------------------------------------------------------
+
+
+def vacancy(state: BuildState) -> BuildState:
+    """Read each interior qubit, which the transport left in |0>; a shot is kept only when all read 0.
+
+    Catches an excitation left on the path, such as a SWAP or a move gone wrong
+    on a qubit that should be empty. Blind to an error on the ports themselves,
+    to any phase error, and to a flip a later gate undoes.
+    """
+    _read_vacant(state, _vacant_interior(state, "vacancy"), "check_vac")
+    state.steps.append("vacancy()")
+    return state
+
+
+def bus_zz(state: BuildState, reset: bool = False) -> BuildState:
+    """The ports' ZZ parity collected on the interior and read as one check; the other bus qubits read in X.
+
+    Catches a bit flip (X or Y) on one port, which makes ZZ = -1. Blind to a
+    phase flip (Z), to the same flip on both ports, and to an error on the bus
+    during the check, which it carries no flag for. The bus qubits other than
+    the last end holding copies of the first port's Z value; reading them in X
+    releases them and owes a Z on the first port, recorded as a frame.
+    """
+    bus = _vacant_interior(state, "bus_zz")
+    _read_vacant(state, bus, "check_vac_zz")
+    (a, b), qc = state.ports, state.circuit
+    qc.cx(a, bus[0])
+    for u, v in zip(bus, bus[1:]):
+        qc.cx(u, v)
+    qc.cx(b, bus[-1])
+    zz = state.register("check_zz", 1)
+    state.checks.append([state.measure(bus[-1], zz, 0), *state.frame_x])  # an owed X on the first port flips ZZ
+    if len(bus) > 1:
+        frame = state.register("frame_z_zz", len(bus) - 1)
+        state.frame_z += [state.measure(q, frame, k, "X") for k, q in enumerate(bus[:-1])]
+    _release(state, bus, reset)
+    state.steps.append(f"bus_zz(reset={reset})")
+    return state
+
+
+def bus_xx(state: BuildState, reset: bool = False) -> BuildState:
+    """The ports' XX parity, read off the interior prepared as a GHZ ancilla, as one check over every bus bit.
+
+    Catches a phase flip (Z or Y) on one port, which makes XX = -1. Blind to a
+    bit flip (X), to the same flip on both ports, and to an error on the bus
+    during the check, which it carries no flag for.
+    """
+    bus = _vacant_interior(state, "bus_xx")
+    _read_vacant(state, bus, "check_vac_xx")
+    (a, b), qc = state.ports, state.circuit
+    qc.h(bus[0])
+    for u, v in zip(bus, bus[1:]):
+        qc.cx(u, v)
+    qc.cx(bus[0], a)
+    qc.cx(bus[-1], b)
+    xx = state.register("check_xx", len(bus))
+    bits = [state.measure(q, xx, k, "X") for k, q in enumerate(bus)]
+    state.checks.append([*bits, *state.frame_z])  # an owed Z on the first port flips XX
+    _release(state, bus, reset)
+    state.steps.append(f"bus_xx(reset={reset})")
+    return state
+
+
 # -- Helpers -------------------------------------------------------------------------
 
 
@@ -214,6 +293,35 @@ def _make_pair(state: BuildState, a: int, b: int) -> None:
     _fresh(state, state.path)
     state.circuit.h(a)
     state.circuit.cx(a, b)
+
+
+def _vacant_interior(state: BuildState, check: str) -> list[int]:
+    """The interior qubits a check works on, once a transport has run and left them all in |0>."""
+    if not state.steps:
+        raise BuildError(f"{check} follows a transport; build one first")
+    if not state.interior:
+        raise BuildError(f"{check}: the ports are neighbours, so the path has no interior qubit to use")
+    busy = [q for q in state.interior if q not in state.vacant]
+    if busy:
+        raise BuildError(
+            f"{check}: interior qubits {busy} are not in |0>; give the step that measured them reset=True"
+        )
+    return list(state.interior)
+
+
+def _read_vacant(state: BuildState, qubits: list[int], name: str) -> None:
+    """Read each qubit as its own check that it is in |0>; in a kept shot it is in |0> again afterwards."""
+    register = state.register(name, len(qubits))
+    for k, q in enumerate(qubits):
+        state.checks.append([state.measure(q, register, k)])
+        state.vacant.add(q)
+
+
+def _release(state: BuildState, qubits: list[int], reset: bool) -> None:
+    if reset:
+        for q in qubits:
+            state.circuit.reset(q)
+        state.vacant |= set(qubits)
 
 
 def _move(state: BuildState, source: int, target: int) -> None:
