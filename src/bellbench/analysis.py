@@ -25,7 +25,9 @@ A circuit file names its analysis as `{name, settings}`:
   bases. A group may include frame bits, as a check measured after a frame bit
   must. Every bit of every register other than the port is read by a group or a
   frame, a frame_z bit comes from a frame_z register and a frame_x bit from a
-  frame_x one, so no bit is left unread or read as the wrong kind.
+  frame_x one, so no bit is left unread or read as the wrong kind. A group or a
+  frame lists each bit once, since a bit listed twice cancels itself; one bit
+  may still sit in two groups.
 
 Correction, which flips result bits to undo a detected error, is not here: a
 decoder joins the registry when a strategy first needs one.
@@ -132,13 +134,17 @@ def _check_parity(settings: Mapping, registers: Registers) -> None:
         raise ValueError(f"parity's checks are a list of non-empty lists of bits; got {checks!r}")
     sizes = dict(registers)
     read = set()
-    for where, bits in [("checks", b) for b in checks] + [(f, settings.get(f, [])) for f in FLIPS]:
+    for where, bits in [(f"checks[{i}]", b) for i, b in enumerate(checks)] + [(f, settings.get(f, [])) for f in FLIPS]:
         if not isinstance(bits, list):
             raise ValueError(f"parity's {where} is a list of bits; got {bits!r}")
+        listed = set()
         for bit in bits:
             name, index = _parse_bit(bit, sizes)
             if where in FLIPS and _role(name) != where:
                 raise ValueError(f"parity's {where} lists {bit}, which is not a bit of a {where} register")
+            if (name, index) in listed:
+                raise ValueError(f"parity's {where} lists {bit} twice, so it cancels itself; list each bit once")
+            listed.add((name, index))
             read.add((name, index))
     for name, size in registers:
         for index in range(size):

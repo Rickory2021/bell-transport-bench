@@ -124,11 +124,21 @@ def test_a_check_group_reads_its_bits_by_index_and_may_fold_in_a_frame_bit():
         ({"checks": [["check_zz[0]"], ["port[0]"]], "frame_z": ["frame_z[0]"]}, r"port\[0\] is not a bit"),
         ({"checks": [["check_zz[1]"]], "frame_z": ["frame_z[0]"]}, r"check_zz\[1\] is past the end"),
         ({"checks": [["check_zz"]], "frame_z": ["frame_z[0]"]}, r"written register\[index\]"),
+        ({"checks": [["check_zz[0]", "check_zz[0]"]], "frame_z": ["frame_z[0]"]},
+         r"checks\[0\] lists check_zz\[0\] twice"),
+        ({"checks": [["check_zz[0]"]], "frame_z": ["frame_z[0]", "frame_z[0]"]}, r"frame_z lists frame_z\[0\] twice"),
     ],
 )
 def test_parity_refuses_settings_that_do_not_fit(settings, message):
     with pytest.raises(ValueError, match=message):
         check_analysis({"name": "parity", "settings": settings}, [("check_zz", 1), ("frame_z", 1), ("port", 2)])
+
+
+def test_parity_takes_one_bit_in_two_groups():
+    """A bit may sit in two groups, as a frame bit folded into a later check must; only one group listing it twice
+    is refused."""
+    settings = {"checks": [["check_zz[0]"], ["check_zz[0]", "frame_z[0]"]], "frame_z": ["frame_z[0]"]}
+    check_analysis({"name": "parity", "settings": settings}, [("check_zz", 1), ("frame_z", 1), ("port", 2)])
 
 
 # -- The known answer: the template's bus_zz check ---------------------------------------

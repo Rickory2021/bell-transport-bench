@@ -495,6 +495,7 @@ CASE_GRID = {
     for row, model in enumerate(configs.CORE_PROCESSORS)
     for column in range(3)
 }
+PROTECTED_CASES = {case for case in CASE_GRID if case % 3 == 0}  # the third column: cases 3, 6 and 9
 
 
 def load_benchmark(name: str) -> tuple[dict, dict]:
@@ -505,6 +506,8 @@ def load_benchmark(name: str) -> tuple[dict, dict]:
     where the challenge's grid puts it (docs/CHALLENGE.md, The nine core cases):
     its run's circuit is on the case's model, one row per model in
     CORE_PROCESSORS order, and cases 1, 4 and 7 are ideal, all others noisy.
+    A protected case, 3, 6 or 9, needs a run whose circuit measures into a
+    check register, so it cannot repeat its baseline (D-128).
     """
     data, record = configs.load_recorded("benchmark", name)
     where = f"{record['path']}: $.cases"
@@ -531,7 +534,18 @@ def load_benchmark(name: str) -> tuple[dict, dict]:
                 f"{where}: case {c['case']} is the {model} model's {simulation} simulation; "
                 f"run {c['run']!r} is on {processor} and the case names its {c['simulation']} simulation"
             )
+        if c["case"] in PROTECTED_CASES and not _measures_a_check(load_circuit(circuit_of[c["run"]]).circuit):
+            raise ValueError(
+                f"{where}: case {c['case']} is a protected case; run {c['run']!r}'s circuit "
+                f"{circuit_of[c['run']]!r} measures no check register, so it would repeat its baseline"
+            )
     return data, record
+
+
+def _measures_a_check(circuit) -> bool:
+    """Whether a measurement in `circuit` writes a bit of a check register, `check` or `check_<name>`."""
+    checks = {bit for reg in circuit.cregs if reg.name == "check" or reg.name.startswith("check_") for bit in reg}
+    return any(inst.operation.name == "measure" and checks & set(inst.clbits) for inst in circuit.data)
 
 
 def run_benchmark(name: str, root: Path | None = None, shots: int | None = None) -> Path:

@@ -367,6 +367,18 @@ def test_reset_error_leaves_the_qubit_in_one_with_its_probability(p, scale):
     assert nc.export_as_yaml()["conditional"] == {"reset_error": p, "mid_circuit_measurement_error": None}
 
 
+@pytest.mark.parametrize("noise", noise_names())
+def test_a_reset_error_is_refused_where_the_profile_defines_no_reset(noise):
+    """Only the snapshots with reset data define a reset; on any other profile the channel would change nothing."""
+    has_reset = "reset" in NoiseControl("ibm2016", noise).target.operation_names
+    assert has_reset == (noise in {"boston-2026", "fez-2025"})
+    if has_reset:
+        assert NoiseControl("ibm2016", noise, conditional={"reset_error": 0.3}).conditional["reset_error"] == 0.3
+    else:
+        with pytest.raises(ValueError, match=f"noise profile '{noise}' defines no reset, so conditional reset_error"):
+            NoiseControl("ibm2016", noise, conditional={"reset_error": 0.3})
+
+
 def test_reset_error_keeps_the_resets_decay():
     from qiskit_aer.noise import pauli_error
 

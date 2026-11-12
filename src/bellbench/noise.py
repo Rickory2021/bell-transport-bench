@@ -50,7 +50,9 @@ and qubit together, so this one enters as an identity labelled
 MID_CIRCUIT_LABEL that `pipeline.mark_mid_circuit_measurements` puts after
 each such read once the circuit is scheduled. A run whose circuit resets, or
 measures a qubit and acts on it again, stops while the matching channel is
-None (docs/DESIGN.md, section 4).
+None (docs/DESIGN.md, section 4). `reset_error` set on a profile whose Target
+defines no reset (a snapshot without reset data, or a depolarising or pauli
+profile) raises, since it would change nothing.
 
 NoiseControl records each config file's path and content hash when it builds,
 and its scale, overrides and conditional channels cannot change afterwards.
@@ -123,6 +125,11 @@ class NoiseControl:
         self._conditional = _check_conditional(conditional)
 
         self.target, self.noise_model = _BUILDERS[self.kind](self)
+        if self._conditional["reset_error"] is not None and "reset" not in self.target.operation_names:
+            raise ValueError(
+                f"noise profile {noise!r} defines no reset, so conditional reset_error would change nothing; "
+                "leave it null, or pick a profile with a reset"
+            )
 
     @property
     def has_durations(self) -> bool:

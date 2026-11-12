@@ -291,12 +291,33 @@ def test_a_case_whose_ideal_f_is_not_1_is_refused(config_copy):
         ([{"id": "a", "circuit": "baseline-hyperbolic", "noise": "boston-2026"}],
          [{"case": 9, "run": "a", "simulation": "ideal"}],
          "case 9 is the hyperbolic model's noisy simulation"),
+        # A second run id on a baseline cannot fill a protected case: its circuit measures no check.
+        ([{"id": "a", "circuit": "baseline-ibm2016", "noise": "boston-2026"},
+          {"id": "b", "circuit": "baseline-ibm2016", "noise": "boston-2026"}],
+         [{"case": 2, "run": "a", "simulation": "noisy"}, {"case": 3, "run": "b", "simulation": "noisy"}],
+         "case 3 is a protected case; run 'b''s circuit 'baseline-ibm2016' measures no check register"),
     ],
 )
 def test_a_malformed_benchmark_file_raises_naming_the_field(config_copy, runs, cases, message):
     _write_benchmark(config_copy, "bad", runs, cases)
     with pytest.raises(ValueError, match=message):
         load_benchmark("bad")
+
+
+@pytest.mark.parametrize("register", ["check", "check_zz", "flag"])
+def test_a_protected_case_needs_a_circuit_that_measures_a_check(config_copy, register):
+    circuit = swap_chain("hyperbolic")
+    reg = ClassicalRegister(1, register)
+    circuit.add_register(reg)
+    circuit.measure(5, reg[0])  # a qubit off the pair's path, so the read changes nothing
+    save_circuit("read-one", "Read one", "hyperbolic", circuit, "A test circuit that reads one spare qubit.")
+    _write_benchmark(config_copy, "protected", [{"id": "a", "circuit": "read-one", "noise": "boston-2026"}],
+                     [{"case": 9, "run": "a", "simulation": "noisy"}])
+    if register == "flag":
+        with pytest.raises(ValueError, match="case 9 is a protected case; .* measures no check register"):
+            load_benchmark("protected")
+    else:
+        assert load_benchmark("protected")[0]["cases"][0]["case"] == 9
 
 
 @pytest.mark.parametrize("diagrams, files", [
