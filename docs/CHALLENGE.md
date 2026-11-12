@@ -295,6 +295,8 @@ This table defines the challenge's terms as the repo uses them, and the other do
 | What to submit | Deck, slide 13; festival site |
 | Judging | Deck, slide 14 |
 
+Slide 11 suggests approaches for different experience levels and sets no requirement, so no section draws on it.
+
 The linear algebra (state vectors, the Pauli matrices, why the fidelity formula holds, and the 1/2 line for entanglement) is standard and comes from none of these sources.
 
 ## Where to go next

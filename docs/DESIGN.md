@@ -333,7 +333,7 @@ workspace/        runtime notebooks and uncommitted runs, never committed
 
 ## 7. Protection as building blocks
 
-**Protection is assembled from building blocks in a circuit file, and we choose the core strategy from benchmark results rather than in advance.** Protection here is always error detection with postselection, never error correction or fault tolerance ([README, science rules](../README.md#science-rules)). The strategies the challenge allows are in [CHALLENGE.md, Protection strategies](CHALLENGE.md#protection-strategies).
+**Protection is assembled from building blocks in a circuit file, and we choose the core strategy from benchmark results rather than in advance.** The core benchmark protects by postselection, and the framework also supports correction. The strategies the challenge allows are in [CHALLENGE.md, Protection strategies](CHALLENGE.md#protection-strategies).
 
 A strategy is one choice for each block:
 
@@ -345,7 +345,20 @@ A strategy is one choice for each block:
   - A flagged check adds a flag qubit to catch a fault in the check itself.
 - **Check placement:** on the pair's own path, or on a spare path that shares no qubit with it.
 - **Check timing:** at the end of the circuit (terminal) or partway through it (mid-circuit).
-- **Analysis:** which shots are kept, and the fidelity and acceptance fraction computed from them ([section 8](#8-metrics-and-reporting)).
+- **Analysis:** how each shot is processed, by postselection or by correction, and the fidelity and acceptance fraction computed from the result ([section 8](#8-metrics-and-reporting)).
+
+**Two ways to process a shot:**
+
+- **Postselection** discards a shot whose checks flag an error. The core benchmark uses it, and every postselected F is reported with its acceptance fraction.
+- **Correction** flips the result bits that a decoding rule names from the checks' outcomes, so no shot is discarded. The framework supports it, and a decoder is built when a strategy first needs one.
+
+**A correcting strategy enters the core benchmark only by a later decision,** once three things hold:
+
+- Single-fault tests show what its decoder corrects and what it miscorrects.
+- Its decoding rule is fixed in its circuit file before any results are seen, so the rule cannot be tuned to them.
+- Its results report raw, postselected and corrected F side by side, so no gain hides its cost.
+
+Readout mitigation, which corrects the counts with known misread rates, stays out of the core either way ([README, science rules](../README.md#science-rules)).
 
 **Why blocks, chosen later:** choosing a strategy before the benchmark exists gets the order backwards. Blocks let us compare combinations on results. The question we most want to test is whether spare disjoint paths let a pair be checked without mid-circuit measurement.
 
@@ -369,7 +382,7 @@ Sources: `smith-2026-error-detected-primitives`, `baumer-2024-long-range-entangl
 
 | Reported | How |
 |---|---|
-| F raw and F after postselection | Each with its statistical uncertainty and the method that computed it |
+| F raw and F after postselection, and F after correction when a strategy corrects | Each with its statistical uncertainty and the method that computed it |
 | Acceptance fraction p | With a Wilson score interval, a confidence interval for a fraction that stays between 0 and 1 |
 | Shots | Raw and accepted, for each basis |
 | Infidelity removed per unit of rejection | Derived: how much postselection lowers 1 − F for each unit of shots it discards; protection breaks even where this crosses zero in a noise sweep |
@@ -398,16 +411,17 @@ Source: `fallfest-compilation-deck`.
 
 ## Terms
 
-This table collects the design's own terms, each defined where it first appears above. The challenge's terms are CHALLENGE.md's: [case](CHALLENGE.md#terms), [port](CHALLENGE.md#terms), [fidelity](CHALLENGE.md#terms), [processor model](CHALLENGE.md#the-three-processor-models), [noise model](CHALLENGE.md#noise-is-the-teams-choice) and [shot](CHALLENGE.md#verifying-the-pair).
+This table collects the design's own terms, each defined where it first appears above. The challenge's terms are CHALLENGE.md's: [case](CHALLENGE.md#terms), [port](CHALLENGE.md#terms), [fidelity](CHALLENGE.md#terms), [processor model](CHALLENGE.md#the-three-processor-models), [noise model](CHALLENGE.md#noise-is-the-teams-choice), [postselection](CHALLENGE.md#terms) and [shot](CHALLENGE.md#verifying-the-pair).
 
 | Term | Means |
 |---|---|
 | Benchmark | A named set of runs, defined by a benchmark file, with one comparison table across them. Bare, "the benchmark" means this whole project; "the core benchmark" means the nine cases; every other benchmark is named, such as the noise sweep. |
 | Benchmark file | A YAML file in `config/` that names which circuits run on which processor and noise pairs, with the shots and the base seed. Not the benchmark's results, which are in `results/benchmarks/`. |
-| Check | A function that extends the build state with measurements that detect errors, such as a parity check on the pair. |
 | Build state | The object that transports and checks pass along while a circuit is built: the circuit, the path, the free qubits and the role of each measured bit. |
+| Check | A function that extends the build state with measurements that detect errors, such as a parity check on the pair. |
 | Circuit file | A YAML file in `config/` holding one strategy: the transport, the checks, their timing and the rule that chooses the path. It works on any processor, unlike a compiled circuit, which belongs to one. |
 | Comparison table | A benchmark's table across its runs, with the derived metrics of [section 8](#8-metrics-and-reporting). |
+| Correction | Processing a shot by flipping the result bits a decoding rule names from the checks' outcomes, instead of discarding it. Supported by the framework; not in the core benchmark until a later decision. |
 | Noise profile | The file of values a noise model is built from: one value per quantity and a native gate set, in Qiskit's units and gate names with descriptive keys. The noise model is what NoiseControl builds from it. |
 | Run | One circuit on one processor model and noise profile, with its simulations; it writes one run folder. A SABRE replicate is a run of its own. |
 | Run folder | The folder one run writes: in `results/runs/` for a clean run, in `workspace/` for a run made with uncommitted changes. |
