@@ -169,6 +169,25 @@ def test_a_rerun_refuses_a_changed_file(config_copy):
     assert code == 2 and "changed since it was recorded" in lines[0]
 
 
+def test_a_run_of_an_earlier_result_format_is_refused(folder):
+    """A run recorded in OpenQASM 2 (format 1) is history: a rerun or a redraw names the commit that can rebuild it."""
+    path = folder / RESULT_FILE
+    record = yaml.safe_load(path.read_text(encoding="utf-8"))
+    record["result_format"] = 1
+    path.write_text(yaml.safe_dump(record), encoding="utf-8")
+    code, lines = rerun(folder)
+    assert code == 2 and "recorded in result format 1" in lines[0]
+    with pytest.raises(ValueError, match="rebuild it from the commit that made it"):
+        run_module.write_views(folder)
+
+
+def test_the_record_holds_the_circuits_in_openqasm_3(folder):
+    record = yaml.safe_load((folder / RESULT_FILE).read_text(encoding="utf-8"))
+    assert record["written"].startswith("OPENQASM 3.0;\n")
+    assert all(text.startswith("OPENQASM 3.0;\n") for text in record["compiled"].values())
+    assert "qiskit-qasm3-import" in record["provenance"]["packages"]
+
+
 @pytest.mark.parametrize("uncommitted, root", [(True, "workspace"), (False, "results")])
 def test_uncommitted_runs_go_to_workspace(config_copy, monkeypatch, uncommitted, root):
     monkeypatch.setattr(run_module, "_git_state", lambda: ("abc123", uncommitted))

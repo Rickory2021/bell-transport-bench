@@ -11,12 +11,12 @@ notes: >-
   and the same SWAPs back, so the pair ends on the ports. No checks, so postselection
   keeps every shot.
 circuit: |
-  OPENQASM 2.0;
-  include "qelib1.inc";
-  qreg q[13];
+  OPENQASM 3.0;
+  include "stdgates.inc";
+  qubit[13] q;
   h q[0];
-  swap q[0],q[1];
-  swap q[1],q[9];
-  cx q[9],q[12];
-  swap q[1],q[9];
-  swap q[0],q[1];
+  swap q[0], q[1];
+  swap q[1], q[9];
+  cx q[9], q[12];
+  swap q[1], q[9];
+  swap q[0], q[1];

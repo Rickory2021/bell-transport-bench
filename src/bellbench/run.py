@@ -45,10 +45,10 @@ from importlib.metadata import version
 from pathlib import Path
 
 import yaml
-from qiskit import qasm2
+from qiskit import qasm3
 
 from bellbench import configs
-from bellbench.circuits import ROLES, load_circuit
+from bellbench.circuits import ROLES, circuit_to_qasm, load_circuit
 from bellbench.fidelity import BASES, fidelity_from_counts
 from bellbench.noise import NoiseControl
 from bellbench.pipeline import (
@@ -62,11 +62,11 @@ from bellbench.pipeline import (
     simulate,
 )
 
-RESULT_FORMAT = 1
+RESULT_FORMAT = 2  # 1: circuits in OpenQASM 2; 2: circuits in OpenQASM 3
 RESULT_FILE = "bp.data.result.yaml"
 SIMULATIONS = ("ideal", "noisy")
 DIAGRAMS = ("lean", "full")
-PACKAGES = ("qiskit", "qiskit-aer", "qiskit-ibm-runtime", "numpy")
+PACKAGES = ("qiskit", "qiskit-aer", "qiskit-ibm-runtime", "qiskit-qasm3-import", "numpy")
 WILSON_Z = 1.959963984540054  # a 95% interval
 STAMP = "%Y%m%dT%H%M%SZ"  # the UTC time that names run and benchmark folders
 
@@ -164,8 +164,8 @@ class CircuitRun:
             "seeds": dict(self.seeds),
             "diagrams": self.diagrams,
             "registers": self.registers,
-            "written": qasm2.dumps(self.circuit.circuit) + "\n",
-            "compiled": {basis: qasm2.dumps(c.compiled) + "\n" for basis, c in self.compiled.items()},
+            "written": circuit_to_qasm(self.circuit.circuit),
+            "compiled": {basis: circuit_to_qasm(c.compiled) for basis, c in self.compiled.items()},
             "cost": self.cost,
             "scheduled_duration": self.duration,
             "simulations": {
@@ -182,6 +182,7 @@ class CircuitRun:
     def from_yaml(cls, record: dict) -> "CircuitRun":
         """Rebuild a run from its record; refuses a referenced file whose content changed since."""
         configs.check_config("result", record, "the run record")
+        _check_result_format(record)
         circuit = configs.name_from_record(record["circuit"], "circuit")
         nc_record = record["noise_control"]
         noise = configs.name_from_record(nc_record["noise"], "noise")
@@ -363,6 +364,7 @@ def write_views(folder: Path) -> list[Path]:
 
     folder = Path(folder)
     record = yaml.safe_load((folder / RESULT_FILE).read_text(encoding="utf-8"))
+    _check_result_format(record)
     proc = yaml.safe_load((configs.ROOT / record["noise_control"]["processor"]["path"]).read_text(encoding="utf-8"))
     written = []
 
@@ -380,13 +382,13 @@ def write_views(folder: Path) -> list[Path]:
         drawings |= {"written.png": record["written"], "circuit-xx.png": record["compiled"]["XX"],
                      "circuit-yy.png": record["compiled"]["YY"]}
     for name, text in drawings.items():
-        circuit = qasm2.loads(text, custom_instructions=qasm2.LEGACY_CUSTOM_INSTRUCTIONS)
+        circuit = qasm3.loads(text)
         save(circuit.draw("mpl", idle_wires=False, fold=40), name)
     if record["diagrams"] == "full" and record["scheduled_duration"] is not None:
         from qiskit.visualization import timeline_drawer
 
         nc = NoiseControl.from_yaml(record["noise_control"])
-        zz = qasm2.loads(record["compiled"]["ZZ"], custom_instructions=qasm2.LEGACY_CUSTOM_INSTRUCTIONS)
+        zz = qasm3.loads(record["compiled"]["ZZ"])
         save(timeline_drawer(schedule(zz, nc), target=nc.target), "timeline.png")
     (folder / "report.md").write_text(_run_report(folder, record), encoding="utf-8")
     written.append(folder / "report.md")
@@ -561,6 +563,16 @@ def _check_conditional_channels(circuit, nc: NoiseControl) -> None:
                 f"circuit {circuit.name!r} uses {operation} before the end, but the conditional channel {channel} "
                 "is unset, so it would be silently perfect (D-48)"
             )
+
+
+def _check_result_format(record: dict) -> None:
+    """Refuse a run recorded in another result format: its circuits and CSVs are in an older shape."""
+    if record["result_format"] != RESULT_FORMAT:
+        commit = record["provenance"]["commit"] or "unknown"
+        raise ValueError(
+            f"the run was recorded in result format {record['result_format']}, and this code reads format "
+            f"{RESULT_FORMAT}; rebuild it from the commit that made it, {commit}"
+        )
 
 
 def _stamp() -> str:

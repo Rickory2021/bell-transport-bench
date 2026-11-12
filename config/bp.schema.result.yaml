@@ -51,8 +51,10 @@ $defs:
 
 properties:
   result_format:
-    description: The shape of this record; benchmarks gather only runs of the current format.
-    const: 1
+    description: >-
+      The shape of this record; benchmarks gather only runs of the current format. 1: circuits in OpenQASM 2;
+      2: circuits in OpenQASM 3. A record of an earlier format stays valid as history; reruns and views refuse it.
+    enum: [1, 2]
   circuit: {$ref: "#/$defs/file"}
   noise_control:
     description: NoiseControl's export, taken when it built the model.
@@ -103,10 +105,10 @@ properties:
     minItems: 1
     items: {$ref: "#/$defs/text"}
   written:
-    description: The circuit as written, in OpenQASM 2.
+    description: The circuit as written, in OpenQASM 3.
     $ref: "#/$defs/text"
   compiled:
-    description: Each basis circuit as compiled, in OpenQASM 2 on physical qubits, before scheduling.
+    description: Each basis circuit as compiled, in OpenQASM 3 on physical qubits, before scheduling.
     allOf: [{$ref: "#/$defs/bases"}]
     additionalProperties: {$ref: "#/$defs/text"}
   cost:

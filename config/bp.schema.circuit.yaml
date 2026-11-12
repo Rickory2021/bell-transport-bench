@@ -2,7 +2,7 @@
 #
 # Validates config/circuit/bp.data.circuit.*.yaml: one written circuit on one
 # processor model's physical qubits, as a run reads it (docs/DESIGN.md, sections
-# 2 and 5). The gates are OpenQASM 2, so a reader sees exactly what runs. A run
+# 2 and 5). The gates are OpenQASM 3, so a reader sees exactly what runs. A run
 # adds each basis's rotation and the port measurement itself, into a classical
 # register named port; a written circuit names its own registers by role.
 # Checks that span fields (the gates parse, the circuit has the processor's
@@ -42,5 +42,5 @@ properties:
     description: Free text saying how the circuit was built (the transport, the path, the checks) and anything a reader should know.
     $ref: "#/$defs/text"
   circuit:
-    description: "The gates, as an OpenQASM 2 program on one register q with the processor's qubit count; classical registers named check or flag only."
+    description: "The gates, as an OpenQASM 3 program on one register q with the processor's qubit count; classical registers named check or flag only."
     $ref: "#/$defs/text"

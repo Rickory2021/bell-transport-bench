@@ -2,7 +2,7 @@
 """Circuit files, and the functions that build the circuits they hold.
 
 A circuit file, config/circuit/bp.data.circuit.<name>.yaml, holds one written
-circuit on one processor model's physical qubits: its gates as OpenQASM 2, the
+circuit on one processor model's physical qubits: its gates as OpenQASM 3, the
 analysis that processes its shots, and notes saying how it was built
 (docs/DESIGN.md, section 2). A run reads the gates as written; nothing
 regenerates them from a transport's name, so the file shows exactly what runs.
@@ -25,7 +25,9 @@ from pathlib import Path
 
 import networkx as nx
 import yaml
-from qiskit import QuantumCircuit, qasm2
+from openqasm3.parser import QASM3ParsingError
+from qiskit import QuantumCircuit, qasm3
+from qiskit.qasm3 import QASM3ImporterError
 
 from bellbench import configs
 
@@ -58,11 +60,11 @@ def load_circuit(name: str) -> CircuitFile:
 
 
 def circuit_from_qasm(text: str, num_qubits: int, where: str = "circuit") -> QuantumCircuit:
-    """The circuit an OpenQASM 2 program builds, checked against the processor's qubit count and ROLES."""
+    """The circuit an OpenQASM 3 program builds, checked against the processor's qubit count and ROLES."""
     try:
-        circuit = qasm2.loads(text, custom_instructions=qasm2.LEGACY_CUSTOM_INSTRUCTIONS)
-    except qasm2.QASM2ParseError as e:
-        raise ValueError(f"{where}: $.circuit: the gates do not parse as OpenQASM 2: {e}") from None
+        circuit = qasm3.loads(text)
+    except (QASM3ImporterError, QASM3ParsingError) as e:
+        raise ValueError(f"{where}: $.circuit: the gates do not parse as OpenQASM 3: {e}") from None
     if [(r.name, r.size) for r in circuit.qregs] != [("q", num_qubits)]:
         got = ", ".join(f"{r.name}[{r.size}]" for r in circuit.qregs) or "none"
         raise ValueError(f"{where}: $.circuit: needs one register q[{num_qubits}], the processor's qubits; got {got}")
@@ -76,8 +78,8 @@ def circuit_from_qasm(text: str, num_qubits: int, where: str = "circuit") -> Qua
 
 
 def circuit_to_qasm(circuit: QuantumCircuit) -> str:
-    """A circuit as the OpenQASM 2 text a circuit file holds."""
-    return qasm2.dumps(circuit) + "\n"
+    """A circuit as the OpenQASM 3 text a circuit file holds, ending in one newline."""
+    return qasm3.dumps(circuit).rstrip("\n") + "\n"
 
 
 def save_circuit(

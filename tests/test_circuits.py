@@ -3,7 +3,7 @@
 
 Covers docs/DESIGN.md, sections 2 and 7, as D-83 and D-86 settle them: the three
 committed baseline files equal what the transport builds, a circuit file's gates
-round-trip through OpenQASM 2, and a file whose gates do not fit its processor,
+round-trip through OpenQASM 3, and a file whose gates do not fit its processor,
 or that names a register outside its roles, fails to load naming the field.
 """
 
@@ -62,7 +62,7 @@ def test_swap_chain_rejects_a_bad_path(path, message):
         swap_chain("contemporary", path)
 
 
-def test_gates_round_trip_through_openqasm_2():
+def test_gates_round_trip_through_openqasm_3():
     circuit = swap_chain("hyperbolic")
     check = ClassicalRegister(1, "check")
     circuit.add_register(check)
@@ -84,8 +84,13 @@ def test_gates_that_do_not_fit_raise_naming_the_field(build, message):
 
 
 def test_unparseable_gates_raise():
-    with pytest.raises(ValueError, match="do not parse as OpenQASM 2"):
-        circuit_from_qasm("OPENQASM 2.0;\nqreg q[5];\nfoo q[0];\n", 5)
+    with pytest.raises(ValueError, match="do not parse as OpenQASM 3"):
+        circuit_from_qasm("OPENQASM 3.0;\nqubit[5] q;\nfoo q[0];\n", 5)
+
+
+def test_an_openqasm_2_file_is_refused():
+    with pytest.raises(ValueError, match="do not parse as OpenQASM 3"):
+        circuit_from_qasm('OPENQASM 2.0;\ninclude "qelib1.inc";\nqreg q[5];\nh q[0];\n', 5)
 
 
 def _with_register(name):
