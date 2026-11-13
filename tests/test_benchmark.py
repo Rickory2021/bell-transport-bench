@@ -8,7 +8,8 @@ the current one; two makes in one second refuse; the run list fits its schema;
 comparison.csv's header is the declared columns; a run folder's views are drawn;
 and the make targets reach the command line. The biased-noise study's circuit
 files equal what the builders make, its file runs each under each pauli
-profile, and it runs end to end.
+profile, and it runs end to end. The mid-circuit sweep runs the XX check on
+ibm2016's path at six mid-circuit measurement errors beside two fixed references.
 """
 
 import csv
@@ -125,7 +126,7 @@ def test_the_study_runs_each_circuit_and_baseline_under_each_profile():
     assert (data["shots"], data["base_seed"]) == (20_000, 20261116)
 
 
-@pytest.mark.parametrize("benchmark", ["biased-noise", "move-chain"])
+@pytest.mark.parametrize("benchmark", ["biased-noise", "move-chain", "mid-circuit-sweep"])
 def test_the_mid_circuit_channel_is_set_only_where_a_circuit_reads_a_qubit_then_reuses_it(benchmark):
     """The spare-path checks read only at the end and need no channel; the check on ibm2016's path does."""
     data, _ = load_benchmark(benchmark)
@@ -173,6 +174,47 @@ def test_the_move_chain_benchmark_runs_end_to_end(tmp_path):
     folder = run_benchmark("move-chain", tmp_path, shots=100)
     table = read_table(folder / "comparison.csv")
     assert sorted(table["case"].dropna()) == list(range(1, 10))
+    ideal = table[table["simulation"] == "ideal"]
+    assert (ideal["fidelity"] == 1.0).all() and (ideal["acceptance"] == 1.0).all()
+
+
+# -- The mid-circuit sweep ----------------------------------------------------------------
+
+
+def test_the_mid_circuit_sweep_runs_the_path_check_at_six_errors_beside_two_fixed_references():
+    """The protected circuit on ibm2016 at each swept error, the baseline and the move chain alone once each without
+    the channel, all under the core's noise profile, with the core's shots and base seed and no case filled."""
+    data, _ = load_benchmark("mid-circuit-sweep")
+    runs = {r["run"]: (r["circuit"], r.get("conditional")) for r in data["runs"]}
+    errors = {"0": 0.0, "1e-3": 0.001, "3e-3": 0.003, "1e-2": 0.01, "2e-2": 0.02, "5e-2": 0.05}
+    swept = {
+        f"path-xx-ibm2016-mcm-{name}": ("move-chain-path-xx-ibm2016", {"mid_circuit_measurement_error": value})
+        for name, value in errors.items()
+    }
+    references = {"baseline-ibm2016": ("baseline-ibm2016", None), "move-ibm2016": ("move-chain-ibm2016", None)}
+    assert runs == references | swept and len(data["runs"]) == len(runs)
+    core = load_benchmark("core")[0]
+    assert {r["noise"] for r in data["runs"]} == {core["runs"][0]["noise"]}
+    assert (data["shots"], data["base_seed"]) == (core["shots"], core["base_seed"])
+    assert "cases" not in data, "the sweep fills none of the challenge's nine cases"
+
+
+def test_the_sweep_point_at_case_3s_error_has_case_3s_settings():
+    """So the sweep's run at 0.01 gives the move-chain benchmark's case 3, and its references give that benchmark's."""
+    sweep = {r["run"]: r for r in load_benchmark("mid-circuit-sweep")[0]["runs"]}
+    move_chain = {r["run"]: r for r in load_benchmark("move-chain")[0]["runs"]}
+    pairs = {"path-xx-ibm2016-mcm-1e-2": "path-xx-ibm2016", "baseline-ibm2016": "baseline-ibm2016",
+             "move-ibm2016": "move-ibm2016"}
+    for ours, theirs in pairs.items():
+        settings = [{k: v for k, v in r.items() if k != "run"} for r in (sweep[ours], move_chain[theirs])]
+        assert settings[0] == settings[1], ours
+
+
+def test_the_mid_circuit_sweep_runs_end_to_end(tmp_path):
+    """Every point compiles and simulates, the error of 0 included, and every ideal simulation gives F = 1 with
+    every shot kept."""
+    table = read_table(run_benchmark("mid-circuit-sweep", tmp_path, shots=100) / "comparison.csv")
+    assert len(table) == 2 * len(load_benchmark("mid-circuit-sweep")[0]["runs"])
     ideal = table[table["simulation"] == "ideal"]
     assert (ideal["fidelity"] == 1.0).all() and (ideal["acceptance"] == 1.0).all()
 
