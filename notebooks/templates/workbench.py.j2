@@ -6,62 +6,63 @@
 # %% [markdown]
 # # Workbench
 #
-# **One run at a time:** pick a circuit file and a noise profile, run it, and see its numbers. Every setting is recorded in the run folder, so a run made here can be repeated with `make run RUN=<folder>`.
+# **Try a circuit, run it, and compare it with the committed results, one cell per step.** The `Workbench` holds this session's settings and calls the package (`src/bellbench/`), which does all the work and writes every file.
 #
 # - **Edit and run your copy in `workspace/`**, which `make workbench` makes. The notebook in `notebooks/` is generated; edits there are lost on the next render.
-# - **The logic lives in the package** (`src/bellbench/`). These cells set values and call it; a run or a saved circuit goes through `CircuitRun` and `save_circuit`, which write the files.
-# - **A circuit you build here is saved as a circuit file before it runs,** because a run records the file it ran by its hash.
+# - **A circuit you build is a trial,** saved in `workspace/circuits/`, which is never committed. A run of a trial, kept, lands in `workspace/runs/`. When a trial is worth keeping, `promote` moves it into `config/circuit/`, ready to commit.
+# - **Each result shows itself:** F and acceptance, each basis's shots and correlator, the cost, the gates, what each check flagged, and a warning if its ideal run fails the self-test.
 #
-# The cells: imports, settings, an optional circuit build, the run, and writing the run folder.
+# The cells: the import, the session's settings, then `fetch`, `build`, `show`, `run`, `compare`, `keep` and `promote`.
 
 # %%
-# Imports
-import pandas as pd
-
-from bellbench import configs
-from bellbench.circuits import save_circuit, swap_chain
-from bellbench.run import CircuitRun, load_benchmark
+# The one import. builders holds the transports and checks that build steps name.
+from bellbench.workbench import Workbench, builders
 
 # %%
-# Settings. The shots and base seed default to the core benchmark's, so a baseline run here repeats its seeds.
-core, _ = load_benchmark("core")
-CIRCUIT = "{{ defaults.circuit }}"
-NOISE = "{{ defaults.noise }}"
-SHOTS = core["shots"]  # per basis circuit, in each of the ideal and noisy simulations
-BASE_SEED = core["base_seed"]
-SCALE = 1.0  # multiplies every gate error, both readout errors and the decay rates
-OVERRIDES = []  # for example [{"qubits": [0, 1], "field": "gates.cz.error_probability", "value": 0.01}]
-# A circuit that resets a qubit, or reads one and acts on it again, runs only with the matching channel set:
-# {"reset_error": p, "mid_circuit_measurement_error": p}. Any circuit may also set "starting_excitation": p, the
-# chance that each qubit starts a shot in |1>. Sweep each over a range rather than claim one value.
-CONDITIONAL = None
-DIAGRAMS = "lean"  # or "full", which adds the written, XX and YY circuits and the timeline
-
-print("circuit files: ", ", ".join(configs.config_names("circuit")))
-print("noise profiles:", ", ".join(configs.config_names("noise")))
-print("processors:    ", ", ".join(configs.config_names("processor")))
+# The session's settings. Each defaults to the core benchmark's, so a baseline run repeats its seeds.
+wb = Workbench(
+    noise="{{ defaults.noise }}",
+    # shots=4000,                  # per basis circuit, in each of the ideal and noisy simulations
+    # scale=1.0,                   # multiplies every gate error, both readout errors and the decay rates
+    # overrides=[{"qubits": [0, 1], "field": "gates.cz.error_probability", "value": 0.01}],
+    # A circuit that resets a qubit, or reads one and acts on it again, needs the matching channel, swept over a
+    # range rather than claimed at one value: {"reset_error": p, "mid_circuit_measurement_error": p}.
+    # conditional={"reset_error": 0.01, "mid_circuit_measurement_error": 0.01},
+)
+BASELINE = "{{ defaults.circuit }}"  # the committed baseline the trial is compared with
+wb
 
 # %%
-# Optional: build a circuit and save it as a circuit file, then run it by its name.
-# swap_chain takes the processor and a path from the first port to the second.
-# ANALYSIS says how a run reads the circuit's shots, and is saved in the circuit file (src/bellbench/analysis.py).
-# postselect keeps a shot when every check and flag bit reads 0. parity reads each check as a group of bits that
-# must have even parity, and flips the first port's outcome by the Pauli frame a check records in frame_z or frame_x.
-ANALYSIS = {"name": "postselect"}
-# ANALYSIS = {"name": "parity", "settings": {"checks": [["check_zz[0]"]], "frame_z": ["frame_z[0]"]}}
-# circuit = swap_chain("contemporary", path=[0, 4, 5, 6, 7])
-# notes = "swap_chain along [0, 4, 5, 6, 7]."
-# save_circuit("chain-04567", "Swap chain along 0-4-5-6-7", "contemporary", circuit, notes, analysis=ANALYSIS)
-# CIRCUIT = "chain-04567"
+# fetch: a committed run, shown without running it again. With analysis=..., its counts are re-read another way,
+# labelled as a view.
+base = wb.fetch("move-chain", BASELINE)
+base
 
 # %%
-# Run: compile once, simulate ideal and noisy, read the shots with the circuit file's analysis,
-# and show the numbers and the cost.
-run = CircuitRun(CIRCUIT, NOISE, SHOTS, BASE_SEED, SCALE, OVERRIDES, CONDITIONAL, DIAGRAMS).run()
-display(pd.DataFrame(run.simulation_rows()).set_index("simulation").T)
-display(pd.Series(run.cost, name="cost"))
+# build: a trial circuit from builder steps, each a step or a (step, its arguments) pair. Building a name again
+# replaces that trial. OpenQASM text or a Qiskit circuit works too, with its processor, and its analysis when it
+# measures any bit:
+# wb.build("my-pair", qasm_text, processor="ibm2016", analysis={"name": "postselect"})
+wb.build("try-move-xx", "contemporary", builders.move_chain, (builders.bus_xx, {"on": [0, 4, 5, 6, 7]}))
 
 # %%
-# Write the run folder: results/ when src/ and config/ were committed as the run started, workspace/ otherwise.
-folder = run.write()
-print(configs.repo_path(folder))
+# show: the written circuit, the analysis that reads its shots, and the processor's graph with its ports.
+wb.show("try-move-xx")
+
+# %%
+# run: compile, simulate ideal and noisy, and score. Settings given here apply to this run only.
+trial = wb.run("try-move-xx")
+trial
+
+# %%
+# compare: one row per result's noisy simulation, and whether its ideal run passed the self-test.
+wb.compare(base, trial)
+
+# %%
+# keep: write a result's run folder. A trial's lands in workspace/runs/, never committed.
+folder = wb.keep(trial)
+folder
+
+# %%
+# promote: move a trial worth keeping into config/circuit/, ready to commit.
+# wb.promote("try-move-xx")

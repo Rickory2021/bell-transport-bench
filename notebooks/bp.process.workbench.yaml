@@ -11,7 +11,7 @@ vars:
   required: [circuit, noise]
   properties:
     circuit:
-      description: The circuit file the settings cell starts on.
+      description: The committed move-chain run the trial is compared with, by its run id, which is its circuit's name.
       type: string
       pattern: '^[a-z0-9][a-z0-9-]*$'
     noise:

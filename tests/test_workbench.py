@@ -1,11 +1,12 @@
 # tests/test_workbench.py
 """The workbench notebook runs as committed, and the committed notebook is what its template renders.
 
-Covers docs/DESIGN.md, section 1, as D-84 and D-87 settle them: the notebook's
-code cells, run in order at low shots, make and write one run, including the
-commented example that builds and saves a circuit with the analysis its settings
-name; and a fresh render from the
-template, process and invoke gives the committed notebook byte for byte.
+Covers docs/DESIGN.md, section 1: the notebook's code cells, run in order at low
+shots in a temporary copy of the repo's config and its committed move-chain
+benchmark, fetch the committed baseline, build and run a trial, compare the two
+and keep the trial's run in workspace/; with its commented promote line on, the
+trial moves into config/circuit/. A fresh render from the template, process and
+invoke gives the committed notebook byte for byte.
 """
 
 import json
@@ -20,11 +21,9 @@ from bellbench import configs
 ROOT = Path(__file__).resolve().parents[1]
 NOTEBOOK = ROOT / "notebooks" / "bp.output.workbench.ipynb"
 BLUEPRINT = ROOT / "scripts" / "blueprint-render"
-EXAMPLE = ("# circuit = ", "# notes = ", "# save_circuit(", "# CIRCUIT = ")
-# With the example on, ANALYSIS is set to a parity analysis, which save_circuit would never pick by default, so the
-# saved file shows whether the setting reached it. A parity with no groups suits a circuit that measures no check.
-DEFAULT_ANALYSIS = 'ANALYSIS = {"name": "postselect"}'
-PARITY = {"name": "parity", "settings": {"checks": []}}
+MOVE_CHAIN = Path("results") / "runs" / "benchmark" / "move-chain"
+PROMOTE = "# wb.promote("
+TRIAL = "try-move-xx"
 
 
 def _code_cells():
@@ -32,27 +31,25 @@ def _code_cells():
     return ["".join(c["source"]) for c in cells if c["cell_type"] == "code"]
 
 
-@pytest.mark.parametrize("with_example", [False, True])
-def test_the_code_cells_run_in_order(config_copy, with_example):
-    namespace = {"display": lambda *a, **k: None}
+@pytest.mark.parametrize("with_promote", [False, True])
+def test_the_code_cells_run_in_order(config_copy, with_promote):
+    shutil.copytree(ROOT / MOVE_CHAIN, config_copy / MOVE_CHAIN)
+    namespace = {}
     cells = _code_cells()
-    if with_example:
-        assert sum(c.count(DEFAULT_ANALYSIS) for c in cells) == 1
+    assert sum(c.count(PROMOTE) for c in cells) == 1
     for source in cells:
-        if with_example:
-            source = "\n".join(line[2:] if line.startswith(EXAMPLE) else line for line in source.splitlines())
-            source = source.replace(DEFAULT_ANALYSIS, f"ANALYSIS = {PARITY!r}")
+        if with_promote:
+            source = source.replace(PROMOTE, "wb.promote(")
         exec(compile(source, str(NOTEBOOK), "exec"), namespace)
-        if "SHOTS" in namespace and namespace["SHOTS"] != 50:
-            namespace["SHOTS"] = 50  # the settings cell sets the core benchmark's shots; a test needs few
-    circuit = "chain-04567" if with_example else "baseline-contemporary"
-    folder = namespace["folder"]
-    assert folder.relative_to(configs.ROOT).parts[:5] == ("workspace", "runs", "workbench", circuit, "boston-2026")
-    assert namespace["run"].base_seed == namespace["core"]["base_seed"]
-    if with_example:
-        from bellbench.circuits import load_circuit
-
-        assert load_circuit(circuit).analysis == PARITY
+        if "wb" in namespace:
+            namespace["wb"].shots = 50  # the settings cell takes the core benchmark's shots; a test needs few
+    base, trial, folder = namespace["base"], namespace["trial"], namespace["folder"]
+    assert base.label == f"{namespace['BASELINE']} under boston-2026" and base.self_test is None
+    assert trial.self_test is None and trial.record["shots"] == 50
+    assert folder.relative_to(configs.ROOT).parts[:5] == ("workspace", "runs", "workbench", TRIAL, "boston-2026")
+    assert "Comparison, noisy simulations" in repr(namespace["wb"].compare(base, trial))
+    promoted = (configs.ROOT / "config" / "circuit" / configs.file_name("circuit", TRIAL)).is_file()
+    assert promoted == with_promote and (TRIAL in configs.trial_names()) != with_promote
 
 
 def test_the_committed_notebook_is_a_fresh_render(tmp_path):
