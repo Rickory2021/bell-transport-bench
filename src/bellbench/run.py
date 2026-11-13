@@ -21,7 +21,8 @@ measured qubit makes its measurement mid-circuit.
 `write` makes the run folder: <root>/runs/workbench/<circuit>/<noise>/<stamp>/
 for a run made on its own, or the folder a benchmark names for each of its runs.
 <root> is results/ for a run made from committed code and config, workspace/
-otherwise. The git state is read when `run` starts, so the record describes the
+otherwise, as for a run of a trial circuit, which git does not track (configs.py).
+The git state is read when `run` starts, so the record describes the
 tree the numbers came from, and a write after a later commit still lands in
 workspace/. A run folder holds bp.data.result.yaml, the settings and records,
 checked against config/bp.schema.result.yaml; simulations.csv, one row of
@@ -248,7 +249,8 @@ class CircuitRun:
         """Write the run folder and return it.
 
         By default the folder is <root>/runs/workbench/<circuit>/<noise>/<stamp>/,
-        with `root` results/ or workspace/ as the git state says. A benchmark
+        with `root` results/ only when the git state was clean and every file the
+        run used is in config/, and workspace/ otherwise, as for a trial circuit. A benchmark
         passes `folder` instead, which must not exist yet. A circuit, processor or
         noise file that changed since the run was built is refused before the
         folder is made, so a refused write leaves no folder.
@@ -257,7 +259,8 @@ class CircuitRun:
         configs.check_config("result", record, "the run record")
         if folder is None:
             if root is None:
-                root = configs.ROOT / ("workspace" if record["provenance"]["uncommitted"] else "results")
+                kept = not record["provenance"]["uncommitted"] and not _uses_files_outside_config(record)
+                root = configs.ROOT / ("results" if kept else "workspace")
             stamp = _stamp()
             if self.nc.scale != 1:
                 stamp += f"-x{self.nc.scale:g}"
@@ -388,6 +391,13 @@ def rerun(path: Path) -> tuple[int, list[str]]:
 
 
 # -- Views ----------------------------------------------------------------------------
+
+def _uses_files_outside_config(record: dict) -> bool:
+    """Whether the run used a file outside config/, such as a trial circuit, which git does not track."""
+    nc = record["noise_control"]
+    paths = (record["circuit"]["path"], nc["processor"]["path"], nc["noise"]["path"])
+    return any(not path.startswith("config/") for path in paths)
+
 
 def _check_recorded_files(record: dict) -> None:
     """Refuse a circuit, processor or noise file that a run record names and that changed since the run."""
@@ -553,13 +563,24 @@ def load_benchmark(name: str) -> tuple[dict, dict]:
     its run's circuit is on the case's model, one row per model in
     CORE_PROCESSORS order, and cases 1, 4 and 7 are ideal, all others noisy.
     A protected case, 3, 6 or 9, needs a run whose circuit measures into a
-    check register, so it cannot repeat its baseline.
+    check register, so it cannot repeat its baseline. A benchmark names only
+    committed circuits, never a trial, since its file is committed and others run it.
     """
     data, record = configs.load_recorded("benchmark", name)
     where = f"{record['path']}: $.cases"
     ids = [r["run"] for r in data["runs"]]
     if len(set(ids)) != len(ids):
         raise ValueError(f"{record['path']}: $.runs: run ids must be unique; got {ids}")
+    for r in data["runs"]:
+        try:
+            path = configs.config_path("circuit", r["circuit"])
+        except FileNotFoundError:
+            continue  # a missing circuit is refused where the run loads it, naming the known ones
+        if configs.is_trial(path):
+            raise ValueError(
+                f"{record['path']}: $.runs: run {r['run']!r} names the trial circuit {r['circuit']!r}; a benchmark "
+                "names only committed circuits, so promote it and commit it first"
+            )
     cases = [c["case"] for c in data.get("cases", [])]
     if len(set(cases)) != len(cases):
         raise ValueError(f"{where}: each case is filled once; got {cases}")

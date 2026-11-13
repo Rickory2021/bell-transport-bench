@@ -28,7 +28,7 @@ make run RUN=<run folder>       # rebuild a run from its record and report any d
 make report RUN=<run folder>    # redraw a run folder's diagrams and report.md
 ```
 
-**A run or benchmark made from committed code lands in `results/runs/`.** One made while `src/` or `config/` has uncommitted changes lands in `workspace/runs/`, which is never committed; to keep it, commit the change and make it again. What each benchmark answers, and where its folders land, is in [DESIGN.md, section 6](docs/DESIGN.md#6-benchmarks-and-results). `make help` lists every target.
+**A run or benchmark made from committed code lands in `results/runs/`.** One made while `src/` or `config/` has uncommitted changes, or from a trial circuit in `workspace/circuits/`, lands in `workspace/runs/`, which is never committed; to keep it, commit the change, or promote the trial and commit it, and make it again. What each benchmark answers, and where its folders land, is in [DESIGN.md, section 6](docs/DESIGN.md#6-benchmarks-and-results). `make help` lists every target.
 
 ## Layout
 
@@ -37,7 +37,7 @@ make report RUN=<run folder>    # redraw a run folder's diagrams and report.md
 | `src/bellbench/` | All benchmark logic: processors, noise, transports, checks, measurement, the runner |
 | `config/` | Typed configs: processor files, noise profiles, circuit files and benchmark files |
 | `results/` | Runs and benchmarks made from committed code, each in a folder never edited afterwards |
-| `workspace/` | Your workbench copy and anything made with uncommitted changes; only its README is committed |
+| `workspace/` | Your workbench copy, trial circuits, and anything made with uncommitted changes or from a trial; only its README is committed |
 | `notebooks/` | The workbench notebook, generated from its template; narrative and plots only |
 | `docs/` | `CHALLENGE.md` (the task), `DESIGN.md` (decisions and reasons), and the references data |
 | `scripts/` | blueprint-render (validates and renders typed YAML) and flatten-sync (exports the repo for Claude Projects) |

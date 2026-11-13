@@ -4,8 +4,11 @@
 Each kind of config file lives in its own folder under config/ and is named
 bp.data.<kind>.<name>.yaml: a processor file in config/processor/, a noise
 profile in config/noise/, a circuit file in config/circuit/ and a benchmark
-file in config/benchmark/ (KINDS). Every load checks the file before it returns
-it: `check_config` validates it against its schema, config/bp.schema.<kind>.yaml,
+file in config/benchmark/ (KINDS). A trial circuit, one not yet in the repo,
+lives in workspace/circuits/ under the same file name until it is promoted, and
+loads by its name like a committed one; one name is never both. Every load
+checks the file before it returns it: `check_config` validates it against its
+schema, config/bp.schema.<kind>.yaml,
 refuses any number that is not finite (.nan or .inf, which a schema's minimum
 and maximum let through), and runs `check_processor` on a processor file, and
 the load then checks that the file's name field matches its file name. A file that fails raises a
@@ -57,13 +60,44 @@ KINDS = {
 
 
 def config_path(kind: str, name: str) -> Path:
-    """The `kind` file for `name`; raises FileNotFoundError naming the known ones."""
+    """The `kind` file for `name`, in config/<kind>/ or, for a circuit, in workspace/circuits/ as a trial.
+
+    Raises FileNotFoundError naming the known ones, and a ValueError naming both
+    files when a circuit's name is both committed and a trial.
+    """
     folder = config_folder(kind)
     path = folder / file_name(kind, name)
+    trial = trial_folder() / file_name(kind, name) if kind == "circuit" else None
+    if trial is not None and trial.is_file():
+        if path.is_file():
+            raise ValueError(
+                f"{KINDS[kind]} {name!r} is both {repo_path(path)} and the trial {repo_path(trial)}; "
+                "one name is one circuit, so rename or delete the trial"
+            )
+        return trial
     if not path.is_file():
         known = ", ".join(config_names(kind)) or "none"
-        raise FileNotFoundError(f"no {KINDS[kind]} named {name!r} in {folder}; known: {known}")
+        trials = ", ".join(trial_names()) if kind == "circuit" else ""
+        raise FileNotFoundError(
+            f"no {KINDS[kind]} named {name!r} in {folder}; known: {known}" + (f"; trials: {trials}" if trials else "")
+        )
     return path
+
+
+def trial_folder() -> Path:
+    """The folder that holds trial circuits, workspace/circuits/, which git ignores until one is promoted."""
+    return ROOT / "workspace" / "circuits"
+
+
+def trial_names() -> list[str]:
+    """The names of every trial circuit, sorted."""
+    paths = trial_folder().glob(file_name("circuit", "*"))
+    return sorted(n for n in (name_from_file("circuit", p.name) for p in paths) if n)
+
+
+def is_trial(path: Path) -> bool:
+    """Whether `path` is a trial circuit's file, in workspace/circuits/."""
+    return Path(path).resolve().parent == trial_folder().resolve()
 
 
 def config_names(kind: str) -> list[str]:

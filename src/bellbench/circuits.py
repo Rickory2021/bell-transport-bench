@@ -21,7 +21,10 @@ in real time (s, ms, us or ns), never in dt, which is a noise profile's clock
 tick while a circuit file belongs to a processor (docs/DESIGN.md, section 7).
 
 The transport and check functions build circuits; `save_circuit` writes what
-they build as a circuit file. `swap_chain` is the baseline transport: the
+they build as a circuit file, in config/circuit/, or with `trial=True` as a
+trial in workspace/circuits/, which git ignores. `promote` moves a trial into
+config/circuit/ to be committed. A circuit's name is never both a committed
+circuit and a trial. `swap_chain` is the baseline transport: the
 organisers' recipe of explicit SWAPs out along a port path, which paths.py
 chooses, and back (D-30).
 Run as a module, this writes the three core baseline circuit files.
@@ -139,12 +142,23 @@ def save_circuit(
     notes: str,
     analysis: Mapping | None = None,
     overwrite: bool = False,
+    trial: bool = False,
 ) -> Path:
     """Write `circuit` as the circuit file `name`, then load it back so a bad file never stays on disk.
 
     `analysis` is `{name, settings}` from the registry in analysis.py; by default postselect.
+    The file goes in config/circuit/, or with `trial=True` in workspace/circuits/;
+    a name the other folder already holds is refused, so one name is one circuit.
     """
-    path = configs.config_folder("circuit") / configs.file_name("circuit", name)
+    committed = configs.config_folder("circuit") / configs.file_name("circuit", name)
+    trial_path = configs.trial_folder() / configs.file_name("circuit", name)
+    path, other = (trial_path, committed) if trial else (committed, trial_path)
+    if other.exists():
+        kind = "a committed circuit" if trial else "a trial circuit"
+        raise ValueError(
+            f"{configs.repo_path(other)} is {kind} named {name!r}; one name is one circuit, so choose another name"
+            + ("" if trial else " or promote the trial")
+        )
     if path.exists() and not overwrite:
         raise FileExistsError(f"{configs.repo_path(path)} exists; pass overwrite=True to replace it")
     if analysis is not None and not isinstance(analysis, Mapping):
@@ -173,6 +187,41 @@ def save_circuit(
             path.write_text(previous, encoding="utf-8")
         raise
     return path
+
+
+def promote(name: str, overwrite: bool = False) -> Path:
+    """Move the trial circuit `name` from workspace/circuits/ into config/circuit/, to be committed.
+
+    The file is written in config/circuit/ with the same content, the trial is
+    deleted, and the moved file is loaded back; if that fails, both are restored,
+    so a bad trial moves nowhere. A committed circuit of that name is refused
+    unless `overwrite=True`. A run made from the trial keeps its record, which then
+    names a file that no longer exists, so it cannot be rerun.
+    """
+    trial_path = configs.trial_folder() / configs.file_name("circuit", name)
+    target = configs.config_folder("circuit") / configs.file_name("circuit", name)
+    if not trial_path.is_file():
+        trials = ", ".join(configs.trial_names()) or "none"
+        folder = configs.repo_path(configs.trial_folder())
+        raise FileNotFoundError(f"no trial circuit named {name!r} in {folder}; trials: {trials}")
+    if target.exists() and not overwrite:
+        raise FileExistsError(f"{configs.repo_path(target)} exists; pass overwrite=True to replace it")
+    trial_text = trial_path.read_text(encoding="utf-8")
+    previous = target.read_text(encoding="utf-8") if target.exists() else None
+    data = yaml.safe_load(trial_text)
+    text = f"# {configs.repo_path(target)}\n\n" + yaml.dump(data, Dumper=configs.Dumper, sort_keys=False)
+    target.write_text(text, encoding="utf-8")
+    trial_path.unlink()
+    try:
+        load_circuit(name)
+    except Exception:
+        trial_path.write_text(trial_text, encoding="utf-8")
+        if previous is None:
+            target.unlink()
+        else:
+            target.write_text(previous, encoding="utf-8")
+        raise
+    return target
 
 
 # -- Transports ------------------------------------------------------------------
