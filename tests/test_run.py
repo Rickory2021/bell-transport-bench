@@ -29,7 +29,7 @@ from bellbench.run import (
     RESULT_FILE,
     SIMULATION_COLUMNS,
     CircuitRun,
-    Analysis,
+    Score,
     _write_csv,
     read_table,
     rerun,
@@ -44,7 +44,7 @@ ORGANISERS = {"ibm2016": 0.915, "contemporary": 0.795, "hyperbolic": 0.852}
 @pytest.mark.parametrize("processor, swaps, cz", [("ibm2016", 2, 7), ("contemporary", 6, 19), ("hyperbolic", 4, 13)])
 def test_baseline_passes_its_self_test(processor, swaps, cz):
     run = CircuitRun(f"baseline-{processor}", "boston-2026", shots=1000, base_seed=SEED).run()
-    ideal, noisy = run.analysis["ideal"], run.analysis["noisy"]
+    ideal, noisy = run.scores["ideal"], run.scores["noisy"]
     assert ideal.accepted.value == 1.0 and ideal.acceptance == 1.0
     assert noisy.acceptance == 1.0 and noisy.accepted.value == noisy.raw.value < 1.0
     assert run.cost["pair_on_ports"] is True
@@ -54,7 +54,7 @@ def test_baseline_passes_its_self_test(processor, swaps, cz):
 
 @pytest.mark.parametrize("processor", sorted(ORGANISERS))
 def test_measured_cross_check_lands_within_three_standard_errors(processor):
-    noisy = CircuitRun(f"baseline-{processor}", "organiser-cx2", shots=20_000, base_seed=SEED).run().analysis["noisy"]
+    noisy = CircuitRun(f"baseline-{processor}", "organiser-cx2", shots=20_000, base_seed=SEED).run().scores["noisy"]
     # The organisers recorded three decimals, so their value carries up to 0.0005 of rounding.
     assert abs(noisy.accepted.value - ORGANISERS[processor]) < 3 * noisy.accepted.standard_error + 0.0005
 
@@ -81,12 +81,12 @@ def test_postselection_keeps_shots_whose_checks_read_zero():
     raw = {"00 0": 40, "11 0": 40, "01 1": 15, "11 1": 5}
     by_basis = {b: dict(raw) for b in ("XX", "YY", "ZZ")}
     ports = read_shots({"name": "postselect"}, by_basis, [("check", 1), ("port", 2)], 100)
-    analysis = Analysis(ports)
-    assert analysis.accepted_shots == {"XX": 80, "YY": 80, "ZZ": 80}
-    assert analysis.raw_shots == {"XX": 100, "YY": 100, "ZZ": 100}
-    assert analysis.acceptance == pytest.approx(0.8)
-    assert analysis.accepted.correlators["ZZ"].value == 1.0
-    assert analysis.raw.correlators["ZZ"].value == pytest.approx(0.7)
+    score = Score(ports)
+    assert score.accepted_shots == {"XX": 80, "YY": 80, "ZZ": 80}
+    assert score.raw_shots == {"XX": 100, "YY": 100, "ZZ": 100}
+    assert score.acceptance == pytest.approx(0.8)
+    assert score.accepted.correlators["ZZ"].value == 1.0
+    assert score.raw.correlators["ZZ"].value == pytest.approx(0.7)
 
 
 def test_wilson_interval():
@@ -110,7 +110,7 @@ def test_a_final_check_measurement_runs_with_the_channels_unset(config_copy):
     """Qubit 3 is vacated when the SWAPs come back, so a vacancy read at the end finds 0 and keeps every shot."""
     name = _save_checked(lambda qc, check: qc.measure(3, check[0]))
     run = CircuitRun(name, "boston-2026", shots=500, base_seed=SEED).run()
-    assert run.analysis["ideal"].accepted.value == 1.0 and run.analysis["ideal"].acceptance == 1.0
+    assert run.scores["ideal"].accepted.value == 1.0 and run.scores["ideal"].acceptance == 1.0
     assert run.registers == ["check", "port"]
 
 
@@ -144,8 +144,8 @@ def test_a_reset_runs_once_its_channel_is_set(config_copy, p, low, high):
 
     name = _save_checked(build)
     run = CircuitRun(name, "boston-2026", shots=2000, base_seed=SEED, conditional={"reset_error": p}).run()
-    assert run.analysis["ideal"].acceptance == 1.0
-    assert low <= run.analysis["noisy"].acceptance <= high
+    assert run.scores["ideal"].acceptance == 1.0
+    assert low <= run.scores["noisy"].acceptance <= high
 
 
 def _vacancy_then_zz(reset: bool):
@@ -168,7 +168,7 @@ def test_a_protected_circuit_runs_end_to_end_once_both_channels_are_set(config_c
     name = _save_checked(_vacancy_then_zz(reset=True))
     conditional = {"reset_error": 0.01, "mid_circuit_measurement_error": 0.01}
     run = CircuitRun(name, "boston-2026", shots=2000, base_seed=SEED, conditional=conditional).run()
-    ideal, noisy = run.analysis["ideal"], run.analysis["noisy"]
+    ideal, noisy = run.scores["ideal"], run.scores["noisy"]
     assert ideal.accepted.value == 1.0 and ideal.acceptance == 1.0
     assert 0.5 < noisy.acceptance < 1.0 and noisy.accepted.value > noisy.raw.value
     assert run.registers == ["check", "check_zz", "port"]
@@ -180,8 +180,8 @@ def test_a_reused_qubit_carries_the_mid_circuit_error_into_its_next_check(config
     name = _save_checked(_vacancy_then_zz(reset=False))
     conditional = {"mid_circuit_measurement_error": p}
     run = CircuitRun(name, "boston-2026", shots=2000, base_seed=SEED, conditional=conditional).run()
-    assert run.analysis["ideal"].acceptance == 1.0
-    assert low <= run.analysis["noisy"].acceptance <= high
+    assert run.scores["ideal"].acceptance == 1.0
+    assert low <= run.scores["noisy"].acceptance <= high
 
 
 def test_a_router_swap_through_a_measured_qubit_makes_its_measurement_mid_circuit(config_copy):
@@ -252,7 +252,7 @@ def test_a_run_with_starting_excitation_records_it_and_reruns(tmp_path):
     run = CircuitRun("move-chain-spare-xx-contemporary", "boston-2026", shots=200, base_seed=SEED,
                      conditional=conditional).run()
     assert run.settings_hash is not None
-    assert run.analysis["ideal"].accepted.value == 1.0 and run.analysis["ideal"].acceptance == 1.0
+    assert run.scores["ideal"].accepted.value == 1.0 and run.scores["ideal"].acceptance == 1.0
     folder = run.write(tmp_path)
     record = yaml.safe_load((folder / RESULT_FILE).read_text(encoding="utf-8"))
     assert record["noise_control"]["conditional"]["starting_excitation"] == 0.05
@@ -264,7 +264,7 @@ def test_a_starting_excitation_of_0_runs_as_the_first_point_of_a_sweep():
     """Aer keeps no error that does nothing, so at 0 the noise model holds none, and the run still goes ahead."""
     run = CircuitRun("baseline-ibm2016", "boston-2026", shots=50, base_seed=SEED,
                      conditional={"starting_excitation": 0.0}).run()
-    assert run.analysis["ideal"].accepted.value == 1.0
+    assert run.scores["ideal"].accepted.value == 1.0
 
 
 def test_starting_excitation_that_would_reach_no_circuit_stops_the_run(monkeypatch):

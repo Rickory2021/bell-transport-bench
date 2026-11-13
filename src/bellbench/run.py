@@ -137,7 +137,7 @@ class CircuitRun:
         self.seeds = {step: derive_seed(base_seed, *self.labels, step) for step in ("transpile", *SIMULATIONS)}
         self.derived_seeds = dict(self.seeds)  # what the labels give; from_yaml may run with recorded seeds instead
         self.compiled = self.cost = self.duration = self.git_state = None
-        self.simulations, self.analysis = {}, {}
+        self.simulations, self.scores = {}, {}
 
     @property
     def settings_hash(self) -> str | None:
@@ -171,7 +171,7 @@ class CircuitRun:
             method = (methods or {}).get(name, "automatic")
             sim = simulate(scheduled, noise_model, self.shots, self.seeds[name], method)
             self.simulations[name] = sim
-            self.analysis[name] = Analysis(read_shots(self.circuit.analysis, sim.raw, self.layout, self.shots))
+            self.scores[name] = Score(read_shots(self.circuit.analysis, sim.raw, self.layout, self.shots))
         return self
 
     @property
@@ -216,7 +216,7 @@ class CircuitRun:
         """Aer's seeds and methods for one simulation, and `empty_bases`, the bases that kept no shot, when any."""
         sim = self.simulations[name]
         record = {"seeds": dict(sim.seeds), "methods": dict(sim.methods)}
-        empty = [b for b in BASES if self.analysis[name].accepted_shots[b] == 0]
+        empty = [b for b in BASES if self.scores[name].accepted_shots[b] == 0]
         if empty:
             record["empty_bases"] = empty
         return record
@@ -277,7 +277,7 @@ class CircuitRun:
 
     def simulation_rows(self) -> list[dict]:
         """One row of numbers per simulation, as simulations.csv holds them."""
-        return [self.analysis[name].row(name) for name in SIMULATIONS]
+        return [self.scores[name].row(name) for name in SIMULATIONS]
 
     def count_rows(self) -> list[dict]:
         """Every outcome of every basis circuit, keyed as Qiskit writes it: one bit string per register, last first."""
@@ -289,10 +289,10 @@ class CircuitRun:
         ]
 
 
-# -- Analysis ------------------------------------------------------------------------
+# -- Score ---------------------------------------------------------------------------
 
 
-class Analysis:
+class Score:
     """One simulation's port counts, scored: F over all shots and over kept ones, the acceptance and its interval."""
 
     def __init__(self, ports: PortCounts):
@@ -619,11 +619,11 @@ def run_benchmark(name: str, root: Path | None = None, shots: int | None = None)
         run = runs[case["run"]]
         if not run.cost["pair_on_ports"]:
             raise ValueError(f"benchmark {name!r}: case {case['case']}: run {case['run']!r} left the pair off its ports")
-        if run.analysis["ideal"].accepted.value != 1.0:
-            ideal = run.analysis["ideal"].accepted.value
+        if run.scores["ideal"].accepted.value != 1.0:
+            ideal = run.scores["ideal"].accepted.value
             raise ValueError(f"benchmark {name!r}: case {case['case']}: run {case['run']!r} has ideal F {ideal}, not 1")
-        if run.analysis["ideal"].acceptance != 1.0:
-            kept = run.analysis["ideal"].acceptance
+        if run.scores["ideal"].acceptance != 1.0:
+            kept = run.scores["ideal"].acceptance
             raise ValueError(
                 f"benchmark {name!r}: case {case['case']}: run {case['run']!r} kept {kept} of its ideal shots, "
                 "not every one, so a check fires with no noise"
@@ -676,7 +676,7 @@ def comparison_rows(runs: dict, data: dict) -> list[dict]:
     rows = []
     for run_id, run in runs.items():
         for name in SIMULATIONS:
-            a = run.analysis[name]
+            s = run.scores[name]
             rows.append({
                 "case": case_of.get((run_id, name), ""),
                 "run": run_id,
@@ -685,7 +685,7 @@ def comparison_rows(runs: dict, data: dict) -> list[dict]:
                 "noise": run.nc.noise_name,
                 "scale": run.nc.scale,
                 "overrides": len(run.nc.overrides),
-                **a.row(name),
+                **s.row(name),
                 "swaps": run.cost["swaps"],
                 "router_swaps": run.cost["router_swaps"],
                 "two_qubit_gates": run.cost["two_qubit_gates"],
@@ -693,10 +693,10 @@ def comparison_rows(runs: dict, data: dict) -> list[dict]:
                 "qubits_used": len(run.cost["qubits_used"]),
                 "scheduled_duration": run.duration if run.duration is not None else "",
                 "two_qubit_gates_per_accepted_pair": (
-                    run.cost["two_qubit_gates"] / a.acceptance if a.acceptance else math.nan
+                    run.cost["two_qubit_gates"] / s.acceptance if s.acceptance else math.nan
                 ),
-                "infidelity_removed_per_rejection": a.removed_per_rejection[0],
-                "infidelity_removed_per_rejection_se": a.removed_per_rejection[1],
+                "infidelity_removed_per_rejection": s.removed_per_rejection[0],
+                "infidelity_removed_per_rejection_se": s.removed_per_rejection[1],
             })
     return rows
 
