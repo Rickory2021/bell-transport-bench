@@ -209,9 +209,7 @@ The three snapshots are pinned by qiskit-ibm-runtime 0.51.0, and the files in [`
 **Other options:**
 
 - **A different default.** Further research may find a better default than Boston, so the default can change, and every profile stays a file anyone can pick.
-- **Optional profiles, if time allows,** each stated as an assumption:
-  - **Starting excitation:** a qubit begins a shot partly in |1⟩.
-  - **Replacement-type gates.**
+- **An optional profile, if time allows:** replacement-type gates, stated as an assumption.
 - **Considered and rejected:**
   - A profile per processor model in the core benchmark, which would mix connectivity with noise in the comparison.
   - Per-qubit values drawn from the snapshots, which would tie a profile to one processor's layout. Per-qubit variation enters only as an override instead.
@@ -223,14 +221,19 @@ The three snapshots are pinned by qiskit-ibm-runtime 0.51.0, and the files in [`
 - **Decay while idle:** every circuit run under a snapshot profile is scheduled before noise is applied ([README, science rules](../README.md#science-rules)), so waiting becomes timed delays, during which qubits decay.
 - **Asymmetric readout errors,** as above. Decay of the measured qubit during measurement is already inside the calibrated misread rates, so it is not added again.
 
-**Conditional channels, only when a strategy needs them:**
+**Conditional channels, set per run rather than by the profile:**
 
 - **Reset error and mid-circuit measurement error.** Reset returns a qubit to |0⟩ during the circuit so it can be reused, and a mid-circuit measurement reads a qubit before the end.
   - Both enter as an input of their own and are swept over a range rather than given a claimed value.
   - A run whose circuit resets or measures mid-circuit stops if the matching channel is unset ([section 5](#5-how-a-run-works)).
   - **A measurement is mid-circuit only when its qubit is acted on again,** by a gate, a measurement or a reset. A measurement with nothing after it on its qubit is final and needs no channel, which lets a check on a spare path read at the end with none set.
-  - The mid-circuit channel applies under every kind of profile, and the reset channel only under a snapshot profile with reset data. The scale factor leaves both alone.
+  - The mid-circuit channel applies under every kind of profile, and the reset channel only under a snapshot profile with reset data. The scale factor leaves both alone, and the mid-circuit sweep sweeps the second ([section 6](#6-benchmarks-and-results)).
   - A value is never accepted and silently ignored: setting a reset error on a profile that defines no reset raises an error, and so does a profile that lists reset among its gates.
+- **Starting excitation:** the chance that each qubit starts a shot in |1⟩ instead of |0⟩, whether from heat or left over from the shot before, entered as `starting_excitation` and swept over a range by the starting-excitation study ([section 6](#6-benchmarks-and-results)).
+  - Once the circuit is scheduled, a labelled marker opens every qubit, before any idle delay, and the noise model flips the qubit there with that chance, so an excited qubit decays while it waits. It applies under every kind of profile, and the scale factor leaves it alone.
+  - Unlike the other two, it does not depend on what a circuit does, since every circuit starts: unset means no excitation, the model's assumption everywhere else, and stops no run.
+  - A run records it only when set, so a run without it keeps the record and seeds it would have had without the channel; a run whose circuits the marker would not reach stops.
+  - The move chain and the spare-path checks rely on its absence ([section 7](#7-protection-as-building-blocks)).
 - **A degree penalty, planned:** extra error on the hyperbolic-inspired model's centre qubit and the contemporary model's five-edge qubit, entered as an override, only if a strategy routes through them. No run carries one yet. The move-chain benchmark's protected case on the contemporary model reads its check through the five-edge qubit, so its numbers are without the penalty, a limitation of those numbers.
 
 **Not modelled, and stated as limitations:**
@@ -240,7 +243,6 @@ The three snapshots are pinned by qiskit-ibm-runtime 0.51.0, and the files in [`
 - **Spectator errors:** a gate disturbs qubits next to the ones it acts on.
 - **Coherent errors:** systematic over- or under-rotations, which add up rather than average out.
 - **Drift:** calibration values change over time.
-- **Leftover excitation:** a qubit not fully back in |0⟩ when the next shot starts. The checks on a spare path rely on its absence ([section 7](#7-protection-as-building-blocks)).
 - **Feedforward latency:** the delay before a circuit can act on a mid-circuit result.
 - **Cosmic-ray bursts:** rare events that raise error rates across a chip at once.
 - **Leakage:** a qubit leaving the states |0⟩ and |1⟩ for a higher energy level.
@@ -309,17 +311,21 @@ The steps inside the classes (compile, schedule, simulate) are plain functions, 
 
 ## 6. Benchmarks and results
 
-**A benchmark is a named set of runs, defined by a benchmark file, with one comparison table across them.** `make benchmark` makes the core benchmark, and `make benchmark NAME=<name>` makes another. Three are built, and each answers one question:
+**A benchmark is a named set of runs, defined by a benchmark file, with one comparison table across them.** `make benchmark` makes the core benchmark, and `make benchmark NAME=<name>` makes another. Five are built, and each answers one question:
 
 | Benchmark | Runs | Answers |
 |---|---|---|
 | **Core**, `core` | The organisers' baseline on each processor model, under the core noise profile ([section 4](#4-noise-model)). It fills the ideal and noisy [cases](CHALLENGE.md#the-nine-core-cases), 1, 2, 4, 5, 7 and 8, and leaves the protected cases 3, 6 and 9 open | How the three processor models compare, with connectivity the only difference |
 | **Move chain**, `move-chain` | All nine cases under the core noise profile. The ideal and noisy cases are the core's baseline runs, with the same circuits, profile and seeds, so the same numbers; the protected cases are the move chain with its XX check ([section 7](#7-protection-as-building-blocks)). The move chain also runs alone, filling no case | What the move chain's cheaper transport buys, and what its check buys, on each graph. **The submission reports this benchmark's nine cases** |
 | **Biased noise**, `biased-noise` | The baseline, the move chain and the move chain with its XX check on each graph, under three pauli profiles ([section 4](#4-noise-model)) | An optional study: whether an XX check catches nearly every error when a processor's errors are mostly phase flips |
+| **Mid-circuit sweep**, `mid-circuit-sweep` | The move chain with its XX check on the 2016-inspired model's path, at mid-circuit measurement errors 0, 0.001, 0.003, 0.01, 0.02 and 0.05, beside the baseline and the move chain alone, once each; its run at 0.01 repeats case 3 | An optional study: how much case 3 depends on the mid-circuit measurement error it assumes, and at which values, if any, the check beats the move chain alone |
+| **Starting excitation**, `starting-excitation` | The move-chain benchmark's nine runs at starting excitations 0, 0.005, 0.01 and 0.02 ([section 4](#4-noise-model)) | An optional study: how fast the move chain's and the spare-path checks' lead shrinks when qubits may start a shot in \|1⟩ ([section 7](#7-protection-as-building-blocks)) |
 
 A noise sweep, the same circuits at a series of noise scale factors, is planned. It would show whether a conclusion holds as noise grows or shrinks, and where protection breaks even ([section 8](#8-metrics-and-reporting)).
 
-**Optional studies stay apart from the nine cases,** in the sense of [CHALLENGE.md, What is fixed and what we choose](CHALLENGE.md#what-is-fixed-and-what-we-choose): the biased-noise study fills no case, and neither do the move chain's runs without a check. The runs a comparison across processor models rests on share the core noise profile, as the README's [science rules](../README.md#science-rules) require. The protected case on the 2016-inspired model also sets a mid-circuit measurement error, since its check reads a qubit and reuses it, so a comparison of that case with the other two graphs is conditional on the value set.
+**A sweep reports points, not claims.** Each value is one the model assumes, never a measured property of a device, and each point derives its own seeds, so neighbouring points differ by shot noise as well as by the value; a difference is read against its standard errors.
+
+**Optional studies stay apart from the nine cases,** in the sense of [CHALLENGE.md, What is fixed and what we choose](CHALLENGE.md#what-is-fixed-and-what-we-choose): the biased-noise, mid-circuit and starting-excitation studies fill no case, and neither do the move chain's runs without a check. The runs a comparison across processor models rests on share the core noise profile, as the README's [science rules](../README.md#science-rules) require. The protected case on the 2016-inspired model also sets a mid-circuit measurement error, since its check reads a qubit and reuses it, so a comparison of that case with the other two graphs is conditional on the value set; the mid-circuit sweep shows how much that value matters.
 
 **A benchmark tests itself before it writes anything.** It refuses:
 
@@ -354,6 +360,8 @@ workspace/                                 the same layout, for anything made wh
 
 **The strategy the submission reports is the move chain with an XX parity check,** postselected. The move chain carries the pair to the ports with two CX gates a hop where a SWAP takes three, and the check reads the ports' XX parity through a bus of extra qubits: on a spare path on the contemporary and hyperbolic models, and on the pair's own path on the 2016-inspired model, which has no spare path. It catches a phase flip on one port and misses a bit flip. Its cases are the move-chain benchmark's 3, 6 and 9 ([section 6](#6-benchmarks-and-results)); the core benchmark's own protected cases stay open for a strategy chosen with the planned single-fault tests.
 
+**Key caveat: the move chain and the spare-path checks rely on idle qubits starting in |0⟩.** The move chain's two-CX move is a SWAP without its third CX, which is correct only when the qubit it moves onto starts in |0⟩, and a check on a spare path reads its spare qubits as if they started there. The organisers' baseline swaps the pair out and back, which returns an excited qubit on its path to where it started, so the move chain is the more exposed transport. The core noise profile excites no qubit, so the move-chain benchmark's cases 3, 6 and 9, and the move chain's lead over the baseline, hold only while starting excitation stays small. The starting-excitation study measures how fast that lead shrinks ([section 4](#4-noise-model), [section 6](#6-benchmarks-and-results)), and the submission states its result beside the cases. The check on the 2016-inspired model's path reads each qubit as vacant before reusing it, which can catch an excited qubit on the path.
+
 A strategy is one choice for each block:
 
 - **Transport:** how the pair is created and moved to the ports. The baseline transport follows the organisers' recipe: it moves the pair along the shortest path between the ports with explicit SWAPs, and back.
@@ -363,7 +371,7 @@ A strategy is one choice for each block:
   - A ZZ or XX parity check measures Z ⊗ Z or X ⊗ X on the pair through an ancilla.
   - A flagged check, planned, adds a flag qubit to catch a fault in the check itself.
 - **Check placement:** on the pair's own path, or on a spare path that shares no qubit with it.
-  - A check on a spare path reads its qubits only at the end, with no vacancy read, no mid-circuit measurement and no reset. It trusts its spare qubits to start in |0⟩, which holds because no noise model here excites an idle qubit ([section 4](#4-noise-model), leftover excitation).
+  - A check on a spare path reads its qubits only at the end, with no vacancy read, no mid-circuit measurement and no reset. It trusts its spare qubits to start in |0⟩, a key caveat stated above.
   - The 2016-inspired model has no spare path, so a check there sits on the pair's path and reads each qubit as vacant before reusing it.
 - **Check timing:** at the end of the circuit (terminal) or partway through it (mid-circuit).
 - **Analysis:** how each shot is processed, by postselection, or by correction once a decoder exists, and the fidelity and acceptance fraction computed from the result ([section 8](#8-metrics-and-reporting)).
@@ -408,10 +416,11 @@ Sources: `smith-2026-error-detected-primitives`, `baumer-2024-long-range-entangl
 | F raw and F after postselection, and F after correction when a strategy corrects | Each with its statistical uncertainty and the method that computed it |
 | Acceptance fraction p | With a Wilson score interval, a confidence interval for a fraction that stays between 0 and 1 |
 | Shots | Raw and accepted, for each basis |
-| Infidelity removed per unit of rejection | Derived, planned: how much postselection lowers 1 − F for each unit of shots it discards; protection breaks even where this crosses zero in a noise sweep. No output holds it yet |
+| Infidelity removed per rejection | Derived: (F after postselection − F raw) / (1 − p) within one simulation, how much postselection lowers 1 − F for each unit of shots it discards, with its standard error; undefined where no shot is discarded |
 | Two-qubit gates per accepted pair | Derived: the two-qubit gate cost of each pair that survives postselection |
 
 - **One fidelity function** computes F raw and F after postselection from the three correlators. Its standard error comes from the counts: a correlator c over the N shots of its basis has variance (1 − c²)/N, the three bases are measured on separate shots, and the standard error of F is a quarter of the square root of the three variances summed. For F after postselection, N is the shots kept. Every result reports F measured from shots; an exact F, from the density matrix's correlators, only reproduces the organisers' numbers ([section 4](#4-noise-model)).
+- **The infidelity removed per rejection is read within one run, never against another circuit.** With the same acceptance in every basis it equals F of the kept shots minus F of the discarded ones, so it is 0 only where a check discards shots no better than those it keeps. Whether a check pays for itself is read across runs instead, from F and p beside the same transport without its check, as the move-chain benchmark sets them side by side ([section 6](#6-benchmarks-and-results)). Its standard error comes from the delta method over each basis's kept and discarded counts, the three bases measured on separate shots.
 - **A protected run is to take more shots, planned:** in proportion to 1/p, so it keeps about as many accepted shots as its baseline. Today every run of a benchmark takes the shots its benchmark file sets, so a protected run's F after postselection rests on fewer shots than its baseline's, and its standard error is computed from the shots it kept.
 - **The analysis warns when a basis keeps no shots,** because that basis's correlator, and so F, is then undefined.
 - **No readout mitigation in the core benchmark** ([README, science rules](../README.md#science-rules)): runs use the simulator's standard measurement, so p stays the plain fraction of shots kept.
