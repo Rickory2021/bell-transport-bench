@@ -289,7 +289,8 @@ def test_the_derived_metrics_follow_the_cost_columns_in_order():
 def test_a_simulation_that_kept_no_shot_has_no_gates_per_accepted_pair():
     scores = {
         name: SimpleNamespace(
-            acceptance=acceptance, removed_per_rejection=removed, row=lambda n: {"simulation": n}
+            acceptance=acceptance, removed_per_rejection=removed, row=lambda n: {"simulation": n},
+            raw_shots={"XX": 10, "YY": 10, "ZZ": 10},
         )
         for name, acceptance, removed in (("ideal", 1.0, (math.nan, math.nan)), ("noisy", 0.0, (0.39, 0.016)))
     }

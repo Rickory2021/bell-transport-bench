@@ -102,7 +102,7 @@ TEXT_COLUMNS = ("simulation", "se_method", "basis", "outcome", "run", "circuit",
 COMPARISON_COLUMNS = (
     "case", "run", "circuit", "processor", "noise", "scale", "overrides",
     *SIMULATION_COLUMNS,
-    "swaps", "router_swaps", "two_qubit_gates", "depth", "qubits_used", "scheduled_duration",
+    "swaps", "router_swaps", "two_qubit_gates", "depth", "qubits_used", "scheduled_duration", "shots_total",
     "two_qubit_gates_per_accepted_pair",
     "infidelity_removed_per_rejection", "infidelity_removed_per_rejection_se",
 )
@@ -698,7 +698,9 @@ def current_benchmark(name: str, root: Path | None = None) -> Path:
 
 
 def comparison_rows(runs: dict, data: dict) -> list[dict]:
-    """One row per run and simulation, with the cost and the derived metrics.
+    """One row per run and simulation, with the cost, the total shots and the derived metrics.
+
+    The total shots are the raw shots of the simulation's three bases together.
 
     The gates per accepted pair are undefined (NaN) where a simulation kept no
     shot, as its F is. The infidelity removed per rejection and its standard
@@ -724,6 +726,7 @@ def comparison_rows(runs: dict, data: dict) -> list[dict]:
                 "depth": run.cost["depth"],
                 "qubits_used": len(run.cost["qubits_used"]),
                 "scheduled_duration": run.duration if run.duration is not None else "",
+                "shots_total": sum(s.raw_shots.values()),
                 "two_qubit_gates_per_accepted_pair": (
                     run.cost["two_qubit_gates"] / s.acceptance if s.acceptance else math.nan
                 ),
@@ -752,6 +755,22 @@ def _benchmark_report(data: dict, rows: list[dict]) -> str:
             "Cases not listed have no run yet. The infidelity removed per rejection is (F - F raw) / (1 - p) "
             f"within the run, with its standard error by the {REJECTION_METHOD}; it is n/a where no shot was "
             "discarded.",
+            "",
+        ]
+    else:
+        lines += [
+            "| Run | F | Standard error | F raw | Acceptance | Two-qubit gates | Total shots |",
+            "|---|---|---|---|---|---|---|",
+        ]
+        for r in (r for r in rows if r["simulation"] == "noisy"):
+            lines.append(
+                f"| {r['run']} | {r['fidelity']:.4f} | {r['fidelity_se']:.4f} | {r['fidelity_raw']:.4f} | "
+                f"{r['acceptance']:.4f} | {r['two_qubit_gates']} | {r['shots_total']} |"
+            )
+        lines += [
+            "",
+            "One row per run, its noisy simulation; every run's ideal simulation passed the self-test, F = 1 with "
+            "every shot kept. Total shots are the raw shots of the three bases together.",
             "",
         ]
     lines += [
