@@ -32,7 +32,8 @@ BASE_SEED = core["base_seed"]
 SCALE = 1.0  # multiplies every gate error, both readout errors and the decay rates
 OVERRIDES = []  # for example [{"qubits": [0, 1], "field": "gates.cz.error_probability", "value": 0.01}]
 # A circuit that resets a qubit, or reads one and acts on it again, runs only with the matching channel set:
-# {"reset_error": p, "mid_circuit_measurement_error": p}. Sweep each over a range rather than claim one value.
+# {"reset_error": p, "mid_circuit_measurement_error": p}. Any circuit may also set "starting_excitation": p, the
+# chance that each qubit starts a shot in |1>. Sweep each over a range rather than claim one value.
 CONDITIONAL = None
 DIAGRAMS = "lean"  # or "full", which adds the written, XX and YY circuits and the timeline
 

@@ -27,7 +27,7 @@ from bellbench import configs
 from bellbench import noise as noise_module
 from bellbench.configs import content_hash, load_noise, noise_names, processor_names
 from bellbench.circuits import swap_chain
-from bellbench.noise import CONDITIONAL_CHANNELS, MID_CIRCUIT_LABEL, NoiseControl
+from bellbench.noise import CONDITIONAL_CHANNELS, MID_CIRCUIT_LABEL, STARTING_LABEL, NoiseControl
 from bellbench.pipeline import basis_circuits, compile_bases, port_density_matrix
 
 FEZ = load_noise("fez-2025")
@@ -411,17 +411,35 @@ def test_reset_error_keeps_the_resets_decay():
     assert _after_reset(unset) == pytest.approx(0.0, abs=1e-12)
 
 
-@pytest.mark.parametrize("conditional", [{"reset_error": 1.5}, {"reset_error": True}, {"leakage": 0.01}, [0.01]])
+@pytest.mark.parametrize(
+    "conditional",
+    [{"reset_error": 1.5}, {"reset_error": True}, {"starting_excitation": -0.1}, {"leakage": 0.01}, [0.01]],
+)
 def test_invalid_conditional_raises(conditional):
     with pytest.raises(ValueError, match="conditional"):
         NoiseControl("ibm2016", "fez-2025", conditional=conditional)
 
 
-def test_unset_conditional_channels_are_recorded():
+def test_unset_conditional_channels_are_recorded_and_an_unset_starting_excitation_is_not():
+    """A run that leaves starting_excitation unset keeps the record it had before the channel existed."""
     nc = NoiseControl("ibm2016", "fez-2025", conditional={"reset_error": None})
-    unset = {"reset_error": None, "mid_circuit_measurement_error": None}
-    assert nc.conditional == unset
-    assert nc.export_as_yaml()["conditional"] == unset
+    assert nc.conditional == dict.fromkeys(CONDITIONAL_CHANNELS)
+    assert nc.export_as_yaml()["conditional"] == {"reset_error": None, "mid_circuit_measurement_error": None}
+    set_ = NoiseControl("ibm2016", "fez-2025", conditional={"starting_excitation": 0.01})
+    assert set_.export_as_yaml()["conditional"] == {
+        "reset_error": None, "mid_circuit_measurement_error": None, "starting_excitation": 0.01
+    }
+
+
+@pytest.mark.parametrize("noise", ["boston-2026", "organiser-cx2", "pauli-cx-biased"])
+@pytest.mark.parametrize("scale", [1, 2])
+def test_the_starting_channel_is_a_bit_flip_on_its_marker_under_every_kind(noise, scale):
+    """Every kind of profile carries it, so none ignores it, and the scale leaves its probability alone."""
+    nc = NoiseControl("ibm2016", noise, scale=scale, conditional={"starting_excitation": 0.2})
+    errors = nc.noise_model._local_quantum_errors[STARTING_LABEL]
+    assert set(errors) == {(q,) for q in range(nc.num_qubits)}
+    assert all(_same_channel(e, pauli_error([("X", 0.2), ("I", 0.8)])) for e in errors.values())
+    assert STARTING_LABEL not in NoiseControl("ibm2016", noise).noise_model._local_quantum_errors
 
 
 # -- The depolarising cross-check profile ---------------------------------------

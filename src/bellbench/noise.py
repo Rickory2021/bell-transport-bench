@@ -53,11 +53,19 @@ readout error already covers the recorded bit, so the error is on the qubit
 alone. Aer applies an error attached to `measure` before the read, to record
 and qubit together, so this one enters as an identity labelled
 MID_CIRCUIT_LABEL that `pipeline.mark_mid_circuit_measurements` puts after
-each such read once the circuit is scheduled. A run whose circuit resets, or
-measures a qubit and acts on it again, stops while the matching channel is
-None (docs/DESIGN.md, section 4). `reset_error` set on a profile whose Target
-defines no reset (a snapshot without reset data, or a depolarising or pauli
-profile) raises, since it would change nothing.
+each such read once the circuit is scheduled. `starting_excitation` is the
+probability that a qubit starts a shot in |1>, a bit flip on an identity
+labelled STARTING_LABEL that `pipeline.mark_starting_excitation` puts first on
+every qubit once the circuit is scheduled, so an excited qubit then decays
+while it idles. Both labelled channels apply under every kind of profile. A run
+whose circuit resets, or measures a qubit and acts on it again, stops while the
+matching channel is None (docs/DESIGN.md, section 4); every circuit starts, so
+an unset starting_excitation means no excitation and stops nothing. It is
+recorded only when set (RECORDED_CHANNELS are recorded always), so a run that
+does not set it keeps the record and the seeds it had before the channel
+existed. `reset_error` set on a profile whose Target defines no reset (a
+snapshot without reset data, or a depolarising or pauli profile) raises, since
+it would change nothing.
 
 NoiseControl records each config file's path and content hash when it builds,
 and its scale, overrides and conditional channels cannot change afterwards.
@@ -94,8 +102,10 @@ PROBABILITY_FIELDS = (READS_1_WHEN_0, READS_0_WHEN_1)
 GATE_ERROR_FIELD = "gates.{gate}.error_probability"
 OVERRIDE_FIELDS = QUBIT_FIELDS + (GATE_ERROR_FIELD,)
 
-CONDITIONAL_CHANNELS = ("reset_error", "mid_circuit_measurement_error")
+CONDITIONAL_CHANNELS = ("reset_error", "mid_circuit_measurement_error", "starting_excitation")
+RECORDED_CHANNELS = ("reset_error", "mid_circuit_measurement_error")  # in every record; the others only when set
 MID_CIRCUIT_LABEL = "mid_circuit_measurement"  # the identity after a read whose qubit is acted on again
+STARTING_LABEL = "starting_excitation"  # the identity first on every qubit, where a shot may start it in |1>
 
 STANDARD_GATES = get_standard_gate_name_mapping()
 
@@ -163,7 +173,7 @@ class NoiseControl:
 
     @property
     def conditional(self) -> dict:
-        """Both conditional channels, as a copy."""
+        """Every conditional channel, None where unset, as a copy."""
         return dict(self._conditional)
 
     # -- YAML ------------------------------------------------------------------
@@ -175,7 +185,9 @@ class NoiseControl:
             "noise": dict(self._records["noise"]),
             "scale": self.scale,
             "overrides": list(self.overrides),
-            "conditional": self.conditional,
+            "conditional": {
+                k: v for k, v in self._conditional.items() if k in RECORDED_CHANNELS or v is not None
+            },
         }
 
     @classmethod
@@ -273,15 +285,18 @@ def _build_snapshot(nc: NoiseControl):
     reset_error = nc.conditional["reset_error"]
     if reset_error is not None and "reset" in profile:
         _add_after(noise_model, _bit_flip(reset_error), "reset", nc.num_qubits)
-    _add_mid_circuit_error(nc, noise_model)
+    _add_labelled_errors(nc, noise_model)
     return target, noise_model
 
 
-def _add_mid_circuit_error(nc: NoiseControl, noise_model: NoiseModel) -> None:
-    p = nc.conditional["mid_circuit_measurement_error"]
-    if p is not None:
-        for q in range(nc.num_qubits):
-            noise_model.add_quantum_error(_bit_flip(p), MID_CIRCUIT_LABEL, [q])
+def _add_labelled_errors(nc: NoiseControl, noise_model: NoiseModel) -> None:
+    """A bit flip on every qubit's labelled identity for each labelled channel that is set."""
+    labelled = {"mid_circuit_measurement_error": MID_CIRCUIT_LABEL, "starting_excitation": STARTING_LABEL}
+    for channel, label in labelled.items():
+        p = nc.conditional[channel]
+        if p is not None:
+            for q in range(nc.num_qubits):
+                noise_model.add_quantum_error(_bit_flip(p), label, [q])
 
 
 def _bit_flip(p: float):
@@ -302,8 +317,8 @@ def _build_gate_set(nc: NoiseControl, error_for: Callable[[float, int], QuantumE
     so no scheduling, and no readout error or decay. After every `after_gate`,
     on every qubit or directed coupler it acts on, comes `error_for(p, n)`, the
     kind's error with probability p, the profile's probability after the scale,
-    on the gate's n qubits. Every other gate is ideal, and the mid-circuit
-    measurement channel applies as to any profile.
+    on the gate's n qubits. Every other gate is ideal, and the labelled channels
+    apply as to any profile.
     """
     spec = nc.profile[nc.kind]
     gates, after = spec["gates"], spec["after_gate"]
@@ -323,7 +338,7 @@ def _build_gate_set(nc: NoiseControl, error_for: Callable[[float, int], QuantumE
     error = error_for(probability, after_op.num_qubits)
     for qargs in _qargs(after_op.num_qubits, nc):
         noise_model.add_quantum_error(error, after, list(qargs))
-    _add_mid_circuit_error(nc, noise_model)
+    _add_labelled_errors(nc, noise_model)
     return target, noise_model
 
 
@@ -523,7 +538,7 @@ def _override_gate(field) -> str | None:
 
 
 def _check_conditional(conditional) -> dict:
-    """Validate and return both conditional channels, each None or a probability."""
+    """Validate and return every conditional channel, each None or a probability."""
     channels = dict.fromkeys(CONDITIONAL_CHANNELS)
     if conditional is None:
         return channels

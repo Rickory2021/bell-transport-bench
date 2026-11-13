@@ -77,6 +77,7 @@ properties:
           properties:
             reset_error: {type: [number, "null"]}
             mid_circuit_measurement_error: {type: [number, "null"]}
+            starting_excitation: {type: [number, "null"]}
   cases:
     description: >-
       For a benchmark that fills the challenge's nine cases (docs/CHALLENGE.md, The nine core cases), which run and

@@ -50,7 +50,7 @@ from qiskit.transpiler.passes import ALAPScheduleAnalysis, PadDelay
 from qiskit_aer import AerSimulator
 
 from bellbench.fidelity import BASES
-from bellbench.noise import MID_CIRCUIT_LABEL, NoiseControl
+from bellbench.noise import MID_CIRCUIT_LABEL, STARTING_LABEL, NoiseControl
 
 OPTIMIZATION_LEVEL = 1
 PORT_REGISTER = "port"
@@ -350,6 +350,18 @@ def mark_mid_circuit_measurements(circuit: QuantumCircuit) -> QuantumCircuit:
     marked = circuit.copy()
     for k, q in reversed(mid_circuit_measurements(circuit)):
         marked.data.insert(k + 1, CircuitInstruction(IGate(label=MID_CIRCUIT_LABEL), (marked.qubits[q],)))
+    return marked
+
+
+def mark_starting_excitation(circuit: QuantumCircuit) -> QuantumCircuit:
+    """A copy of a scheduled circuit with an identity labelled STARTING_LABEL first on every qubit, before any delay,
+    where the noise model may start the qubit in |1>. It takes no time, so the schedule stands."""
+    from qiskit.circuit import CircuitInstruction
+    from qiskit.circuit.library import IGate
+
+    marked = circuit.copy()
+    for q in reversed(marked.qubits):
+        marked.data.insert(0, CircuitInstruction(IGate(label=STARTING_LABEL), (q,)))
     return marked
 
 

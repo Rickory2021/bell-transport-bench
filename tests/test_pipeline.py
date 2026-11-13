@@ -30,6 +30,7 @@ from bellbench.pipeline import (
     cost,
     derive_seed,
     mark_mid_circuit_measurements,
+    mark_starting_excitation,
     mid_circuit_measurements,
     pair_on_ports,
     port_density_matrix,
@@ -589,3 +590,43 @@ def test_ideal_fidelity_is_exactly_one_without_shots():
     zz = compile_bases(basis_circuits(_baseline(nc), nc.ports), nc, seed=5)["ZZ"].compiled
     f = fidelity_from_density(port_density_matrix(zz, None, nc.ports))
     assert math.isclose(f.value, 1.0, abs_tol=1e-12)
+
+
+# -- The starting marker ----------------------------------------------------------------
+
+
+def test_the_starting_marker_opens_every_qubit_before_any_delay_and_leaves_the_schedule():
+    from bellbench.noise import STARTING_LABEL
+
+    nc = NoiseControl("contemporary", "boston-2026")
+    compiled = compile_bases(basis_circuits(swap_chain("contemporary"), nc.ports), nc, 7)["ZZ"].compiled
+    scheduled = schedule(compiled, nc)
+    marked = mark_starting_excitation(scheduled)
+    assert _first_operations(marked) == {q: ("id", STARTING_LABEL) for q in range(marked.num_qubits)}
+    assert ("delay", None) in _first_operations(scheduled).values(), "some qubit's schedule opens with a delay"
+    assert list(marked.data[marked.num_qubits:]) == list(scheduled.data), "nothing else moves, the delays included"
+
+
+def _first_operations(circuit: QuantumCircuit) -> dict:
+    """Each qubit's first instruction, as (name, label)."""
+    first = {}
+    for inst in circuit.data:
+        for q in inst.qubits:
+            first.setdefault(circuit.find_bit(q).index, (inst.operation.name, inst.operation.label))
+    return first
+
+
+@pytest.mark.parametrize("p", [0.0, 0.1, 1.0])
+def test_each_qubit_starts_in_one_at_the_channel_rate(p):
+    """Under the organisers' profile, which has no readout error, reading every qubit at once gives 1 at rate p."""
+    from qiskit_aer import AerSimulator
+
+    nc = NoiseControl("ibm2016", "organiser-cx2", conditional={"starting_excitation": p})
+    qc = QuantumCircuit(nc.num_qubits, nc.num_qubits)
+    qc.measure(range(nc.num_qubits), range(nc.num_qubits))
+    shots = 20000
+    simulator = AerSimulator(noise_model=nc.noise_model, seed_simulator=2026)
+    counts = simulator.run(mark_starting_excitation(qc), shots=shots).result().get_counts()
+    for q in range(nc.num_qubits):
+        rate = sum(n for key, n in counts.items() if key[::-1][q] == "1") / shots
+        assert abs(rate - p) <= 4 * math.sqrt(p * (1 - p) / shots) + 1e-12, q

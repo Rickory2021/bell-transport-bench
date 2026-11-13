@@ -59,13 +59,14 @@ from bellbench import configs
 from bellbench.analysis import PortCounts, read_shots
 from bellbench.circuits import circuit_to_qasm, load_circuit
 from bellbench.fidelity import BASES, REJECTION_METHOD, fidelity_from_counts, infidelity_removed_per_rejection
-from bellbench.noise import NoiseControl
+from bellbench.noise import STARTING_LABEL, NoiseControl
 from bellbench.pipeline import (
     basis_circuits,
     compile_bases,
     cost,
     derive_seed,
     mark_mid_circuit_measurements,
+    mark_starting_excitation,
     mid_circuit_measurements,
     schedule,
     scheduled_duration,
@@ -163,6 +164,9 @@ class CircuitRun:
         self.duration = scheduled_duration(scheduled["ZZ"], self.nc)
         if self.nc.conditional["mid_circuit_measurement_error"] is not None:
             scheduled = {basis: mark_mid_circuit_measurements(c) for basis, c in scheduled.items()}
+        if self.nc.conditional["starting_excitation"] is not None:
+            scheduled = {basis: mark_starting_excitation(c) for basis, c in scheduled.items()}
+            _check_starting_marker(self.circuit.name, scheduled, self.nc)
         for name, noise_model in (("ideal", None), ("noisy", self.nc.noise_model)):
             method = (methods or {}).get(name, "automatic")
             sim = simulate(scheduled, noise_model, self.shots, self.seeds[name], method)
@@ -752,6 +756,28 @@ def _check_conditional_channels(name: str, compiled: dict, nc: NoiseControl) -> 
                 f"circuit {name!r} measures qubit(s) {reused} and then acts on them again in its {basis} circuit, "
                 "but the conditional channel mid_circuit_measurement_error is unset, so the qubit would come out "
                 "of each read perfect; set it, as a value swept over a range, or measure the qubit last"
+            )
+
+
+def _check_starting_marker(name: str, scheduled: dict, nc: NoiseControl) -> None:
+    """Stop a run whose starting_excitation is set but would change nothing: the noise model holds no error on the
+    starting marker though the value is above 0 (at 0 there is nothing to hold, since Aer keeps no error that does
+    nothing), or a circuit about to be simulated does not open every qubit with it."""
+    if nc.conditional["starting_excitation"] > 0 and STARTING_LABEL not in nc.noise_model.noise_instructions:
+        raise ValueError(
+            f"conditional starting_excitation is set, but the noise model for {nc.noise_name!r} holds no error on "
+            f"{STARTING_LABEL!r}, so it would change nothing"
+        )
+    for basis, circuit in scheduled.items():
+        first = {}
+        for inst in circuit.data:
+            for q in inst.qubits:
+                first.setdefault(q, inst.operation.label)
+        unmarked = [circuit.find_bit(q).index for q in circuit.qubits if first.get(q) != STARTING_LABEL]
+        if unmarked:
+            raise ValueError(
+                f"circuit {name!r}: conditional starting_excitation is set, but its {basis} circuit does not open "
+                f"qubit(s) {unmarked} with the starting marker, so the excitation would not reach them"
             )
 
 

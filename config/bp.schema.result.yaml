@@ -89,6 +89,9 @@ properties:
         properties:
           reset_error: {type: [number, "null"]}
           mid_circuit_measurement_error: {type: [number, "null"]}
+          starting_excitation:
+            description: The probability that each qubit starts a shot in |1>; recorded only when set, absent meaning none.
+            type: number
   shots:
     description: Shots per basis circuit in each simulation.
     type: integer

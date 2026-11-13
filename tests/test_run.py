@@ -234,6 +234,56 @@ def test_an_analysis_the_registry_lacks_is_refused(config_copy):
         save_circuit("corrected", "Corrected", "ibm2016", circuit, "A test.", analysis={"name": "correct"})
 
 
+# -- Starting excitation ----------------------------------------------------------------
+
+
+def test_a_run_without_starting_excitation_keeps_its_record_and_seeds():
+    """The record and the settings hash the seeds derive from are what they were before the channel existed."""
+    run = CircuitRun("move-chain-path-xx-ibm2016", "boston-2026", shots=10, base_seed=SEED,
+                     conditional={"mid_circuit_measurement_error": 0.01})
+    assert run.nc.export_as_yaml()["conditional"] == {"reset_error": None, "mid_circuit_measurement_error": 0.01}
+    assert run.settings_hash == "5bccd220"
+    assert CircuitRun("baseline-ibm2016", "boston-2026", shots=10, base_seed=SEED).settings_hash is None
+
+
+def test_a_run_with_starting_excitation_records_it_and_reruns(tmp_path):
+    conditional = {"starting_excitation": 0.05}
+    run = CircuitRun("move-chain-spare-xx-contemporary", "boston-2026", shots=200, base_seed=SEED,
+                     conditional=conditional).run()
+    assert run.settings_hash is not None
+    assert run.analysis["ideal"].accepted.value == 1.0 and run.analysis["ideal"].acceptance == 1.0
+    folder = run.write(tmp_path)
+    record = yaml.safe_load((folder / RESULT_FILE).read_text(encoding="utf-8"))
+    assert record["noise_control"]["conditional"]["starting_excitation"] == 0.05
+    code, lines = rerun(folder)
+    assert code == 0, lines
+
+
+def test_a_starting_excitation_of_0_runs_as_the_first_point_of_a_sweep():
+    """Aer keeps no error that does nothing, so at 0 the noise model holds none, and the run still goes ahead."""
+    run = CircuitRun("baseline-ibm2016", "boston-2026", shots=50, base_seed=SEED,
+                     conditional={"starting_excitation": 0.0}).run()
+    assert run.analysis["ideal"].accepted.value == 1.0
+
+
+def test_starting_excitation_that_would_reach_no_circuit_stops_the_run(monkeypatch):
+    monkeypatch.setattr(run_module, "mark_starting_excitation", lambda circuit: circuit)
+    run = CircuitRun("baseline-ibm2016", "boston-2026", shots=10, base_seed=SEED,
+                     conditional={"starting_excitation": 0.01})
+    with pytest.raises(ValueError, match=r"does not open qubit\(s\) \[0, 1, 2, 3, 4\] with the starting marker"):
+        run.run()
+
+
+def test_starting_excitation_the_noise_model_ignores_stops_the_run(monkeypatch):
+    from bellbench import noise as noise_module
+
+    monkeypatch.setattr(noise_module, "_add_labelled_errors", lambda nc, noise_model: None)
+    run = CircuitRun("baseline-ibm2016", "boston-2026", shots=10, base_seed=SEED,
+                     conditional={"starting_excitation": 0.01})
+    with pytest.raises(ValueError, match="holds no error on 'starting_excitation', so it would change nothing"):
+        run.run()
+
+
 # -- Run folders and reruns ------------------------------------------------------------
 
 
