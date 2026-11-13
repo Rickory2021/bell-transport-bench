@@ -1,0 +1,5 @@
+# Biased-noise study
+
+An optional study, kept apart from the core benchmark (docs/CHALLENGE.md, What is fixed and what we choose): if a processor's errors were mostly phase flips and its CX kept them so, would an XX check catch nearly every error on the pair? Each graph runs the organisers' baseline, move_chain alone, and move_chain with bus_xx, under three pauli profiles that differ only in the native two-qubit gate and the noise bias: pauli-cx-biased (CX, eta 100), pauli-cz-biased (CZ, eta 100) and pauli-cx-unbiased (CX, eta 0.5). On the contemporary and hyperbolic graphs bus_xx runs on a spare path and reads only at the end; ibm2016 has no spare path, so there it runs on the path, reads each qubit before reusing it, and needs the mid-circuit measurement channel, set to 0.01 as one point of the range it is to be swept over. The profiles have no readout error, decay or durations, so these numbers describe gate noise alone, on one finite model each. 20,000 shots per basis, as in the core.
+
+Every row, with the derived metrics, is in comparison.csv. F's standard error method: binomial per basis: var(c) = (1 - c^2)/N, independent bases, SE(F) = sqrt(sum var)/4.
