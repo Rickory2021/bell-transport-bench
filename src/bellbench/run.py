@@ -616,10 +616,11 @@ def _measures_a_check(circuit) -> bool:
 
 
 def run_benchmark(name: str, root: Path | None = None, shots: int | None = None) -> Path:
-    """Make every run the benchmark lists and write a new folder; refuses before writing if a case fails its self-test.
+    """Make every run the benchmark lists and write a new folder; refuses before writing if a run fails its self-test.
 
-    The self-test: the pair ends on the ports, and the ideal simulation gives
-    F = 1 and keeps every shot.
+    The self-test, which every run passes, whether it fills a case or not: the
+    pair ends on the ports, and the ideal simulation gives F = 1 and keeps every
+    shot. A refusal names the run, and the cases it fills.
 
     The folder is <root>/runs/benchmark/<name>/<stamp>/, and each run is written
     in it under its run id. `root` is results/ only when the git state read as the
@@ -636,19 +637,11 @@ def run_benchmark(name: str, root: Path | None = None, shots: int | None = None)
             spec["circuit"], spec["noise"], shots or data["shots"], data["base_seed"],
             spec.get("scale", 1.0), spec.get("overrides", ()), spec.get("conditional"),
         ).run()
+    cases_of = {}
     for case in data.get("cases", []):
-        run = runs[case["run"]]
-        if not run.cost["pair_on_ports"]:
-            raise ValueError(f"benchmark {name!r}: case {case['case']}: run {case['run']!r} left the pair off its ports")
-        if run.scores["ideal"].accepted.value != 1.0:
-            ideal = run.scores["ideal"].accepted.value
-            raise ValueError(f"benchmark {name!r}: case {case['case']}: run {case['run']!r} has ideal F {ideal}, not 1")
-        if run.scores["ideal"].acceptance != 1.0:
-            kept = run.scores["ideal"].acceptance
-            raise ValueError(
-                f"benchmark {name!r}: case {case['case']}: run {case['run']!r} kept {kept} of its ideal shots, "
-                "not every one, so a check fires with no noise"
-            )
+        cases_of.setdefault(case["run"], []).append(case["case"])
+    for run_id, run in runs.items():
+        _self_test(name, run_id, run, cases_of.get(run_id, []))
     run_list = {"benchmark": record, "runs": list(runs), "cases": data.get("cases", [])}
     if root is None:
         clean = not start[1] and all(run.git_state == start for run in runs.values())
@@ -667,6 +660,24 @@ def run_benchmark(name: str, root: Path | None = None, shots: int | None = None)
     _write_csv(folder / "comparison.csv", rows, COMPARISON_COLUMNS)
     (folder / "report.md").write_text(_benchmark_report(data, rows), encoding="utf-8")
     return folder
+
+
+def _self_test(benchmark: str, run_id: str, run: CircuitRun, cases: list[int]) -> None:
+    """Refuse a run whose pair ends off its ports, or whose ideal simulation does not give F = 1 with every shot kept.
+
+    The message names the benchmark, the cases the run fills, if any, and the run.
+    """
+    filled = f"case{'s' if len(cases) > 1 else ''} {', '.join(map(str, cases))}: " if cases else ""
+    where = f"benchmark {benchmark!r}: {filled}run {run_id!r}"
+    if not run.cost["pair_on_ports"]:
+        raise ValueError(f"{where} left the pair off its ports")
+    ideal = run.scores["ideal"]
+    if ideal.accepted.value != 1.0:
+        raise ValueError(f"{where} has ideal F {ideal.accepted.value}, not 1")
+    if ideal.acceptance != 1.0:
+        raise ValueError(
+            f"{where} kept {ideal.acceptance} of its ideal shots, not every one, so a check fires with no noise"
+        )
 
 
 def current_benchmark(name: str, root: Path | None = None) -> Path:
