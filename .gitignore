@@ -20,6 +20,10 @@ project-export-files/
 workspace/*
 !workspace/README.md
 
+# AI agents' folders
+.claude/
+.agent/
+
 # Editors and OS
 .vscode/
 .idea/

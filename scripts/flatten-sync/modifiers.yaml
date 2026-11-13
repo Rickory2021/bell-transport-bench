@@ -90,6 +90,18 @@ modifiers:
       - '\.pdf$'
     note: "Binary fonts and rendered PDFs. AI platforms cannot process them as-is (Project Knowledge converts PDFs to page-image zips); manifest tracks their paths for context."
 
+  workspace-scratch:
+    silent: true
+    patterns:
+      - '^workspace/(?!README\.md$)'
+    note: "Runs and notebook copies made with uncommitted changes; never authoritative, so never exported. workspace/README.md stays."
+
+  result-images:
+    silent: false
+    patterns:
+      - '^results/.*\.png$'
+    note: "Diagrams in run folders. A Project re-encodes images, so its copies are not the repo's files; each run's record holds its circuits as OpenQASM 3, which the export keeps."
+
   # -- Toggleable (profiles decide direction) -------------------------
 
   scripts:
