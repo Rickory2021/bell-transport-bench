@@ -119,7 +119,10 @@ def infidelity_removed_per_rejection(
     The standard error is the delta method's (REJECTION_METHOD): each basis's
     shots split into four counts, kept or discarded and agreeing or not, drawn
     as one multinomial over that basis's fixed number of shots, and the three
-    bases are measured on separate shots, so their variances add.
+    bases are measured on separate shots, so their variances add. The sums are
+    plain Python arithmetic in a fixed order, through math.fsum, never numpy's
+    vectorised sums, whose order can differ between processors, so the error is
+    the same to the last digit on any machine.
     """
     _check_bases(all_by_basis)
     _check_bases(kept_by_basis)
@@ -140,16 +143,17 @@ def infidelity_removed_per_rejection(
     discarded = 1 - kept_total / total
     gain = fidelity_from_counts(kept_by_basis).value - fidelity_from_counts(all_by_basis).value
     value = gain / discarded
-    variance = 0.0
+    terms = []
     for basis, (a, d, e, f, shots) in cells.items():
         s, kept = SIGNS[basis], a + d
         # Derivatives of the gain and of p by each count, the basis's shots held fixed.
-        d_gain = np.array([2 * d / kept**2 - 1 / shots, -2 * a / kept**2 + 1 / shots, -1 / shots, 1 / shots]) * s / 4
-        d_p = np.array([1, 1, 0, 0]) / total
-        g = d_gain / discarded + gain / discarded**2 * d_p
-        n = np.array([a, d, e, f], dtype=float)
-        variance += float(n @ g**2 - (n @ g) ** 2 / shots)
-    return float(value), math.sqrt(variance)
+        d_gain = [2 * d / kept**2 - 1 / shots, -2 * a / kept**2 + 1 / shots, -1 / shots, 1 / shots]
+        d_p = [1 / total, 1 / total, 0.0, 0.0]
+        g = [x * s / 4 / discarded + gain / discarded**2 * y for x, y in zip(d_gain, d_p)]
+        n = (a, d, e, f)
+        terms.append(math.fsum(c * x * x for c, x in zip(n, g)))
+        terms.append(-math.fsum(c * x for c, x in zip(n, g)) ** 2 / shots)
+    return float(value), math.sqrt(math.fsum(terms))
 
 
 def _fidelity(correlators: dict[str, Correlator], method: str) -> Fidelity:

@@ -130,11 +130,20 @@ def _removed(cells):
     return (f_kept - f_all) / (1 - p)
 
 
+# Shaped like a protected run: 20,000 shots a basis, about 3% discarded, the discarded F about 0.6. Each row is one
+# basis's kept-agree, kept-differ, discarded-agree and discarded-differ counts.
+CELLS = np.array([[19060, 340, 360, 240], [330, 19070, 250, 350], [19050, 350, 370, 230]])
+CELLS_EVERY = {b: {"00": int(c[0] + c[2]), "01": int(c[1] + c[3])} for b, c in zip(BASES, CELLS)}
+CELLS_KEPT = {b: {"00": int(c[0]), "01": int(c[1])} for b, c in zip(BASES, CELLS)}
+
+
+def test_infidelity_removed_per_rejection_is_the_same_to_the_last_digit_on_any_machine():
+    """Every sum is exactly rounded, so these are the values on any machine, not only on the one that wrote them."""
+    assert infidelity_removed_per_rejection(CELLS_EVERY, CELLS_KEPT) == (0.5737113402061913, 0.017339919858240103)
+
+
 def test_infidelity_removed_per_rejection_standard_error_matches_redrawn_counts():
-    # Shaped like a protected run: 20,000 shots a basis, about 3% discarded, the discarded F about 0.6.
-    cells = np.array([[19060, 340, 360, 240], [330, 19070, 250, 350], [19050, 350, 370, 230]])
-    every = {b: {"00": int(c[0] + c[2]), "01": int(c[1] + c[3])} for b, c in zip(BASES, cells)}
-    kept = {b: {"00": int(c[0]), "01": int(c[1])} for b, c in zip(BASES, cells)}
+    cells, every, kept = CELLS, CELLS_EVERY, CELLS_KEPT
     value, error = infidelity_removed_per_rejection(every, kept)
     assert value == pytest.approx(float(_removed(cells)))
     rng = np.random.default_rng(20261116)
