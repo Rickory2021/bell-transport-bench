@@ -1,14 +1,15 @@
 # scripts/blueprint-render/tests/test_config.py
 """Tests for YAML loading, per-run caching, and date normalization.
 
-Validates the three PyYAML coercion cases:
+Validates the two PyYAML coercion cases the loader undoes:
   - datetime.date (YYYY-MM-DD) -> isoformat string
   - datetime.datetime -> isoformat string
-  - bare int year (1900-2100) -> string
 
-And passthrough of everything else. Also checks that load_yaml
-returns the cached structure for an unchanged file and re-reads a
-file that changed on disk.
+And passthrough of everything else, a bare year included: only a
+schema can say whether 2024 is a year, so lib/validate.py turns it
+into a string where the schema asks for one (test_validate.py).
+Also checks that load_yaml returns the cached structure for an
+unchanged file and re-reads a file that changed on disk.
 """
 
 import datetime
@@ -32,10 +33,10 @@ class TestNormalizeDates:
         dt = datetime.datetime(2024, 10, 15, 14, 30, 0)
         assert normalize_dates(dt) == "2024-10-15T14:30:00"
 
-    def test_bare_year_to_string(self):
-        assert normalize_dates(2024) == "2024"
-        assert normalize_dates(1900) == "1900"
-        assert normalize_dates(2100) == "2100"
+    def test_bare_year_stays_an_int(self):
+        assert normalize_dates(2024) == 2024
+        assert normalize_dates(1900) == 1900
+        assert normalize_dates(2100) == 2100
 
     def test_int_outside_range_unchanged(self):
         assert normalize_dates(42) == 42
@@ -67,7 +68,7 @@ class TestNormalizeDates:
         result = normalize_dates(data)
         assert result == {
             "date": "2024-01-01",
-            "year": "2024",
+            "year": 2024,
             "name": "test",
             "count": 42,
         }
@@ -75,7 +76,7 @@ class TestNormalizeDates:
     def test_list_recursive(self):
         data = [datetime.date(2024, 1, 1), 2024, "hello", 42]
         result = normalize_dates(data)
-        assert result == ["2024-01-01", "2024", "hello", 42]
+        assert result == ["2024-01-01", 2024, "hello", 42]
 
     def test_nested_structure(self):
         data = {
@@ -86,9 +87,9 @@ class TestNormalizeDates:
         }
         result = normalize_dates(data)
         assert result["entries"][0]["start"] == "2021-08-01"
-        assert result["entries"][0]["year"] == "2021"
+        assert result["entries"][0]["year"] == 2021
         assert result["entries"][1]["start"] == "2024-05-15"
-        assert result["entries"][1]["year"] == "2024"
+        assert result["entries"][1]["year"] == 2024
 
     def test_empty_containers(self):
         assert normalize_dates({}) == {}

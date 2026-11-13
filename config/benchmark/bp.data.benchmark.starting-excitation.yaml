@@ -1,0 +1,63 @@
+# config/benchmark/bp.data.benchmark.starting-excitation.yaml
+
+name: starting-excitation
+label: Starting excitation sweep on the move-chain benchmark's runs
+notes: >-
+  An optional study, kept apart from the nine cases (docs/CHALLENGE.md, What is fixed
+  and what we choose): how the move-chain benchmark's runs fare if each qubit may start
+  a shot in |1> rather than |0>. The move chain's two-CX move is a SWAP without its
+  third CX, so it assumes the qubit it moves onto starts in |0>, and the XX check on a
+  spare path trusts its spare qubits to start in |0>; the organisers' baseline swaps
+  the pair out and back, which returns an excited qubit on its path to where it
+  started. Each of the move-chain benchmark's nine runs, the baseline, the move chain
+  alone and the move chain with its XX check on each graph, runs under boston-2026 with
+  the starting excitation, the chance that each qubit starts a shot in |1>, at 0,
+  0.005, 0.01 and 0.02, each run named by its value in e notation after exc; the check
+  on ibm2016 keeps case 3's mid-circuit measurement error of 0.01. A run at 0 differs
+  from the move-chain benchmark's run of the same circuit only in its seeds. Each value is one
+  point of a sweep, not a claimed property of any device, and each run derives its own
+  seeds, so neighbouring points also differ by shot noise: read each difference
+  against its standard errors. 20,000 shots per basis and base seed 20261116, as in
+  the core.
+shots: 20000
+base_seed: 20261116
+runs:
+  # The organisers' baseline.
+  - {run: baseline-ibm2016-exc-0, circuit: baseline-ibm2016, noise: boston-2026, conditional: {starting_excitation: 0.0}}
+  - {run: baseline-ibm2016-exc-5e-3, circuit: baseline-ibm2016, noise: boston-2026, conditional: {starting_excitation: 0.005}}
+  - {run: baseline-ibm2016-exc-1e-2, circuit: baseline-ibm2016, noise: boston-2026, conditional: {starting_excitation: 0.01}}
+  - {run: baseline-ibm2016-exc-2e-2, circuit: baseline-ibm2016, noise: boston-2026, conditional: {starting_excitation: 0.02}}
+  - {run: baseline-contemporary-exc-0, circuit: baseline-contemporary, noise: boston-2026, conditional: {starting_excitation: 0.0}}
+  - {run: baseline-contemporary-exc-5e-3, circuit: baseline-contemporary, noise: boston-2026, conditional: {starting_excitation: 0.005}}
+  - {run: baseline-contemporary-exc-1e-2, circuit: baseline-contemporary, noise: boston-2026, conditional: {starting_excitation: 0.01}}
+  - {run: baseline-contemporary-exc-2e-2, circuit: baseline-contemporary, noise: boston-2026, conditional: {starting_excitation: 0.02}}
+  - {run: baseline-hyperbolic-exc-0, circuit: baseline-hyperbolic, noise: boston-2026, conditional: {starting_excitation: 0.0}}
+  - {run: baseline-hyperbolic-exc-5e-3, circuit: baseline-hyperbolic, noise: boston-2026, conditional: {starting_excitation: 0.005}}
+  - {run: baseline-hyperbolic-exc-1e-2, circuit: baseline-hyperbolic, noise: boston-2026, conditional: {starting_excitation: 0.01}}
+  - {run: baseline-hyperbolic-exc-2e-2, circuit: baseline-hyperbolic, noise: boston-2026, conditional: {starting_excitation: 0.02}}
+  # The move chain alone.
+  - {run: move-ibm2016-exc-0, circuit: move-chain-ibm2016, noise: boston-2026, conditional: {starting_excitation: 0.0}}
+  - {run: move-ibm2016-exc-5e-3, circuit: move-chain-ibm2016, noise: boston-2026, conditional: {starting_excitation: 0.005}}
+  - {run: move-ibm2016-exc-1e-2, circuit: move-chain-ibm2016, noise: boston-2026, conditional: {starting_excitation: 0.01}}
+  - {run: move-ibm2016-exc-2e-2, circuit: move-chain-ibm2016, noise: boston-2026, conditional: {starting_excitation: 0.02}}
+  - {run: move-contemporary-exc-0, circuit: move-chain-contemporary, noise: boston-2026, conditional: {starting_excitation: 0.0}}
+  - {run: move-contemporary-exc-5e-3, circuit: move-chain-contemporary, noise: boston-2026, conditional: {starting_excitation: 0.005}}
+  - {run: move-contemporary-exc-1e-2, circuit: move-chain-contemporary, noise: boston-2026, conditional: {starting_excitation: 0.01}}
+  - {run: move-contemporary-exc-2e-2, circuit: move-chain-contemporary, noise: boston-2026, conditional: {starting_excitation: 0.02}}
+  - {run: move-hyperbolic-exc-0, circuit: move-chain-hyperbolic, noise: boston-2026, conditional: {starting_excitation: 0.0}}
+  - {run: move-hyperbolic-exc-5e-3, circuit: move-chain-hyperbolic, noise: boston-2026, conditional: {starting_excitation: 0.005}}
+  - {run: move-hyperbolic-exc-1e-2, circuit: move-chain-hyperbolic, noise: boston-2026, conditional: {starting_excitation: 0.01}}
+  - {run: move-hyperbolic-exc-2e-2, circuit: move-chain-hyperbolic, noise: boston-2026, conditional: {starting_excitation: 0.02}}
+  # The move chain with its XX check, on ibm2016 with case 3's mid-circuit measurement error.
+  - {run: path-xx-ibm2016-exc-0, circuit: move-chain-path-xx-ibm2016, noise: boston-2026, conditional: {mid_circuit_measurement_error: 0.01, starting_excitation: 0.0}}
+  - {run: path-xx-ibm2016-exc-5e-3, circuit: move-chain-path-xx-ibm2016, noise: boston-2026, conditional: {mid_circuit_measurement_error: 0.01, starting_excitation: 0.005}}
+  - {run: path-xx-ibm2016-exc-1e-2, circuit: move-chain-path-xx-ibm2016, noise: boston-2026, conditional: {mid_circuit_measurement_error: 0.01, starting_excitation: 0.01}}
+  - {run: path-xx-ibm2016-exc-2e-2, circuit: move-chain-path-xx-ibm2016, noise: boston-2026, conditional: {mid_circuit_measurement_error: 0.01, starting_excitation: 0.02}}
+  - {run: spare-xx-contemporary-exc-0, circuit: move-chain-spare-xx-contemporary, noise: boston-2026, conditional: {starting_excitation: 0.0}}
+  - {run: spare-xx-contemporary-exc-5e-3, circuit: move-chain-spare-xx-contemporary, noise: boston-2026, conditional: {starting_excitation: 0.005}}
+  - {run: spare-xx-contemporary-exc-1e-2, circuit: move-chain-spare-xx-contemporary, noise: boston-2026, conditional: {starting_excitation: 0.01}}
+  - {run: spare-xx-contemporary-exc-2e-2, circuit: move-chain-spare-xx-contemporary, noise: boston-2026, conditional: {starting_excitation: 0.02}}
+  - {run: spare-xx-hyperbolic-exc-0, circuit: move-chain-spare-xx-hyperbolic, noise: boston-2026, conditional: {starting_excitation: 0.0}}
+  - {run: spare-xx-hyperbolic-exc-5e-3, circuit: move-chain-spare-xx-hyperbolic, noise: boston-2026, conditional: {starting_excitation: 0.005}}
+  - {run: spare-xx-hyperbolic-exc-1e-2, circuit: move-chain-spare-xx-hyperbolic, noise: boston-2026, conditional: {starting_excitation: 0.01}}
+  - {run: spare-xx-hyperbolic-exc-2e-2, circuit: move-chain-spare-xx-hyperbolic, noise: boston-2026, conditional: {starting_excitation: 0.02}}

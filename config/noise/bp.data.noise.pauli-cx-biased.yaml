@@ -1,0 +1,29 @@
+# config/noise/bp.data.noise.pauli-cx-biased.yaml
+#
+# A Pauli noise profile for the biased-noise study, kept apart from the core
+# benchmark. Validated by config/bp.schema.noise.yaml; tests/test_config.py pins
+# every comment to the schema.
+
+name: pauli-cx-biased
+label: Pauli noise biased toward phase flips (eta 100), CX native
+kind: pauli
+reference: puri-2020-bias-preserving-cx
+notes: >-
+  A what-if for the biased-noise study, never a core model. After every CX, each of its
+  two qubits independently takes a Pauli error with probability 0.00942, split by the
+  noise bias eta = p_Z / (p_X + p_Y) as p_X = p_Y = p / (2 (eta + 1)). The probability
+  makes a two-qubit gate's total error, 1 - (1 - p)^2, about 0.01875, match
+  organiser-cx2's (15/16 of its 0.02). With CX native, a phase flip stays a phase flip
+  through the gate, the bias-preserving CX that Puri et al. (2020) propose for
+  stabilised cat qubits. Only the CX carries an error, so this is the case where the
+  bias reaches the pair intact. Every other gate is ideal, with no readout error, no
+  decay and no durations, so a run is not scheduled.
+pauli:
+  # The gate each Pauli error follows, on every qubit it acts on.
+  after_gate: cx
+  # The probability that each qubit the gate acts on takes a Pauli error (X, Y or Z), independently of its other qubit.
+  probability: 0.00942
+  # Noise bias eta = p_Z / (p_X + p_Y), above 0; 0.5 is unbiased, as depolarising noise is.
+  bias: 100
+  # The gate set; every gate other than after_gate is ideal.
+  gates: [h, cx, sdg]

@@ -1,0 +1,164 @@
+# config/bp.schema.result.yaml
+#
+# Validates bp.data.result.yaml in each run folder, results/runs/... or
+# workspace/runs/...: the settings and records of one run, which CircuitRun
+# writes and a rerun rebuilds from (docs/DESIGN.md, section 5). The numbers are
+# in the folder's simulations.csv and counts.csv, never here. CircuitRun checks
+# a record against this schema when it writes one and when it reads one back.
+
+$schema: "https://json-schema.org/draft/2020-12/schema"
+title: Run record
+description: One run's files, settings, seeds, circuits, cost and provenance.
+
+type: object
+required: [result_format, circuit, noise_control, shots, base_seed, seeds, diagrams, registers, written, compiled, cost, scheduled_duration, simulations, provenance]
+additionalProperties: false
+
+$defs:
+  text:
+    type: string
+    minLength: 1
+  file:
+    description: A config file by its repo-relative path and the hash of its parsed content.
+    type: object
+    required: [path, hash]
+    additionalProperties: false
+    properties:
+      path: {$ref: "#/$defs/text"}
+      hash: {type: string, pattern: '^sha256:[0-9a-f]{64}$'}
+  seed:
+    type: integer
+    minimum: 0
+    maximum: 4294967295
+  bases:
+    description: One entry for each of the three bases.
+    type: object
+    required: [XX, YY, ZZ]
+    propertyNames: {enum: [XX, YY, ZZ]}
+  simulation:
+    type: object
+    required: [seeds, methods]
+    additionalProperties: false
+    properties:
+      seeds:
+        description: The simulator seed Aer used for each basis circuit.
+        allOf: [{$ref: "#/$defs/bases"}]
+        additionalProperties: {$ref: "#/$defs/seed"}
+      methods:
+        description: The simulation method Aer used for each basis circuit.
+        allOf: [{$ref: "#/$defs/bases"}]
+        additionalProperties: {$ref: "#/$defs/text"}
+      empty_bases:
+        description: The bases in which the simulation kept no shot, so its F is undefined; written only if any.
+        type: array
+        minItems: 1
+        uniqueItems: true
+        items: {enum: [XX, YY, ZZ]}
+
+properties:
+  result_format:
+    description: >-
+      The shape of this record; benchmarks gather only runs of the current format. 1: circuits in OpenQASM 2 and
+      a counts.csv column per register role; 2: circuits in OpenQASM 3 and counts.csv's full outcome key. A record
+      of an earlier format stays valid as history; reruns and views refuse it.
+    enum: [1, 2]
+  circuit: {$ref: "#/$defs/file"}
+  noise_control:
+    description: NoiseControl's export, taken when it built the model.
+    type: object
+    required: [processor, noise, scale, overrides, conditional]
+    additionalProperties: false
+    properties:
+      processor: {$ref: "#/$defs/file"}
+      noise: {$ref: "#/$defs/file"}
+      scale: {type: number, exclusiveMinimum: 0}
+      overrides:
+        type: array
+        items:
+          type: object
+          required: [qubits, field, value]
+          additionalProperties: false
+          properties:
+            qubits: {type: array, minItems: 1, maxItems: 2, items: {type: integer, minimum: 0}}
+            field: {$ref: "#/$defs/text"}
+            value: {type: number}
+      conditional:
+        type: object
+        required: [reset_error, mid_circuit_measurement_error]
+        additionalProperties: false
+        properties:
+          reset_error: {type: [number, "null"]}
+          mid_circuit_measurement_error: {type: [number, "null"]}
+          starting_excitation:
+            description: The probability that each qubit starts a shot in |1>; recorded only when set, absent meaning none.
+            type: number
+  shots:
+    description: Shots per basis circuit in each simulation.
+    type: integer
+    minimum: 1
+  base_seed: {$ref: "#/$defs/seed"}
+  seeds:
+    description: The seeds the run derived from its base seed and labels, one per step.
+    type: object
+    required: [transpile, ideal, noisy]
+    additionalProperties: false
+    properties:
+      transpile: {$ref: "#/$defs/seed"}
+      ideal: {$ref: "#/$defs/seed"}
+      noisy: {$ref: "#/$defs/seed"}
+  diagrams:
+    description: lean draws the graph and the compiled ZZ circuit; full adds the written circuit, the XX and YY circuits and the schedule's timeline.
+    enum: [lean, full]
+  registers:
+    description: >-
+      The compiled circuits' classical registers in order, the port register last; counts.csv's outcome key holds
+      one bit string per register, in reverse of this order.
+    type: array
+    minItems: 1
+    items: {$ref: "#/$defs/text"}
+  written:
+    description: The circuit as written, in OpenQASM 3.
+    $ref: "#/$defs/text"
+  compiled:
+    description: Each basis circuit as compiled, in OpenQASM 3 on physical qubits, before scheduling.
+    allOf: [{$ref: "#/$defs/bases"}]
+    additionalProperties: {$ref: "#/$defs/text"}
+  cost:
+    description: Taken from the routed and compiled circuits before scheduling (docs/DESIGN.md, sections 5 and 9).
+    type: object
+    required: [swaps, router_swaps, qubits_used, depth, two_qubit_gates, two_qubit_gates_by_edge, pair_on_ports]
+    additionalProperties: false
+    properties:
+      swaps: {type: integer, minimum: 0}
+      router_swaps: {type: integer, minimum: 0}
+      qubits_used: {type: array, items: {type: integer, minimum: 0}}
+      depth: {type: integer, minimum: 0}
+      two_qubit_gates: {type: integer, minimum: 0}
+      two_qubit_gates_by_edge:
+        allOf: [{$ref: "#/$defs/bases"}]
+        additionalProperties:
+          type: object
+          additionalProperties: {type: integer, minimum: 0}
+      pair_on_ports: {type: boolean}
+  scheduled_duration:
+    description: The scheduled ZZ circuit's duration in seconds; null for a profile without durations.
+    oneOf: [{type: number, minimum: 0}, {type: "null"}]
+  simulations:
+    type: object
+    required: [ideal, noisy]
+    additionalProperties: false
+    properties:
+      ideal: {$ref: "#/$defs/simulation"}
+      noisy: {$ref: "#/$defs/simulation"}
+  provenance:
+    type: object
+    required: [commit, uncommitted, packages]
+    additionalProperties: false
+    properties:
+      commit: {type: [string, "null"]}
+      uncommitted:
+        description: Whether src/ or config/ had uncommitted changes, or the run was made outside git.
+        type: boolean
+      packages:
+        type: object
+        additionalProperties: {type: string}

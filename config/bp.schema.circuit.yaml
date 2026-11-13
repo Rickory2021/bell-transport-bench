@@ -1,0 +1,55 @@
+# config/bp.schema.circuit.yaml
+#
+# Validates config/circuit/bp.data.circuit.*.yaml: one written circuit on one
+# processor model's physical qubits, as a run reads it (docs/DESIGN.md, sections
+# 2 and 5). The gates are OpenQASM 3, so a reader sees exactly what runs. A run
+# adds each basis's rotation and the port measurement itself, into a classical
+# register named port; a written circuit names its own registers by role.
+# Checks that span fields (the gates parse, the circuit has the processor's
+# qubits, the registers are named by role) are in src/bellbench/circuits.py,
+# which runs them whenever a circuit file loads.
+
+$schema: "https://json-schema.org/draft/2020-12/schema"
+title: Circuit file
+description: One written circuit on one processor model, with the analysis that processes its shots.
+
+type: object
+required: [name, label, processor, analysis, notes, circuit]
+additionalProperties: false
+
+$defs:
+  text:
+    type: string
+    minLength: 1
+  slug:
+    type: string
+    pattern: '^[a-z0-9][a-z0-9-]*$'
+
+properties:
+  name:
+    description: Slug, the qualifier in the file name; runs and benchmarks pick the circuit by it.
+    $ref: "#/$defs/slug"
+  label:
+    description: A short human name for the circuit.
+    $ref: "#/$defs/text"
+  processor:
+    description: The name of the processor file whose physical qubits the gates act on.
+    $ref: "#/$defs/slug"
+  analysis:
+    description: >-
+      How a run reads the shots: the name of an analysis in the registry in src/bellbench/analysis.py, which
+      checks its settings when the file loads. postselect takes none; parity takes checks, frame_z and frame_x.
+    type: object
+    required: [name]
+    additionalProperties: false
+    properties:
+      name: {$ref: "#/$defs/slug"}
+      settings: {type: object}
+  notes:
+    description: Free text saying how the circuit was built (the transport, the path, the checks) and anything a reader should know.
+    $ref: "#/$defs/text"
+  circuit:
+    description: >-
+      The gates, as an OpenQASM 3 program on one register q with the processor's qubit count; classical registers
+      named by role (check, flag, frame_z or frame_x), alone or followed by an underscore and a name.
+    $ref: "#/$defs/text"

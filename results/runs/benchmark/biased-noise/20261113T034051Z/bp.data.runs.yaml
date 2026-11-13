@@ -1,0 +1,32 @@
+benchmark:
+  path: config/benchmark/bp.data.benchmark.biased-noise.yaml
+  hash: sha256:5de6402162a74c5d6b936b8904f9ac865775471d51fd5df637cd774d9ace3949
+runs:
+- baseline-ibm2016-cx-biased
+- baseline-contemporary-cx-biased
+- baseline-hyperbolic-cx-biased
+- move-ibm2016-cx-biased
+- move-contemporary-cx-biased
+- move-hyperbolic-cx-biased
+- path-xx-ibm2016-cx-biased
+- spare-xx-contemporary-cx-biased
+- spare-xx-hyperbolic-cx-biased
+- baseline-ibm2016-cz-biased
+- baseline-contemporary-cz-biased
+- baseline-hyperbolic-cz-biased
+- move-ibm2016-cz-biased
+- move-contemporary-cz-biased
+- move-hyperbolic-cz-biased
+- path-xx-ibm2016-cz-biased
+- spare-xx-contemporary-cz-biased
+- spare-xx-hyperbolic-cz-biased
+- baseline-ibm2016-cx-unbiased
+- baseline-contemporary-cx-unbiased
+- baseline-hyperbolic-cx-unbiased
+- move-ibm2016-cx-unbiased
+- move-contemporary-cx-unbiased
+- move-hyperbolic-cx-unbiased
+- path-xx-ibm2016-cx-unbiased
+- spare-xx-contemporary-cx-unbiased
+- spare-xx-hyperbolic-cx-unbiased
+cases: []

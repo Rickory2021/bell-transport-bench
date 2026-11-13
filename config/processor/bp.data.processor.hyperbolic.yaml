@@ -1,0 +1,53 @@
+# config/processor/bp.data.processor.hyperbolic.yaml
+#
+# The Hyperbolic-inspired processor model, the organisers' graph (docs/DESIGN.md, section 3).
+# Validated by config/bp.schema.processor.yaml.
+
+name: hyperbolic
+label: Hyperbolic-inspired model
+reference: ideal-and-noisy-example
+notes: >-
+  The organisers' example notebook, section 1 (the models cell), gives the 13-node graph
+  as an edge list with its ports; the organisers stated at the event that the
+  graphs are exact. Ids and positions are the notebook's: slide 4's drawings carry
+  no qubit numbers, so the notebook labels the qubits by position.
+qubits:
+  - {id: 0, position: [0, 2.08]}
+  - {id: 1, position: [-2, 1.14]}
+  - {id: 2, position: [0, 1.14]}
+  - {id: 3, position: [2, 1.14]}
+  - {id: 4, position: [-1, 0.59]}
+  - {id: 5, position: [1, 0.59]}
+  - {id: 6, position: [0, 0]}
+  - {id: 7, position: [-1, -0.59]}
+  - {id: 8, position: [1, -0.59]}
+  - {id: 9, position: [-2, -1.14]}
+  - {id: 10, position: [0, -1.14]}
+  - {id: 11, position: [2, -1.14]}
+  - {id: 12, position: [0, -2.08]}
+ports: [0, 12]
+edges:
+  - [0, 1]
+  - [0, 3]
+  - [1, 9]
+  - [3, 11]
+  - [9, 12]
+  - [11, 12]
+  - [2, 4]
+  - [2, 5]
+  - [4, 7]
+  - [5, 8]
+  - [7, 10]
+  - [8, 10]
+  - [0, 2]
+  - [1, 4]
+  - [3, 5]
+  - [7, 9]
+  - [8, 11]
+  - [10, 12]
+  - [2, 6]
+  - [4, 6]
+  - [5, 6]
+  - [6, 7]
+  - [6, 8]
+  - [6, 10]

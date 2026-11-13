@@ -1,0 +1,24 @@
+# config/noise/bp.data.noise.organiser-cx2.yaml
+#
+# The organisers' noise from their example notebook, used as a cross-check that
+# reproduces their recorded fidelities, never as the core noise model. Validated
+# by config/bp.schema.noise.yaml; tests/test_config.py pins every comment to the
+# schema.
+
+name: organiser-cx2
+label: The organisers' 2% CX depolarising noise
+kind: depolarising
+reference: ideal-and-noisy-example
+notes: >-
+  The organisers' example notebook, section 4 (the noise model cell): a two-qubit
+  depolarising channel of strength 0.02 after every CX, every other gate ideal, no
+  readout error and no idle decay. Their recipe uses only H and CX; sdg is added,
+  ideal like H, so a run can rotate the ports into the YY basis, which the organisers
+  read from the density matrix instead of measuring.
+depolarising:
+  # The gate each depolarising channel follows.
+  after_gate: cx
+  # Depolarising strength: with this probability, the gate's qubits are left in a fully random state.
+  probability: 0.02
+  # The gate set; every gate other than after_gate is ideal.
+  gates: [h, cx, sdg]

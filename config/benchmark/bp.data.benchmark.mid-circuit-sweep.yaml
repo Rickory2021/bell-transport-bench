@@ -1,0 +1,35 @@
+# config/benchmark/bp.data.benchmark.mid-circuit-sweep.yaml
+
+name: mid-circuit-sweep
+label: Mid-circuit measurement error sweep on ibm2016
+notes: >-
+  An optional study, kept apart from the nine cases (docs/CHALLENGE.md, What is fixed
+  and what we choose): how the XX check on ibm2016 fares as its mid-circuit measurement
+  error grows. ibm2016 has no spare path, so its check sits on the pair's own path,
+  reads each bus qubit mid-circuit and reuses it, and the move-chain benchmark's case 3
+  sets the mid-circuit measurement error to 0.01, one assumed value. Here that circuit,
+  move_chain with bus_xx on the pair's path, runs under boston-2026 at mid-circuit
+  measurement errors 0, 0.001, 0.003, 0.01, 0.02 and 0.05, each run named by its value
+  in e notation after mcm. Each value is one point of a sweep, not a claimed property
+  of any device, and each run derives its own seeds, so neighbouring points also differ
+  by shot noise: read each difference against its standard errors. The run at 0.01 has
+  case 3's settings and seeds, so it gives case 3's numbers. The organisers' baseline
+  and move_chain alone read nothing
+  mid-circuit, so the error cannot reach them: each runs once, without the channel, as
+  a fixed reference. Setting the check's F after postselection, with its acceptance,
+  beside move_chain alone's F at each point shows at which errors, if any, the check
+  pays for the shots it discards. 20,000 shots per basis and base seed 20261116, as in
+  the core.
+shots: 20000
+base_seed: 20261116
+runs:
+  # The fixed references, as the move-chain benchmark runs them.
+  - {run: baseline-ibm2016, circuit: baseline-ibm2016, noise: boston-2026}
+  - {run: move-ibm2016, circuit: move-chain-ibm2016, noise: boston-2026}
+  # The move chain with its XX check on the pair's path, one run per mid-circuit measurement error.
+  - {run: path-xx-ibm2016-mcm-0, circuit: move-chain-path-xx-ibm2016, noise: boston-2026, conditional: {mid_circuit_measurement_error: 0.0}}
+  - {run: path-xx-ibm2016-mcm-1e-3, circuit: move-chain-path-xx-ibm2016, noise: boston-2026, conditional: {mid_circuit_measurement_error: 0.001}}
+  - {run: path-xx-ibm2016-mcm-3e-3, circuit: move-chain-path-xx-ibm2016, noise: boston-2026, conditional: {mid_circuit_measurement_error: 0.003}}
+  - {run: path-xx-ibm2016-mcm-1e-2, circuit: move-chain-path-xx-ibm2016, noise: boston-2026, conditional: {mid_circuit_measurement_error: 0.01}}
+  - {run: path-xx-ibm2016-mcm-2e-2, circuit: move-chain-path-xx-ibm2016, noise: boston-2026, conditional: {mid_circuit_measurement_error: 0.02}}
+  - {run: path-xx-ibm2016-mcm-5e-2, circuit: move-chain-path-xx-ibm2016, noise: boston-2026, conditional: {mid_circuit_measurement_error: 0.05}}

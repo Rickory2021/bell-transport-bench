@@ -64,11 +64,14 @@ dependencies = [
     { name = "matplotlib" },
     { name = "networkx" },
     { name = "numpy" },
+    { name = "openqasm3", extra = ["parser"] },
     { name = "pandas" },
+    { name = "pylatexenc" },
     { name = "pyyaml" },
     { name = "qiskit" },
     { name = "qiskit-aer" },
     { name = "qiskit-ibm-runtime" },
+    { name = "qiskit-qasm3-import" },
 ]
 
 [package.dev-dependencies]
@@ -83,11 +86,14 @@ requires-dist = [
     { name = "matplotlib" },
     { name = "networkx", specifier = "==3.7" },
     { name = "numpy" },
+    { name = "openqasm3", extras = ["parser"], specifier = "==1.0.1" },
     { name = "pandas" },
+    { name = "pylatexenc", specifier = "==2.10" },
     { name = "pyyaml" },
     { name = "qiskit", specifier = "==2.6.2" },
     { name = "qiskit-aer", specifier = "==0.18.2" },
     { name = "qiskit-ibm-runtime", specifier = "==0.51.0" },
+    { name = "qiskit-qasm3-import", specifier = "==0.6.0" },
 ]
 
 [package.metadata.requires-dev]
@@ -1060,11 +1066,11 @@ wheels = [
 
 [[package]]
 name = "openqasm3"
-version = "1.0.2"
+version = "1.0.1"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/ea/6c/8e6212d96e1e7987aa9d84e37f7795120512d5bb063c16c22d878371c02a/openqasm3-1.0.2.tar.gz", hash = "sha256:7eb62cc897a6e8edac71d6c5d41384f028b6526904ae2f3f71f5bffb7c55df14", size = 548501, upload-time = "2026-11-11T16:44:59.129Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/92/a0/678ce1e4efbeb1cf06a7728b4056754e52bfd2c5cad174dae0f2a17b2d03/openqasm3-1.0.1.tar.gz", hash = "sha256:c589dc05d4ced50ca24167d14e0f2c916e717499ba0442e0ff2a3030ef312d0a", size = 536861, upload-time = "2025-02-19T22:51:06.204Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/cd/dc/a68f5266f933e4cc42c5eab5bd96155e38b2ace336934c486ab2a58230d8/openqasm3-1.0.2-py3-none-any.whl", hash = "sha256:e5fa81d67279bb17808bd4825c81b2a18a90f27a60e577c6cebb4f23b602b7e7", size = 551825, upload-time = "2026-11-11T16:44:57.564Z" },
+    { url = "https://files.pythonhosted.org/packages/75/dd/2aa7698341948f3229f7a1cb75e84d9677444d9c730632d1907716574dc5/openqasm3-1.0.1-py3-none-any.whl", hash = "sha256:0d3a1ebe3465e3ea619bcaa369858bba8944cbb0c49604b24f94662d3ec41d41", size = 541545, upload-time = "2025-02-19T22:51:01.852Z" },
 ]
 
 [package.optional-dependencies]
@@ -1205,7 +1211,7 @@ name = "pexpect"
 version = "4.9.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "ptyprocess" },
+    { name = "ptyprocess", marker = "sys_platform != 'emscripten' and sys_platform != 'win32'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/42/92/cc564bf6381ff43ce1f4d06852fc19a2f11d180f23dc32d9588bee2f149d/pexpect-4.9.0.tar.gz", hash = "sha256:ee7d41123f3c9911050ea2c2dac107568dc43b2d3b0c7557a33212c398ead30f", size = 166450, upload-time = "2023-11-25T09:07:26.339Z" }
 wheels = [
@@ -1669,6 +1675,12 @@ sdist = { url = "https://files.pythonhosted.org/packages/43/ea/5194e52748b0da83d
 wheels = [
     { url = "https://files.pythonhosted.org/packages/50/ca/44de4e75f8aadc457f0634be3b542815078ded46dca30efb960edeecad6e/pyjwt-2.15.1-py3-none-any.whl", hash = "sha256:42d59d631f7768a1028a64c7ff581a9bf7519804daf91fc5b6c56e30eec5e193", size = 33860, upload-time = "2026-09-28T18:40:41.429Z" },
 ]
+
+[[package]]
+name = "pylatexenc"
+version = "2.10"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/5d/ab/34ec41718af73c00119d0351b7a2531d2ebddb51833a36448fc7b862be60/pylatexenc-2.10.tar.gz", hash = "sha256:3dd8fd84eb46dc30bee1e23eaab8d8fb5a7f507347b23e5f38ad9675c84f40d3", size = 162597, upload-time = "2021-04-06T07:56:07.854Z" }
 
 [[package]]
 name = "pyparsing"

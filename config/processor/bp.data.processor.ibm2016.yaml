@@ -1,0 +1,25 @@
+# config/processor/bp.data.processor.ibm2016.yaml
+#
+# The 2016-inspired reference processor model, the organisers' graph (docs/DESIGN.md, section 3).
+# Validated by config/bp.schema.processor.yaml.
+
+name: ibm2016
+label: 2016-inspired reference
+reference: ideal-and-noisy-example
+notes: >-
+  The organisers' example notebook, section 1 (the models cell), gives the T graph
+  as an edge list with its ports; the organisers stated at the event that the
+  graphs are exact. Ids and positions are the notebook's: slide 4's drawings carry
+  no qubit numbers, so the notebook labels the qubits by position.
+qubits:
+  - {id: 0, position: [0, 2]}
+  - {id: 1, position: [-1.55, 0.75]}
+  - {id: 2, position: [1.55, 0.75]}
+  - {id: 3, position: [0, -0.45]}
+  - {id: 4, position: [0, -2]}
+ports: [0, 4]
+edges:
+  - [0, 1]
+  - [0, 2]
+  - [0, 3]
+  - [3, 4]

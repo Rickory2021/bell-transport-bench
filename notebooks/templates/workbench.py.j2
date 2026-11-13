@@ -1,0 +1,67 @@
+# notebooks/templates/workbench.py.j2
+# The workbench notebook's template, in the percent format. blueprint-render fills
+# it from notebooks/bp.invoke.workbench.yaml and writes notebooks/bp.output.workbench.ipynb;
+# make workbench copies that into workspace/. Edit this file, never the output.
+
+# %% [markdown]
+# # Workbench
+#
+# **One run at a time:** pick a circuit file and a noise profile, run it, and see its numbers. Every setting is recorded in the run folder, so a run made here can be repeated with `make run RUN=<folder>`.
+#
+# - **Edit and run your copy in `workspace/`**, which `make workbench` makes. The notebook in `notebooks/` is generated; edits there are lost on the next render.
+# - **The logic lives in the package** (`src/bellbench/`). These cells set values and call it; a run or a saved circuit goes through `CircuitRun` and `save_circuit`, which write the files.
+# - **A circuit you build here is saved as a circuit file before it runs,** because a run records the file it ran by its hash.
+#
+# The cells: imports, settings, an optional circuit build, the run, and writing the run folder.
+
+# %%
+# Imports
+import pandas as pd
+
+from bellbench import configs
+from bellbench.circuits import save_circuit, swap_chain
+from bellbench.run import CircuitRun, load_benchmark
+
+# %%
+# Settings. The shots and base seed default to the core benchmark's, so a baseline run here repeats its seeds.
+core, _ = load_benchmark("core")
+CIRCUIT = "{{ defaults.circuit }}"
+NOISE = "{{ defaults.noise }}"
+SHOTS = core["shots"]  # per basis circuit, in each of the ideal and noisy simulations
+BASE_SEED = core["base_seed"]
+SCALE = 1.0  # multiplies every gate error, both readout errors and the decay rates
+OVERRIDES = []  # for example [{"qubits": [0, 1], "field": "gates.cz.error_probability", "value": 0.01}]
+# A circuit that resets a qubit, or reads one and acts on it again, runs only with the matching channel set:
+# {"reset_error": p, "mid_circuit_measurement_error": p}. Any circuit may also set "starting_excitation": p, the
+# chance that each qubit starts a shot in |1>. Sweep each over a range rather than claim one value.
+CONDITIONAL = None
+DIAGRAMS = "lean"  # or "full", which adds the written, XX and YY circuits and the timeline
+
+print("circuit files: ", ", ".join(configs.config_names("circuit")))
+print("noise profiles:", ", ".join(configs.config_names("noise")))
+print("processors:    ", ", ".join(configs.config_names("processor")))
+
+# %%
+# Optional: build a circuit and save it as a circuit file, then run it by its name.
+# swap_chain takes the processor and a path from the first port to the second.
+# ANALYSIS says how a run reads the circuit's shots, and is saved in the circuit file (src/bellbench/analysis.py).
+# postselect keeps a shot when every check and flag bit reads 0. parity reads each check as a group of bits that
+# must have even parity, and flips the first port's outcome by the Pauli frame a check records in frame_z or frame_x.
+ANALYSIS = {"name": "postselect"}
+# ANALYSIS = {"name": "parity", "settings": {"checks": [["check_zz[0]"]], "frame_z": ["frame_z[0]"]}}
+# circuit = swap_chain("contemporary", path=[0, 4, 5, 6, 7])
+# notes = "swap_chain along [0, 4, 5, 6, 7]."
+# save_circuit("chain-04567", "Swap chain along 0-4-5-6-7", "contemporary", circuit, notes, analysis=ANALYSIS)
+# CIRCUIT = "chain-04567"
+
+# %%
+# Run: compile once, simulate ideal and noisy, read the shots with the circuit file's analysis,
+# and show the numbers and the cost.
+run = CircuitRun(CIRCUIT, NOISE, SHOTS, BASE_SEED, SCALE, OVERRIDES, CONDITIONAL, DIAGRAMS).run()
+display(pd.DataFrame(run.simulation_rows()).set_index("simulation").T)
+display(pd.Series(run.cost, name="cost"))
+
+# %%
+# Write the run folder: results/ when src/ and config/ were committed as the run started, workspace/ otherwise.
+folder = run.write()
+print(configs.repo_path(folder))

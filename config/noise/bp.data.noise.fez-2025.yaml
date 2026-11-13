@@ -1,0 +1,43 @@
+# config/noise/bp.data.noise.fez-2025.yaml
+#
+# Medians of IBM's FakeFez snapshot (Heron r2). Validated by
+# config/bp.schema.noise.yaml; tests/test_config.py pins every value to the
+# snapshot and every comment to the schema.
+
+name: fez-2025
+label: FakeFez medians, calibrated 2025-02-26
+kind: snapshot
+reference: qiskit-fake-provider
+snapshot:
+  class: FakeFez
+  package: qiskit-ibm-runtime==0.51.0
+  calibrated: "2025-02-26"
+  properties: https://github.com/Qiskit/qiskit-ibm-runtime/blob/0.51.0/qiskit_ibm_runtime/fake_provider/backends/fez/props_fez.json
+  configuration: https://github.com/Qiskit/qiskit-ibm-runtime/blob/0.51.0/qiskit_ibm_runtime/fake_provider/backends/fez/conf_fez.json
+notes: >-
+  Medians over the FakeFez snapshot's 156 qubits and 352 directed CZ couplers, as
+  qiskit-ibm-runtime 0.51.0 pins them. Every qubit and coupler of a processor
+  graph takes these values.
+# Time step in seconds: the hardware's clock tick. Null when the snapshot records none.
+time_step: 4.0e-9
+qubit:
+  # T1 in seconds: how long a qubit holds 1 before relaxing to 0; it is still 1 after time t with probability exp(-t/T1).
+  t1_relaxation_time: 144.85526609546147e-6
+  # T2 in seconds: how long a qubit keeps the phase between 0 and 1; never more than 2 T1.
+  t2_dephasing_time: 87.95068681159162e-6
+  readout_error:
+    # Readout error: the probability of reading 1 when the qubit was 0.
+    reads_1_when_0: 0.00390625
+    # Readout error: the probability of reading 0 when the qubit was 1.
+    reads_0_when_1: 0.011474609375
+# Native gates, by Qiskit name: the qubits each acts on (1 or 2), its error probability per use, and its duration in seconds.
+gates:
+  cz: {qubits: 2, error_probability: 0.0039033828523107883, duration: 84.0e-9}
+  sx: {qubits: 1, error_probability: 0.00022868757107977525, duration: 24.0e-9}
+  x: {qubits: 1, error_probability: 0.00022868757107977525, duration: 24.0e-9}
+  rz: {qubits: 1, error_probability: 0.0, duration: 0.0}
+# Measurement: its duration in seconds. Its errors are the readout errors.
+measure: {duration: 1.56e-6}
+# Reset to 0: its duration in seconds.
+reset: {duration: 1.584e-6}
+borrowed: []

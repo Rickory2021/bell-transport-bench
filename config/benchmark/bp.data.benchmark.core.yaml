@@ -1,0 +1,24 @@
+# config/benchmark/bp.data.benchmark.core.yaml
+
+name: core
+label: Core benchmark
+notes: >-
+  The challenge's nine cases (docs/CHALLENGE.md, The nine core cases): the three
+  processor models under one noise profile, boston-2026, so the comparison shows
+  connectivity alone. Each run is the organisers' baseline transport on its graph.
+  Cases 3, 6 and 9, the protected runs, stay open until a protected strategy is
+  chosen for the core; the move-chain benchmark fills them with one candidate.
+  20,000 shots per basis gives F a standard error of about 0.001.
+shots: 20000
+base_seed: 20261116
+runs:
+  - {run: ibm2016, circuit: baseline-ibm2016, noise: boston-2026}
+  - {run: contemporary, circuit: baseline-contemporary, noise: boston-2026}
+  - {run: hyperbolic, circuit: baseline-hyperbolic, noise: boston-2026}
+cases:
+  - {case: 1, run: ibm2016, simulation: ideal}
+  - {case: 2, run: ibm2016, simulation: noisy}
+  - {case: 4, run: contemporary, simulation: ideal}
+  - {case: 5, run: contemporary, simulation: noisy}
+  - {case: 7, run: hyperbolic, simulation: ideal}
+  - {case: 8, run: hyperbolic, simulation: noisy}

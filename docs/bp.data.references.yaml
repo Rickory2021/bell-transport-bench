@@ -34,7 +34,7 @@ references:
       - claim: "The task, the three processor models, the nine core cases, the protection options, the rules, the required measurements, the submission materials and the rubric weights."
         locator: "Slides 2 to 14"
         used_in: [docs/CHALLENGE.md]
-      - claim: "Port positions and graph shapes, given as drawings only: a T-shaped five-qubit graph, a 9-node schematic, and a 13-node graph."
+      - claim: "Port positions and graph shapes as drawings: a T-shaped five-qubit graph, a 9-node graph and a 13-node graph, each with its two ports circled. The exact edge lists came later, in ideal-and-noisy-example."
         locator: "Slides 2 and 4"
         used_in: [docs/CHALLENGE.md, docs/DESIGN.md]
 
@@ -60,6 +60,32 @@ references:
         locator: "Section 3"
         used_in: [docs/CHALLENGE.md]
 
+  - id: ideal-and-noisy-example
+    title: "Bell pairs on the three Fall Fest processor layouts (ideal_and_noisy_example notebook)"
+    authors: [UCF Qiskit Fall Fest organisers]
+    year: 2026
+    kind: notebook
+    url: https://neerpatel125.github.io/UCF-Qiskit-Fall-Fest/assets/Hackathon.zip
+    download: https://neerpatel125.github.io/UCF-Qiskit-Fall-Fest/assets/Hackathon.zip
+    snapshot: https://web.archive.org/web/2026/https://neerpatel125.github.io/UCF-Qiskit-Fall-Fest/assets/Hackathon.zip
+    redistribution: link-only
+    checked: true
+    summary: >-
+      The organisers' worked example: the three processor graphs as edge lists with their ports,
+      a Bell pair routed out and back on each, and its ideal and noisy fidelity under a 2%
+      two-qubit depolarising channel after every CX. The organisers stated at the event that its
+      graphs are exact.
+    takeaways:
+      - claim: "The three coupling graphs as exact edge lists, with ports 0 and 4 (5 qubits, 4 edges), 0 and 7 (9 qubits, 12 edges) and 0 and 12 (13 qubits, 24 edges), labelled by position."
+        locator: "Section 1, the models cell"
+        used_in: [config/processor/bp.data.processor.ibm2016.yaml, config/processor/bp.data.processor.contemporary.yaml, config/processor/bp.data.processor.hyperbolic.yaml, docs/CHALLENGE.md, docs/DESIGN.md]
+      - claim: "Baseline recipe: basic routing out and back at optimisation level 0 with an h and cx gate set; noise is a 2% two-qubit depolarising channel after every CX, H ideal, simulated exactly as a density matrix."
+        locator: "Sections 2 and 4"
+        used_in: [config/noise/bp.data.noise.organiser-cx2.yaml, docs/CHALLENGE.md, docs/DESIGN.md]
+      - claim: "Recorded results: CX 7, 19 and 13; depth 8, 20 and 14; ideal fidelity 1.000; noisy fidelity 0.915, 0.795 and 0.852."
+        locator: "Section 4, the results table"
+        used_in: [docs/CHALLENGE.md]
+
   - id: fallfest-site
     title: "IBM Qiskit Fall Fest 2026, University of Central Florida"
     authors: [UCF Qiskit Fall Fest organisers]
@@ -74,7 +100,7 @@ references:
       The festival page: schedule for November 9 to 16, 2026, links to the slides, notebooks and
       challenge files, and the submission instructions.
     takeaways:
-      - claim: "Submissions are emailed to the organiser with a video presentation of at most 15 minutes; groups of up to 5 members."
+      - claim: "Submissions and questions go by email to the address the site gives, by the deadline it gives, with a video presentation of at most 15 minutes; groups of up to 5 members. The organisers updated these details during the hackathon (read 2026-11-12)."
         locator: "Program section, Quantum hackathon"
         used_in: [docs/CHALLENGE.md]
 
@@ -379,6 +405,52 @@ references:
         locator: "Device-properties table"
         used_in: [docs/DESIGN.md]
 
+  - id: guillaud-mirrahimi-2019-repetition-cat-qubits
+    title: "Repetition Cat Qubits for Fault-Tolerant Quantum Computation"
+    authors: [Jérémie Guillaud, Mazyar Mirrahimi]
+    year: 2019
+    kind: paper
+    url: https://doi.org/10.1103/PhysRevX.9.041053
+    download: https://arxiv.org/pdf/1904.09474v4
+    snapshot: null
+    redistribution: open-license
+    checked: false
+    summary: >-
+      Proposes a one-dimensional repetition code of cat qubits whose bit flips are strongly
+      suppressed, so only phase flips need correcting, with gates chosen to keep that noise bias.
+      Physical Review X 9, 041053 (2019), published under CC BY 4.0. Our biased-noise study asks
+      the circuit-level version of its premise.
+    takeaways:
+      - claim: "Cat qubits stabilised by two-photon driven dissipation have a tunable noise bias: bit flips are suppressed exponentially in the mean photon number, so phase flips dominate."
+        locator: "Abstract"
+        used_in: [config/noise/bp.data.noise.pauli-cx-biased.yaml, config/noise/bp.data.noise.pauli-cz-biased.yaml, config/noise/bp.data.noise.pauli-cx-unbiased.yaml]
+      - claim: "Gates can be built on such cat qubits that preserve the noise bias, which is what makes a code against phase flips alone worthwhile."
+        locator: "Abstract"
+        used_in: [config/noise/bp.data.noise.pauli-cx-biased.yaml]
+
+  - id: puri-2020-bias-preserving-cx
+    title: "Bias-preserving gates with stabilized cat qubits"
+    authors: [Shruti Puri, Lucas St-Jean, Jonathan A. Gross, Alexander Grimm, Nicholas E. Frattini, Pavithran S. Iyer, Anirudh Krishna, Steven Touzard, Liang Jiang, Alexandre Blais, Steven T. Flammia, Steven M. Girvin]
+    year: 2020
+    kind: paper
+    url: https://doi.org/10.1126/sciadv.aay5901
+    download: https://arxiv.org/pdf/1905.00450
+    snapshot: null
+    redistribution: link-only
+    checked: false
+    summary: >-
+      Shows how a CX between stabilised cat qubits in driven Kerr oscillators can keep its errors
+      dominated by phase flips, which a strictly two-level system cannot do. Science Advances 6,
+      eaay5901 (2020), under CC BY-NC 4.0. The source of our pauli profiles' contrast between a
+      native CX and a CX compiled from CZ.
+    takeaways:
+      - claim: "A gate that does not commute with the dominant error removes the noise bias, and a native bias-preserving CX is not possible in a strictly two-level system: a CX turns some phase flips into bit flips on its target."
+        locator: "Abstract and introduction"
+        used_in: [config/noise/bp.data.noise.pauli-cx-biased.yaml, config/noise/bp.data.noise.pauli-cz-biased.yaml, config/noise/bp.data.noise.pauli-cx-unbiased.yaml]
+      - claim: "With two-component cat qubits, a native CX keeps its error channel dominated by phase flips, with bit flips still exponentially suppressed."
+        locator: "Abstract"
+        used_in: [config/noise/bp.data.noise.pauli-cx-biased.yaml]
+
   # -- Software documentation -------------------------------------------------
 
   - id: qiskit-aer-noise-docs
@@ -401,3 +473,22 @@ references:
       - claim: "RelaxationNoisePass skips instructions without a duration, so circuits must be scheduled before idle decoherence appears."
         locator: "RelaxationNoisePass; relaxation_noise_pass source"
         used_in: [docs/DESIGN.md]
+
+  - id: qiskit-fake-provider
+    title: "qiskit_ibm_runtime.fake_provider: fake backends built from IBM system snapshots"
+    authors: [Qiskit IBM Runtime developers]
+    year: 2026
+    kind: docs
+    url: https://quantum.cloud.ibm.com/docs/en/api/qiskit-ibm-runtime/fake-provider
+    download: null
+    snapshot: null
+    redistribution: link-only
+    checked: true
+    summary: >-
+      Reference documentation for the fake backends that ship with qiskit-ibm-runtime, each built
+      from a calibration snapshot of an IBM Quantum system. The pinned package version fixes the
+      snapshot values.
+    takeaways:
+      - claim: "FakeBoston, FakeFez, FakeBurlingtonV2 and FakeOurenseV2 are fake backends built from IBM system snapshots; their calibration values are fixed by the installed qiskit-ibm-runtime version (0.51.0 here)."
+        locator: "Overview; Fake V2 Backends table"
+        used_in: [config/noise/bp.data.noise.boston-2026.yaml, config/noise/bp.data.noise.fez-2025.yaml, config/noise/bp.data.noise.burlington-2020.yaml, docs/DESIGN.md]

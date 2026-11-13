@@ -1,0 +1,198 @@
+# config/bp.schema.noise.yaml
+#
+# Validates config/noise/bp.data.noise.*.yaml: one noise profile, NoiseControl's
+# settings in Qiskit's terms (docs/DESIGN.md, section 4). A snapshot profile holds
+# one value per quantity, the median over a pinned IBM fake-backend snapshot's
+# qubits and directed couplers, and its own native gate set, so any profile pairs
+# with any processor graph. A depolarising profile holds a single channel after a
+# named gate, such as the organisers' cross-check, and a pauli profile a Pauli
+# error with a chosen noise bias after a named gate, for the biased-noise study.
+# Times are in seconds, errors are probabilities. Keys are descriptive; gate names are Qiskit's, since
+# circuits compile to those instructions.
+#
+# Each value field's description is also the comment above that field in every
+# noise file; tests/test_config.py fails when the two differ, so edit them here
+# and copy them there. tests/test_config.py also pins every snapshot value to its
+# snapshot.
+
+$schema: "https://json-schema.org/draft/2020-12/schema"
+title: Noise profile
+description: The noise values NoiseControl builds a Target and a noise model from.
+
+type: object
+required: [name, label, kind, reference, notes]
+additionalProperties: false
+
+$defs:
+  text:
+    type: string
+    minLength: 1
+  seconds:
+    type: number
+    minimum: 0
+  url:
+    type: string
+    pattern: '^https?://'
+  probability:
+    type: number
+    minimum: 0
+    maximum: 1
+  gate:
+    type: object
+    required: [qubits, error_probability, duration]
+    additionalProperties: false
+    properties:
+      qubits:
+        description: 1 for a one-qubit gate, 2 for a two-qubit gate.
+        enum: [1, 2]
+      error_probability: {$ref: "#/$defs/probability"}
+      duration: {$ref: "#/$defs/seconds"}
+      from_snapshot_gate:
+        description: The snapshot's own gate the values were taken from, when it differs from this gate's name.
+        $ref: "#/$defs/text"
+  timed:
+    type: object
+    required: [duration]
+    additionalProperties: false
+    properties:
+      duration: {$ref: "#/$defs/seconds"}
+
+properties:
+  name:
+    description: Slug, the qualifier in the file name; runs and benchmarks pick the profile by it.
+    type: string
+    pattern: '^[a-z0-9][a-z0-9-]*$'
+  label: {$ref: "#/$defs/text"}
+  kind:
+    description: >-
+      snapshot, medians of a fake-backend snapshot; depolarising, one depolarising channel after a named gate;
+      pauli, a Pauli error with a chosen noise bias on each qubit of a named gate.
+    enum: [snapshot, depolarising, pauli]
+  reference:
+    description: The source's id in docs/bp.data.references.yaml.
+    type: string
+    pattern: '^[a-z0-9][a-z0-9-]*$'
+  notes:
+    description: Free text naming the source in words, and anything a reader of the file should know.
+    $ref: "#/$defs/text"
+  snapshot:
+    description: The pinned snapshot a snapshot profile's values come from, with links to its files at the pinned tag; tests read these fields.
+    type: object
+    required: [class, package, calibrated, properties, configuration]
+    additionalProperties: false
+    properties:
+      class:
+        description: The qiskit-ibm-runtime fake backend class.
+        $ref: "#/$defs/text"
+      package:
+        description: The package version that pins the snapshot.
+        $ref: "#/$defs/text"
+      calibrated:
+        description: The snapshot's calibration date.
+        type: string
+        pattern: '^\d{4}-\d{2}-\d{2}$'
+      properties:
+        description: Link to the snapshot's properties file (per-qubit and per-gate values) at the pinned package's tag.
+        $ref: "#/$defs/url"
+      configuration:
+        description: Link to the snapshot's configuration file (the clock tick) at the pinned package's tag.
+        $ref: "#/$defs/url"
+  time_step:
+    description: "Time step in seconds: the hardware's clock tick. Null when the snapshot records none."
+    oneOf:
+      - type: number
+        exclusiveMinimum: 0
+      - type: "null"
+  qubit:
+    type: object
+    required: [t1_relaxation_time, t2_dephasing_time, readout_error]
+    additionalProperties: false
+    properties:
+      t1_relaxation_time:
+        description: "T1 in seconds: how long a qubit holds 1 before relaxing to 0; it is still 1 after time t with probability exp(-t/T1)."
+        $ref: "#/$defs/seconds"
+      t2_dephasing_time:
+        description: "T2 in seconds: how long a qubit keeps the phase between 0 and 1; never more than 2 T1."
+        $ref: "#/$defs/seconds"
+      readout_error:
+        description: Asymmetric readout errors, which replace Aer's symmetric ones.
+        type: object
+        required: [reads_1_when_0, reads_0_when_1]
+        additionalProperties: false
+        properties:
+          reads_1_when_0:
+            description: "Readout error: the probability of reading 1 when the qubit was 0."
+            $ref: "#/$defs/probability"
+          reads_0_when_1:
+            description: "Readout error: the probability of reading 0 when the qubit was 1."
+            $ref: "#/$defs/probability"
+  gates:
+    description: "Native gates, by Qiskit name: the qubits each acts on (1 or 2), its error probability per use, and its duration in seconds."
+    type: object
+    minProperties: 1
+    additionalProperties: {$ref: "#/$defs/gate"}
+  measure:
+    description: "Measurement: its duration in seconds. Its errors are the readout errors."
+    $ref: "#/$defs/timed"
+  reset:
+    description: "Reset to 0: its duration in seconds."
+    $ref: "#/$defs/timed"
+  borrowed:
+    description: Values the snapshot lacks, taken from another source and marked as borrowed.
+    type: array
+    items:
+      type: object
+      required: [field, value, source, url, why]
+      additionalProperties: false
+      properties:
+        field: {$ref: "#/$defs/text"}
+        value: {type: number}
+        source: {$ref: "#/$defs/text"}
+        url:
+          description: Link to the file the value comes from, at the pinned tag when it is a snapshot file.
+          $ref: "#/$defs/url"
+        why: {$ref: "#/$defs/text"}
+  depolarising:
+    type: object
+    required: [after_gate, probability, gates]
+    additionalProperties: false
+    properties:
+      after_gate:
+        description: The gate each depolarising channel follows.
+        $ref: "#/$defs/text"
+      probability:
+        description: "Depolarising strength: with this probability, the gate's qubits are left in a fully random state."
+        $ref: "#/$defs/probability"
+      gates:
+        description: The gate set; every gate other than after_gate is ideal.
+        type: array
+        minItems: 1
+        items: {$ref: "#/$defs/text"}
+  pauli:
+    type: object
+    required: [after_gate, probability, bias, gates]
+    additionalProperties: false
+    properties:
+      after_gate:
+        description: The gate each Pauli error follows, on every qubit it acts on.
+        $ref: "#/$defs/text"
+      probability:
+        description: "The probability that each qubit the gate acts on takes a Pauli error (X, Y or Z), independently of its other qubit."
+        $ref: "#/$defs/probability"
+      bias:
+        description: "Noise bias eta = p_Z / (p_X + p_Y), above 0; 0.5 is unbiased, as depolarising noise is."
+        type: number
+        exclusiveMinimum: 0
+      gates:
+        description: The gate set; every gate other than after_gate is ideal.
+        type: array
+        minItems: 1
+        items: {$ref: "#/$defs/text"}
+
+allOf:
+  - if: {required: [kind], properties: {kind: {const: snapshot}}}
+    then: {required: [snapshot, time_step, qubit, gates, measure]}
+  - if: {required: [kind], properties: {kind: {const: depolarising}}}
+    then: {required: [depolarising]}
+  - if: {required: [kind], properties: {kind: {const: pauli}}}
+    then: {required: [pauli]}

@@ -5,15 +5,12 @@ PyYAML silently coerces two date-like forms on load:
   - Unquoted YYYY-MM-DD  -> datetime.date object
   - Bare YYYY            -> int
 
-Both break jsonschema validation against type: string schemas.
-normalize_dates() converts them back to ISO strings at the load
-boundary, before any validation runs.
-
-The int normalization uses a 1900-2100 range heuristic. Current
-data has no legitimate integer fields in that range (comp values
-are 68k+, rents are 1100-1550, LeetCode refs are empty). If a
-collision occurs, the schema's type: integer check catches it as
-a validation error, so the failure is loud, not silent.
+A date object is never valid JSON, so normalize_dates() converts
+it back to an ISO string at the load boundary, before any
+validation runs. A bare year stays an int here: only a schema can
+say whether 2026 is a year or a count, such as a run's shots or
+seed. lib/validate.py's coerce_years() turns it into a string
+where the schema asks for a string, and nowhere else.
 
 Caching: one run reads the same files many times (every schema
 per data file, every data source per invoke, every enum per
@@ -45,15 +42,13 @@ def normalize_dates(obj):
     """Recursively normalize PyYAML date coercion.
 
     - datetime.date / datetime.datetime -> .isoformat() string
-    - int in 1900-2100 -> str (bare year coercion)
-    - Everything else passes through unchanged.
+    - Everything else passes through unchanged, bare years included
+      (see lib/validate.py, coerce_years).
     """
     if isinstance(obj, datetime.datetime):
         return obj.isoformat()
     if isinstance(obj, datetime.date):
         return obj.isoformat()
-    if isinstance(obj, int) and 1900 <= obj <= 2100:
-        return str(obj)
     if isinstance(obj, dict):
         return {k: normalize_dates(v) for k, v in obj.items()}
     if isinstance(obj, list):

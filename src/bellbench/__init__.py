@@ -1,7 +1,7 @@
 """bellbench: Bell-pair transport and error-detection benchmark.
 
-Modules arrive with the template split (see docs/DESIGN.md). Notebooks import
-from here; they hold narrative and plots, never logic.
+All benchmark logic lives in this package (docs/DESIGN.md, section 1).
+Notebooks import from it and hold narrative and plots, never logic.
 """
 
 __version__ = "0.1.0"

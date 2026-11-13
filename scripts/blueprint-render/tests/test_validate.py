@@ -5,7 +5,7 @@ Uses fixtures/ as a mock repo root. Tests cover:
   - Schema self-validation (check_schema)
   - Enum canonical form
   - Data contract validation (valid passes, seeded errors fail)
-  - Date normalization integration (bare year in data)
+  - Bare years: a string where the schema asks for one, an integer elsewhere
   - Process structural validation (outer shape + vars schema)
   - Invoke structural validation (import format)
   - Invoke contract validation (against process vars)
@@ -17,7 +17,10 @@ from pathlib import Path
 
 from lib.binding import discover
 from lib.enum_registry import build_enum_registry
+from jsonschema import Draft202012Validator
+
 from lib.validate import (
+    coerce_years,
     validate_schema_self,
     validate_enum_form,
     validate_data_contract,
@@ -102,8 +105,8 @@ class TestValidateDataContract:
         assert "purple" in error_text
         assert "year" in error_text
 
-    def test_date_normalization_makes_bare_year_pass(self):
-        """Bare 2024 in YAML loads as int. Normalization converts
+    def test_a_bare_year_passes_where_the_schema_asks_for_a_string(self):
+        """Bare 2024 in YAML loads as int. Validation converts it
         to '2024' so the string type + pattern check passes."""
         enum_reg = build_enum_registry(FIXTURES)
         errors = validate_data_contract(
@@ -112,6 +115,81 @@ class TestValidateDataContract:
             enum_reg,
         )
         assert errors == []
+
+
+    @pytest.mark.parametrize("count", [1900, 2000, 2026, 2100])
+    def test_a_year_like_integer_passes_where_an_integer_is_asked(
+        self, tmp_path, count
+    ):
+        """A run's shots or seed can fall in 1900-2100; it stays an int."""
+        path = tmp_path / "bp.data.widget.yaml"
+        path.write_text(
+            f"name: Counted\ncolor: blue\nyear: 2024\ncount: {count}\n",
+            encoding="utf-8",
+        )
+        errors = validate_data_contract(
+            path,
+            FIXTURES / "bp.schema.widget.yaml",
+            build_enum_registry(FIXTURES),
+        )
+        assert errors == []
+
+
+# -- coerce_years --------------------------------------------------------------
+
+
+class TestCoerceYears:
+    """Bare years become strings only where the schema asks for a string."""
+
+    SCHEMA = {
+        "type": "object",
+        "properties": {
+            "refs": {"type": "array", "items": {"$ref": "#/$defs/ref"}},
+            "shots": {"type": "integer"},
+            "either": {"type": ["string", "integer"]},
+            "maybe": {"oneOf": [{"type": "string"}, {"type": "null"}]},
+        },
+        "$defs": {
+            "ref": {
+                "type": "object",
+                "properties": {
+                    "year": {"type": "string"},
+                    "n": {"type": "integer"},
+                },
+            }
+        },
+    }
+
+    def test_through_ref_items_and_one_of(self):
+        data = {
+            "refs": [{"year": 2026, "n": 2000}],
+            "shots": 2000,
+            "either": 2026,
+            "maybe": 2025,
+        }
+        result = coerce_years(data, Draft202012Validator(self.SCHEMA))
+        assert result == {
+            "refs": [{"year": "2026", "n": 2000}],
+            "shots": 2000,
+            "either": 2026,
+            "maybe": "2025",
+        }
+
+    def test_the_input_is_never_changed(self):
+        data = {"refs": [{"year": 2026}]}
+        coerce_years(data, Draft202012Validator(self.SCHEMA))
+        assert data == {"refs": [{"year": 2026}]}
+
+    def test_a_year_stays_an_integer_where_the_schema_allows_no_string(self):
+        schema = {"properties": {"flag": {"type": "boolean"}}}
+        validator = Draft202012Validator(schema)
+        assert coerce_years({"flag": 2024}, validator) == {"flag": 2024}
+
+    @pytest.mark.parametrize("value", [1899, 2101, True])
+    def test_outside_the_year_range_nothing_changes(self, value):
+        validator = Draft202012Validator(self.SCHEMA)
+        result = coerce_years({"refs": [{"year": value}]}, validator)
+        assert result == {"refs": [{"year": value}]}
 
 
 # -- validate_process_structure ------------------------------------------------

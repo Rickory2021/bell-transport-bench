@@ -16,6 +16,10 @@ Layer 2 (contract):
   - bp.invoke files validate against their bp.process vars via
     Draft202012Validator (import key stripped before validation)
 
+Both contract checks first turn each bare year into a string where
+the schema asks for a string (coerce_years), since YAML reads an
+unquoted 2026 as an integer.
+
 Layer 3 (relationship) is out of scope. Cross-file reference
 checks (employer exists, evidence paths resolve, fn paths exist)
 are deferred to P4+.
@@ -23,12 +27,59 @@ are deferred to P4+.
 All checks are error tier: any failure blocks.
 """
 
+import copy
 from pathlib import Path
 
 from jsonschema import Draft202012Validator, SchemaError
 
 from lib.config import load_yaml
 from lib.enum_registry import build_enum_registry
+
+
+# The integers YAML may have read from a bare year.
+YEARS = range(1900, 2101)
+
+
+def coerce_years(data, validator):
+    """A copy of `data`, each bare year a string where the schema wants one.
+
+    YAML reads an unquoted 2026 as an integer. Where the validator
+    reports that integer as the wrong type and the schema allows a
+    string, it becomes "2026"; anywhere an integer is valid, such as a
+    run's shots or seed, it stays an integer. The places come from the
+    validator's own type errors, so $ref, allOf, anyOf and oneOf
+    resolve as they do when validating. `data` itself is never changed,
+    since load_yaml shares it with every other caller.
+    """
+    data = copy.deepcopy(data)
+    while True:
+        errors = _all_errors(validator.iter_errors(data))
+        paths = [list(e.absolute_path) for e in errors if _wants_string(e)]
+        if not paths:
+            return data
+        for path in paths:
+            if not path:
+                return str(data)
+            parent = data
+            for key in path[:-1]:
+                parent = parent[key]
+            parent[path[-1]] = str(parent[path[-1]])
+
+
+def _all_errors(errors):
+    """Every error, with the ones nested in anyOf and oneOf branches."""
+    for error in errors:
+        yield error
+        yield from _all_errors(error.context)
+
+
+def _wants_string(error):
+    """A type error on a year-like integer where the schema allows a string."""
+    allowed = error.validator_value
+    if not isinstance(allowed, list):
+        allowed = [allowed]
+    year = type(error.instance) is int and error.instance in YEARS
+    return error.validator == "type" and year and "string" in allowed
 
 
 class ValidationResult:
@@ -200,6 +251,7 @@ def validate_data_contract(data_path, schema_path, enum_registry):
 
     try:
         validator = Draft202012Validator(schema, registry=enum_registry)
+        data = coerce_years(data, validator)
         for error in sorted(
             validator.iter_errors(data), key=lambda e: e.json_path
         ):
@@ -324,6 +376,7 @@ def validate_invoke_contract(invoke_path, process_path, enum_registry):
         validator = Draft202012Validator(
             vars_schema, registry=enum_registry
         )
+        invoke_vars = coerce_years(invoke_vars, validator)
         for error in sorted(
             validator.iter_errors(invoke_vars),
             key=lambda e: e.json_path,

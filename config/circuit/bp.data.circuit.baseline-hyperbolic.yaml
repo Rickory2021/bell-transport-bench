@@ -1,0 +1,23 @@
+# config/circuit/bp.data.circuit.baseline-hyperbolic.yaml
+
+name: baseline-hyperbolic
+label: Baseline, Hyperbolic-inspired model
+processor: hyperbolic
+analysis:
+  name: postselect
+notes: >-
+  The baseline transport (swap_chain in src/bellbench/circuits.py), the organisers'
+  recipe: H on the first port, explicit SWAPs out along the path [0, 1, 9, 12], the
+  lexicographically smallest shortest path between the ports, CX onto the second port,
+  and the same SWAPs back, so the pair ends on the ports. No checks, so postselection
+  keeps every shot.
+circuit: |
+  OPENQASM 3.0;
+  include "stdgates.inc";
+  qubit[13] q;
+  h q[0];
+  swap q[0], q[1];
+  swap q[1], q[9];
+  cx q[9], q[12];
+  swap q[1], q[9];
+  swap q[0], q[1];

@@ -9,32 +9,45 @@ The full task is in [`docs/CHALLENGE.md`](docs/CHALLENGE.md): three processor mo
 
 ## Quick start
 
-Requires [uv](https://docs.astral.sh/uv/). uv installs Python 3.12 if it is missing.
+Requires [uv](https://docs.astral.sh/uv/), which installs Python 3.12 if it is missing. `make setup` also installs poppler-utils with `sudo apt` for blueprint-render's PDF output, so it needs a Debian or Ubuntu system, WSL included, and sudo. Elsewhere, run `uv sync --group dev` in its place: everything below works without the PDF tools.
 
 ```bash
-make setup       # uv sync plus system deps for blueprint-render
+make setup       # poppler-utils with sudo apt, then uv sync
 make test
-make refs-fetch  # optional: local copies of every reference
+make refs-fetch  # optional: local copies of each reference that has a download link
 ```
+
+## Running the benchmark
+
+```bash
+make workbench                  # your own copy of the workbench notebook, in workspace/
+make benchmark                  # the core benchmark
+make benchmark NAME=move-chain  # the nine cases the submission reports
+make benchmark NAME=<study>     # an optional study: biased-noise, mid-circuit-sweep or starting-excitation
+make run RUN=<run folder>       # rebuild a run from its record and report any difference
+make report RUN=<run folder>    # redraw a run folder's diagrams and report.md
+```
+
+**A run or benchmark made from committed code lands in `results/runs/`.** One made while `src/` or `config/` has uncommitted changes lands in `workspace/runs/`, which is never committed; to keep it, commit the change and make it again. What each benchmark answers, and where its folders land, is in [DESIGN.md, section 6](docs/DESIGN.md#6-benchmarks-and-results). `make help` lists every target.
 
 ## Layout
 
 | Path | What lives there |
 |------|------------------|
 | `src/bellbench/` | All benchmark logic: processors, noise, transports, checks, measurement, the runner |
-| `config/` | Typed configs: processor models, noise profiles, run configs |
-| `notebooks/` | Tutorials and the generated submission notebook; narrative and plots only |
+| `config/` | Typed configs: processor files, noise profiles, circuit files and benchmark files |
+| `results/` | Runs and benchmarks made from committed code, each in a folder never edited afterwards |
+| `workspace/` | Your workbench copy and anything made with uncommitted changes; only its README is committed |
+| `notebooks/` | The workbench notebook, generated from its template; narrative and plots only |
 | `docs/` | `CHALLENGE.md` (the task), `DESIGN.md` (decisions and reasons), and the references data |
 | `scripts/` | blueprint-render (validates and renders typed YAML) and flatten-sync (exports the repo for Claude Projects) |
 | `tests/` | pytest suite |
 
-Some of these directories arrive in later commits.
-
 ## How the repo works
 
-**Logic lives in Python, narrative lives in notebooks.** Every function the benchmark runs sits in `src/bellbench/`. Notebooks import it and add explanation and plots, never logic. The submission notebook is generated from the package by blueprint-render; never edit a generated notebook by hand.
+**Logic lives in Python, narrative lives in notebooks.** Every function the benchmark runs sits in `src/bellbench/`. Notebooks import it and add explanation and plots, never logic. Notebooks are generated from their templates in `notebooks/` by blueprint-render, the workbench now and the submission notebook once it is built; never edit a generated notebook by hand.
 
-**Configs are typed data.** Processor models, noise profiles and run configs are YAML files validated by schemas, so every assumption is a reviewable file with its source, and every result traces to a config, a seed and pinned package versions.
+**Configs are typed data.** Processor files, noise profiles, circuit files and benchmark files are YAML files validated by schemas, so every assumption is a reviewable file with its source, and every result traces to a config, a seed and pinned package versions.
 
 **Sources are data, not copies.** Every paper, slide deck and doc we rely on is an entry in `docs/bp.data.references.yaml`: its link, an archive snapshot where the original may disappear, a summary in our words, and each claim we take from it with where it appears and which file uses it. Nothing is copied into the repo. `make refs-fetch` downloads local copies into the gitignored `.references/` folder. Entries marked `checked: false` came from secondary accounts and must be confirmed against the original before they reach the submission.
 
@@ -45,20 +58,20 @@ Files in the typed system carry their role in a `bp.` prefix:
 | Prefix | Role |
 |--------|------|
 | `bp.schema.*` | Validates a data file (JSON Schema draft 2020-12, written in YAML) |
-| `bp.data.*` | Hand-written structured data, validated by a schema |
+| `bp.data.*` | Structured data validated by a schema: the configs, and the circuit files, run records and run lists the code writes |
 | `bp.enum.*` | A legal value set under a single `values:` key |
 | `bp.process.*` | Configures a rendering pipeline (vars, map, emit, output) |
 | `bp.invoke.*` | Configures one run of a process |
 | `bp.output.*` | A rendered artifact, committed so results have history |
 
-Files prefixed with `_` are generated by a script and never edited by hand. Run `make bp-validate` to check every typed file.
+Run `make bp-validate` to check every typed file.
 
 ## Science rules
 
 - **Error detection, never fault tolerance.** Parity checks with postselection detect errors and discard shots; they correct nothing.
 - **Every postselected fidelity is reported with its acceptance fraction,** raw and accepted shots per basis, and how the uncertainty was computed.
-- **Separate connectivity from noise.** Any architecture claim needs a run where all graphs share one noise profile.
-- **Circuits are scheduled before noise is applied,** so idle time, measurement and reset cost what they would on hardware.
+- **Separate connectivity from noise.** Any architecture claim needs a run where all graphs share one noise model: the same profile, scale factor, overrides and conditional channels. A comparison that differs in any of them, such as a protected case that sets a mid-circuit measurement error the others do not, is stated as conditional on that difference.
+- **Circuits are scheduled before noise is applied** under a snapshot profile, the kind with durations, so idle time, measurement and reset cost what they would on hardware. A depolarising or pauli profile has no durations, so its runs are not scheduled, and a result under one states that its noise is gate noise alone.
 - **No readout mitigation in the core benchmark.**
 - **One finite model is not a universal advantage.** Recommendations are stated as conditional on the model.
 

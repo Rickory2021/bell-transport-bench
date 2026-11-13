@@ -1,0 +1,30 @@
+# config/circuit/bp.data.circuit.move-chain-path-xx-ibm2016.yaml
+
+name: move-chain-path-xx-ibm2016
+label: move_chain then bus_xx on the path, ibm2016
+processor: ibm2016
+analysis:
+  name: parity
+  settings:
+    checks:
+    - - check_vac_xx[0]
+    - - check_xx[0]
+notes: >-
+  Built by src/bellbench/builders.py on ibm2016 along the path [0, 3, 4]: move_chain();
+  then bus_xx(reset=False).
+circuit: |
+  OPENQASM 3.0;
+  include "stdgates.inc";
+  bit[1] check_vac_xx;
+  bit[1] check_xx;
+  qubit[5] q;
+  h q[0];
+  cx q[0], q[3];
+  cx q[3], q[4];
+  cx q[4], q[3];
+  check_vac_xx[0] = measure q[3];
+  h q[3];
+  cx q[3], q[0];
+  cx q[3], q[4];
+  h q[3];
+  check_xx[0] = measure q[3];
