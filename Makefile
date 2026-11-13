@@ -24,7 +24,9 @@ help:
 	@echo "    make setup                       Create the env (uv sync) and system deps"
 	@echo ""
 	@echo "  Benchmark:"
-	@echo "    make test                        Run the bellbench test suite"
+	@echo "    make test                        Run the bellbench test suite in parallel (the gate before a commit)"
+	@echo "    make test-fast                   The same, skipping the tests marked slow, for use while editing"
+	@echo "    make test-serial                 The whole suite in one process, for debugging"
 	@echo "    make benchmark                   Make the core benchmark (results/ or workspace/)"
 	@echo "    make benchmark NAME=<n>          Make another benchmark"
 	@echo "    make run RUN=<path>              Rerun a run folder and compare: make exits 0 on a match, 2 for a"
@@ -66,11 +68,19 @@ bp-setup:
 
 # -- Benchmark -----------------------------------------------------------
 
-.PHONY: test benchmark run report workbench
+.PHONY: test test-fast test-serial benchmark run report workbench
 
 NAME = core
 
+# make test spreads the suite over one worker per core (pytest-xdist); make test-serial runs it in one
+# process, where a debugger and print output work as usual.
 test:
+	uv run --group dev pytest -q -n auto
+
+test-fast:
+	uv run --group dev pytest -q -n auto -m "not slow"
+
+test-serial:
 	uv run --group dev pytest -q
 
 benchmark:
