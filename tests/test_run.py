@@ -242,6 +242,18 @@ def folder(tmp_path):
     return CircuitRun("baseline-ibm2016", "boston-2026", shots=500, base_seed=SEED).run().write(tmp_path)
 
 
+@pytest.mark.parametrize(
+    "kind, name", [("circuit", "baseline-ibm2016"), ("processor", "ibm2016"), ("noise", "boston-2026")]
+)
+def test_a_write_refused_for_a_changed_file_leaves_no_folder(config_copy, kind, name):
+    run = CircuitRun("baseline-ibm2016", "boston-2026", shots=50, base_seed=SEED).run()
+    path = configs.config_path(kind, name)
+    path.write_text(path.read_text(encoding="utf-8").replace("label: ", "label: Edited ", 1), encoding="utf-8")
+    with pytest.raises(ValueError, match=f"{configs.repo_path(path)} changed since it was recorded"):
+        run.write(config_copy / "results")
+    assert not (config_copy / "results").exists(), "a refused write makes no folder"
+
+
 def test_run_folder_holds_its_record_and_numbers(folder, tmp_path):
     assert folder.relative_to(tmp_path).parts[:4] == ("runs", "workbench", "baseline-ibm2016", "boston-2026")
     record = yaml.safe_load((folder / RESULT_FILE).read_text(encoding="utf-8"))

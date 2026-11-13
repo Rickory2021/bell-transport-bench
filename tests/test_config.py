@@ -253,6 +253,27 @@ def test_a_recorded_file_that_can_no_longer_be_hashed_is_refused_as_changed(conf
         configs.check_file_unchanged(recorded)
 
 
+LONG = "Built in the workbench: swap_chain along the smallest shortest path of the 2016 graph, out and back."
+
+
+@pytest.mark.parametrize(
+    "text, folded",
+    [
+        (LONG, True),  # long prose folds
+        (" " + LONG, False),  # a leading space would read back with a line break at the first fold
+        (LONG + " ", False),  # PyYAML quotes a trailing space itself
+        ("Short.", False),
+        ("line one\nline two", False),  # a literal block
+    ],
+)
+def test_the_dumper_folds_only_text_that_reads_back_as_written(text, folded):
+    from bellbench import configs
+
+    written = yaml.dump({"notes": text}, Dumper=configs.Dumper)
+    assert yaml.safe_load(written) == {"notes": text}
+    assert written.startswith("notes: >") == folded
+
+
 def test_core_graphs_are_present():
     assert set(CORE_GRAPHS) <= set(PROCESSORS)
 

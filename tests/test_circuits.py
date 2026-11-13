@@ -179,6 +179,12 @@ def test_save_then_load(config_copy):
         save_circuit("trial", "Trial", "ibm2016", swap_chain("ibm2016"), "Again.")
 
 
+def test_long_notes_that_start_with_a_space_load_as_written(config_copy):
+    notes = " Built in the workbench: swap_chain along the smallest shortest path of the 2016 graph, out and back."
+    save_circuit("trial", "Trial", "ibm2016", swap_chain("ibm2016"), notes)
+    assert load_circuit("trial").notes == notes
+
+
 def test_a_circuit_that_does_not_fit_is_never_left_on_disk(config_copy):
     with pytest.raises(ValueError, match="needs one register"):
         save_circuit("wrong", "Wrong", "ibm2016", swap_chain("contemporary"), "Built for another graph.")

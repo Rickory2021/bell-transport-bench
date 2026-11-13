@@ -302,11 +302,28 @@ def _non_finite(data, path: str):
 
 class Dumper(yaml.SafeDumper):
     """Writes multi-line text, such as gates, as a literal block, so it reads as written, and long prose as a
-    folded block."""
+    folded block when the folded block reads back as written; other text, such as one that starts with a space,
+    whose first fold YAML would read as a line break, is written in the default style."""
+
+
+class _Folded(yaml.SafeDumper):
+    """Writes every text as a folded block, to test whether a text reads back as written in that style."""
+
+
+_Folded.add_representer(str, lambda dumper, text: dumper.represent_scalar("tag:yaml.org,2002:str", text, style=">"))
+
+
+def _folds_back(text: str) -> bool:
+    return yaml.safe_load(yaml.dump(text, Dumper=_Folded)) == text
 
 
 def _block_text(dumper, text):
-    style = "|" if "\n" in text else (">" if len(text) > 80 else None)
+    if "\n" in text:
+        style = "|"
+    elif len(text) > 80 and _folds_back(text):
+        style = ">"
+    else:
+        style = None
     return dumper.represent_scalar("tag:yaml.org,2002:str", text, style=style)
 
 
