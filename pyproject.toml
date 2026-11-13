@@ -31,7 +31,7 @@ dependencies = [
 ]
 
 [dependency-groups]
-dev = ["pytest", "ipykernel"]
+dev = ["pytest", "pytest-xdist", "ipykernel"]
 
 [build-system]
 requires = ["hatchling"]
@@ -42,3 +42,6 @@ packages = ["src/bellbench"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "slow: takes more than about 2 s on one core; make test-fast skips it, make test runs it",
+]

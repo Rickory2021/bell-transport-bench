@@ -66,6 +66,7 @@ def test_target_coupling_is_the_graph_in_both_directions():
 # -- Parity with Aer's FakeFez model ------------------------------------------
 
 
+@pytest.mark.slow
 def test_fakefez_parity_apart_from_readout():
     """With qubits 0 and 1 and their coupler overridden to FakeFez's own values, the noise equals FakeFez's."""
     fez = _fake_fez()
@@ -261,6 +262,7 @@ def test_the_gate_error_ceiling_is_where_aer_starts_to_cap():
         build(ceiling + 1e-6)
 
 
+@pytest.mark.slow
 def test_numpy_numbers_are_accepted_and_exported_as_plain_ones():
     """A sweep may pass numpy numbers; the export stays plain YAML data and rebuilds the same model."""
     import yaml
@@ -618,6 +620,7 @@ def test_biased_noise_spares_zz_under_cx_and_reaches_it_under_cz(config_copy, pr
 # -- Export, rebuild and hashes --------------------------------------------------
 
 
+@pytest.mark.slow
 def test_export_round_trip():
     nc = NoiseControl(
         "hyperbolic",

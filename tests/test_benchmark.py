@@ -66,6 +66,7 @@ def test_each_core_case_names_its_model_and_simulation():
     }
 
 
+@pytest.mark.slow
 def test_benchmark_end_to_end(tmp_path, monkeypatch):
     stamps = iter(["20261116T120000Z", "20261116T130000Z"])
     monkeypatch.setattr(run_module, "_stamp", lambda: next(stamps))
@@ -141,6 +142,7 @@ def test_the_mid_circuit_channel_is_set_only_where_a_circuit_reads_a_qubit_then_
         assert "reset_error" not in r.get("conditional", {}), "no circuit here resets"
 
 
+@pytest.mark.slow
 def test_the_study_runs_end_to_end(tmp_path):
     """Every run compiles under its profile's gates, and every ideal simulation gives F = 1 with every shot kept."""
     folder = run_benchmark("biased-noise", tmp_path, shots=100)
@@ -170,6 +172,7 @@ def test_the_move_chain_benchmark_fills_the_nine_cases_with_the_baseline_and_the
     assert (data["shots"], data["base_seed"]) == (20_000, 20261116)
 
 
+@pytest.mark.slow
 def test_the_move_chain_benchmark_runs_end_to_end(tmp_path):
     """Every case passes the self-test: the pair ends on the ports, and every ideal simulation gives F = 1 with
     every shot kept."""
@@ -212,6 +215,7 @@ def test_the_sweep_point_at_case_3s_error_has_case_3s_settings():
         assert settings[0] == settings[1], ours
 
 
+@pytest.mark.slow
 def test_the_mid_circuit_sweep_runs_end_to_end(tmp_path):
     """Every point compiles and simulates, the error of 0 included, and every ideal simulation gives F = 1 with
     every shot kept."""
@@ -245,6 +249,7 @@ def test_the_starting_excitation_study_runs_the_move_chain_benchmarks_runs_at_fo
     assert "cases" not in data, "the study fills none of the challenge's nine cases"
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize(
     "states, root",
     [
@@ -316,6 +321,7 @@ def test_the_report_gives_the_infidelity_removed_per_rejection_with_its_error_or
     assert "(F - F raw) / (1 - p) within the run" in report
 
 
+@pytest.mark.slow
 def test_two_makes_in_one_second_refuse_and_keep_the_first(tmp_path, monkeypatch):
     monkeypatch.setattr(run_module, "_stamp", lambda: "20261116T120000Z")
     folder = run_benchmark("core", tmp_path, shots=50)
@@ -471,7 +477,11 @@ def test_the_report_says_the_pair_arrived_only_when_the_ideal_f_is_1(config_copy
 
 @pytest.mark.parametrize("diagrams, files", [
     ("lean", {"graph.png", "circuit-zz.png", "report.md"}),
-    ("full", {"graph.png", "circuit-zz.png", "written.png", "circuit-xx.png", "circuit-yy.png", "timeline.png", "report.md"}),
+    pytest.param(
+        "full",
+        {"graph.png", "circuit-zz.png", "written.png", "circuit-xx.png", "circuit-yy.png", "timeline.png", "report.md"},
+        marks=pytest.mark.slow,
+    ),
 ])
 def test_views_are_drawn(tmp_path, diagrams, files):
     run = CircuitRun("baseline-ibm2016", "boston-2026", shots=100, base_seed=SEED, diagrams=diagrams)
@@ -492,6 +502,7 @@ def test_views_refuse_a_changed_file_before_drawing(config_copy):
     assert {p.name: p.read_bytes() for p in folder.iterdir()} == before, "a refused redraw changes no file"
 
 
+@pytest.mark.slow
 def test_views_draw_without_pyplot_or_a_backend_switch(tmp_path, monkeypatch):
     """Every view is drawn on its own Figure: pyplot makes no figure, so a GUI backend gets no window object
     for Aer's worker threads to free, and nothing switches or resolves the backend."""
@@ -520,6 +531,7 @@ def test_views_draw_without_pyplot_or_a_backend_switch(tmp_path, monkeypatch):
     write_views(folder)
 
 
+@pytest.mark.slow
 def test_writing_a_run_leaves_the_matplotlib_backend_as_it_was(tmp_path):
     """A notebook's inline backend survives a run's write; a fresh process shows the import changes nothing either."""
     script = (

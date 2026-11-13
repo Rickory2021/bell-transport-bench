@@ -246,6 +246,7 @@ def test_a_run_without_starting_excitation_keeps_its_record_and_seeds():
     assert CircuitRun("baseline-ibm2016", "boston-2026", shots=10, base_seed=SEED).settings_hash is None
 
 
+@pytest.mark.slow
 def test_a_run_with_starting_excitation_records_it_and_reruns(tmp_path):
     conditional = {"starting_excitation": 0.05}
     run = CircuitRun("move-chain-spare-xx-contemporary", "boston-2026", shots=200, base_seed=SEED,
