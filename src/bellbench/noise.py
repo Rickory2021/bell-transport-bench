@@ -28,6 +28,11 @@ How each profile kind becomes a model:
   leaves eta alone. A native CX keeps a Z error a Z; with CZ native, a CX
   compiles as H CZ H, and the second H turns a Z on the target into an X.
 
+No kind lists reset among its gates: a snapshot profile gives its reset's
+duration under `reset`, and the reset error applies only there, while a
+depolarising or pauli profile models no reset at all. A profile that lists one
+is refused, so a reset is in the Target exactly where its error is applied.
+
 NoiseControl checks every value after the overrides and the scale, and raises a
 ValueError naming the field instead of capping an invalid one: a probability
 outside 0 to 1, T2 above 2 T1, a gate error below what the gate's decay alone
@@ -114,6 +119,14 @@ class NoiseControl:
         self.kind = self.profile["kind"]
         if self.kind not in _BUILDERS:
             raise ValueError(f"noise profile {noise!r}: unknown kind {self.kind!r}; known: {', '.join(_BUILDERS)}")
+        snapshot = self.kind == "snapshot"
+        if "reset" in (self.profile["gates"] if snapshot else self.profile[self.kind]["gates"]):
+            field = "gates" if snapshot else f"{self.kind}.gates"
+            where = "give its duration under reset" if snapshot else "model no reset"
+            raise ValueError(
+                f"noise profile {noise!r}: $.{field} lists reset, which is not a gate; a {self.kind} profile must "
+                f"{where}, so its reset error is applied wherever the Target holds a reset"
+            )
 
         self.graph = processor_graph(self.processor)
         self.ports = tuple(self.processor["ports"])

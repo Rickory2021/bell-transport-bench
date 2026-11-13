@@ -379,6 +379,28 @@ def test_a_reset_error_is_refused_where_the_profile_defines_no_reset(noise):
             NoiseControl("ibm2016", noise, conditional={"reset_error": 0.3})
 
 
+@pytest.mark.parametrize(
+    "noise, change, field",
+    [
+        ("fez-2025", lambda p: p["gates"].update(reset={"qubits": 1, "error_probability": 0.0, "duration": 1e-6}),
+         r"\$\.gates"),
+        ("organiser-cx2", lambda p: p["depolarising"]["gates"].append("reset"), r"\$\.depolarising\.gates"),
+    ],
+)
+def test_a_profile_that_lists_reset_as_a_gate_is_refused(config_copy, noise, change, field):
+    """A reset listed as a gate would put a reset in the Target that its builder gives no error, so a reset error set
+    on the profile would pass the refusal above and be recorded but never applied."""
+    _edit_profile(noise, change)
+    with pytest.raises(ValueError, match=f"noise profile '{noise}': {field} lists reset, which is not a gate"):
+        NoiseControl("ibm2016", noise)
+
+
+def test_a_pauli_profile_that_lists_reset_as_a_gate_is_refused(config_copy):
+    name = _pauli_profile(gates=["cx", "h", "sdg", "reset"])
+    with pytest.raises(ValueError, match=rf"noise profile '{name}': \$\.pauli\.gates lists reset, which is not a gate"):
+        NoiseControl("ibm2016", name, conditional={"reset_error": 0.3})
+
+
 def test_reset_error_keeps_the_resets_decay():
     from qiskit_aer.noise import pauli_error
 
