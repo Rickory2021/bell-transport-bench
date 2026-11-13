@@ -22,7 +22,8 @@ make refs-fetch  # optional: local copies of each reference that has a download 
 ```bash
 make workbench                  # your own copy of the workbench notebook, in workspace/
 make benchmark                  # the core benchmark
-make benchmark NAME=move-chain  # the nine cases the submission reports; also NAME=biased-noise
+make benchmark NAME=move-chain  # the nine cases the submission reports
+make benchmark NAME=<study>     # an optional study: biased-noise, mid-circuit-sweep or starting-excitation
 make run RUN=<run folder>       # rebuild a run from its record and report any difference
 make report RUN=<run folder>    # redraw a run folder's diagrams and report.md
 ```
