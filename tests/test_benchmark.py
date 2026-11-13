@@ -10,6 +10,8 @@ and the make targets reach the command line. The biased-noise study's circuit
 files equal what the builders make, its file runs each under each pauli
 profile, and it runs end to end. The mid-circuit sweep runs the XX check on
 ibm2016's path at six mid-circuit measurement errors beside two fixed references.
+The starting-excitation study runs the move-chain benchmark's nine runs at four
+starting excitations.
 """
 
 import csv
@@ -126,7 +128,7 @@ def test_the_study_runs_each_circuit_and_baseline_under_each_profile():
     assert (data["shots"], data["base_seed"]) == (20_000, 20261116)
 
 
-@pytest.mark.parametrize("benchmark", ["biased-noise", "move-chain", "mid-circuit-sweep"])
+@pytest.mark.parametrize("benchmark", ["biased-noise", "move-chain", "mid-circuit-sweep", "starting-excitation"])
 def test_the_mid_circuit_channel_is_set_only_where_a_circuit_reads_a_qubit_then_reuses_it(benchmark):
     """The spare-path checks read only at the end and need no channel; the check on ibm2016's path does."""
     data, _ = load_benchmark(benchmark)
@@ -217,6 +219,30 @@ def test_the_mid_circuit_sweep_runs_end_to_end(tmp_path):
     assert len(table) == 2 * len(load_benchmark("mid-circuit-sweep")[0]["runs"])
     ideal = table[table["simulation"] == "ideal"]
     assert (ideal["fidelity"] == 1.0).all() and (ideal["acceptance"] == 1.0).all()
+
+
+# -- The starting-excitation study -------------------------------------------------------
+
+
+def test_the_starting_excitation_study_runs_the_move_chain_benchmarks_runs_at_four_values():
+    """Each of the move-chain benchmark's runs, with its own settings, at each starting excitation, named by run and
+    value, with the core's shots and base seed and no case filled."""
+    data, _ = load_benchmark("starting-excitation")
+    move_chain = load_benchmark("move-chain")[0]["runs"]
+    values = {"0": 0.0, "5e-3": 0.005, "1e-2": 0.01, "2e-2": 0.02}
+    expected = {
+        f"{r['run']}-exc-{name}": {
+            "circuit": r["circuit"], "noise": r["noise"],
+            "conditional": {**r.get("conditional", {}), "starting_excitation": value},
+        }
+        for r in move_chain
+        for name, value in values.items()
+    }
+    assert {r["run"]: {k: v for k, v in r.items() if k != "run"} for r in data["runs"]} == expected
+    assert len(data["runs"]) == len(expected) == 36
+    core = load_benchmark("core")[0]
+    assert (data["shots"], data["base_seed"]) == (core["shots"], core["base_seed"])
+    assert "cases" not in data, "the study fills none of the challenge's nine cases"
 
 
 @pytest.mark.parametrize(
