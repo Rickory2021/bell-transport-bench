@@ -10,6 +10,9 @@ correlators (docs/CHALLENGE.md, Verifying the pair):
 - `fidelity_from_density` computes them exactly from the ports' density
   matrix. Only the cross-check that reproduces the organisers' recorded numbers
   uses it (section 8).
+- `infidelity_removed_per_rejection` sets F after postselection against F over
+  every shot of the same simulation, per unit of the shots discarded, with its
+  standard error (REJECTION_METHOD).
 
 A correlator <BB> is P(00) + P(11) - P(01) - P(10) over the shots of basis B:
 +1 where the two bits agree and -1 where they differ, so the bit order of the
@@ -33,6 +36,8 @@ from qiskit.quantum_info import DensityMatrix, Pauli
 BASES = ("XX", "YY", "ZZ")
 OUTCOMES = ("00", "01", "10", "11")
 UNCERTAINTY_METHOD = "binomial per basis: var(c) = (1 - c^2)/N, independent bases, SE(F) = sqrt(sum var)/4"
+REJECTION_METHOD = "delta method over each basis's kept and discarded counts, independent bases"
+SIGNS = {"XX": 1, "YY": -1, "ZZ": 1}  # each correlator's sign in F
 
 
 @dataclass(frozen=True)
@@ -96,6 +101,55 @@ def fidelity_from_density(rho) -> Fidelity:
         raise ValueError(f"the ports' density matrix is over 2 qubits; got {rho.num_qubits}")
     correlators = {basis: Correlator(float(np.real(rho.expectation_value(Pauli(basis)))), None) for basis in BASES}
     return _fidelity(correlators, "exact, from the density matrix")
+
+
+def infidelity_removed_per_rejection(
+    all_by_basis: Mapping[str, Mapping[str, int]], kept_by_basis: Mapping[str, Mapping[str, int]]
+) -> tuple[float, float]:
+    """(F kept - F all) / (1 - p) for one simulation, with its standard error; (NaN, NaN) where undefined.
+
+    F all is F over every shot, F kept is F over the shots postselection kept,
+    and p is the fraction kept, pooled over the three bases. The value is how
+    much postselection lowers 1 - F per unit of shots it discards. With the same
+    acceptance in every basis it equals F of the kept shots minus F of the
+    discarded ones, so it is 0 where the check discards shots no better or worse
+    than those it keeps. It is undefined where no shot is discarded (p = 1) or a
+    basis keeps none, since F kept is then undefined.
+
+    The standard error is the delta method's (REJECTION_METHOD): each basis's
+    shots split into four counts, kept or discarded and agreeing or not, drawn
+    as one multinomial over that basis's fixed number of shots, and the three
+    bases are measured on separate shots, so their variances add.
+    """
+    _check_bases(all_by_basis)
+    _check_bases(kept_by_basis)
+    cells = {}
+    for basis in BASES:
+        every, kept = all_by_basis[basis], kept_by_basis[basis]
+        if set(kept) - set(OUTCOMES) or any(kept.get(o, 0) > every.get(o, 0) for o in OUTCOMES):
+            raise ValueError(f"basis {basis}'s kept counts {dict(kept)} are not a part of its counts {dict(every)}")
+        a = int(kept.get("00", 0) + kept.get("11", 0))
+        d = int(kept.get("01", 0) + kept.get("10", 0))
+        agree = int(every.get("00", 0) + every.get("11", 0))
+        shots = int(sum(every.values()))
+        cells[basis] = (a, d, agree - a, shots - agree - d, shots)
+    total = sum(c[4] for c in cells.values())
+    kept_total = sum(c[0] + c[1] for c in cells.values())
+    if kept_total == total or any(c[0] + c[1] == 0 for c in cells.values()):
+        return math.nan, math.nan
+    discarded = 1 - kept_total / total
+    gain = fidelity_from_counts(kept_by_basis).value - fidelity_from_counts(all_by_basis).value
+    value = gain / discarded
+    variance = 0.0
+    for basis, (a, d, e, f, shots) in cells.items():
+        s, kept = SIGNS[basis], a + d
+        # Derivatives of the gain and of p by each count, the basis's shots held fixed.
+        d_gain = np.array([2 * d / kept**2 - 1 / shots, -2 * a / kept**2 + 1 / shots, -1 / shots, 1 / shots]) * s / 4
+        d_p = np.array([1, 1, 0, 0]) / total
+        g = d_gain / discarded + gain / discarded**2 * d_p
+        n = np.array([a, d, e, f], dtype=float)
+        variance += float(n @ g**2 - (n @ g) ** 2 / shots)
+    return float(value), math.sqrt(variance)
 
 
 def _fidelity(correlators: dict[str, Correlator], method: str) -> Fidelity:

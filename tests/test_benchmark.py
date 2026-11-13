@@ -80,6 +80,7 @@ def test_benchmark_end_to_end(tmp_path, monkeypatch):
     assert b"\r" not in (folder / "comparison.csv").read_bytes()
     assert {r["case"] for r in rows} == {"1", "2", "4", "5", "7", "8"}
     assert all(float(r["two_qubit_gates_per_accepted_pair"]) == float(r["two_qubit_gates"]) for r in rows)
+    assert all(r["infidelity_removed_per_rejection"] == r["infidelity_removed_per_rejection_se"] == "nan" for r in rows)
     assert "| 5 | contemporary | noisy |" in (folder / "report.md").read_text(encoding="utf-8")
 
     again = run_benchmark("core", tmp_path, shots=200)
@@ -206,10 +207,18 @@ def test_the_current_benchmark_is_the_latest_finished_stamp(tmp_path):
     assert current_benchmark("core", tmp_path) == parent / "20261116T120000Z"
 
 
+def test_the_derived_metrics_follow_the_cost_columns_in_order():
+    assert COMPARISON_COLUMNS[-3:] == (
+        "two_qubit_gates_per_accepted_pair", "infidelity_removed_per_rejection", "infidelity_removed_per_rejection_se"
+    )
+
+
 def test_a_simulation_that_kept_no_shot_has_no_gates_per_accepted_pair():
     analysis = {
-        name: SimpleNamespace(acceptance=acceptance, row=lambda n: {"simulation": n})
-        for name, acceptance in (("ideal", 1.0), ("noisy", 0.0))
+        name: SimpleNamespace(
+            acceptance=acceptance, removed_per_rejection=removed, row=lambda n: {"simulation": n}
+        )
+        for name, acceptance, removed in (("ideal", 1.0, (math.nan, math.nan)), ("noisy", 0.0, (0.39, 0.016)))
     }
     run = SimpleNamespace(
         analysis=analysis, circuit=SimpleNamespace(name="c", processor="ibm2016"),
@@ -220,6 +229,23 @@ def test_a_simulation_that_kept_no_shot_has_no_gates_per_accepted_pair():
     ideal, noisy = comparison_rows({"a": run}, {"runs": []})
     assert ideal["two_qubit_gates_per_accepted_pair"] == 7.0
     assert math.isnan(noisy["two_qubit_gates_per_accepted_pair"])
+    assert all(math.isnan(ideal[c]) for c in COMPARISON_COLUMNS[-2:])
+    assert (noisy["infidelity_removed_per_rejection"], noisy["infidelity_removed_per_rejection_se"]) == (0.39, 0.016)
+
+
+def test_the_report_gives_the_infidelity_removed_per_rejection_with_its_error_or_n_a():
+    row = {
+        "processor": "ibm2016", "simulation": "noisy", "fidelity": 0.98, "fidelity_se": 0.0007, "acceptance": 0.97,
+        "two_qubit_gates": 5, "swaps": 0, "se_method": "binomial",
+    }
+    rows = [
+        {**row, "case": case, "infidelity_removed_per_rejection": value, "infidelity_removed_per_rejection_se": error}
+        for case, value, error in ((2, math.nan, math.nan), (3, 0.39381, 0.01585))
+    ]
+    report = run_module._benchmark_report({"label": "Trial", "notes": "Notes.", "cases": [{}]}, rows)
+    assert "| 2 | ibm2016 | noisy | 0.9800 | 0.0007 | 0.9700 | 5 | 0 | n/a |" in report
+    assert "| 3 | ibm2016 | noisy | 0.9800 | 0.0007 | 0.9700 | 5 | 0 | 0.394 ± 0.016 |" in report
+    assert "(F - F raw) / (1 - p) within the run" in report
 
 
 def test_two_makes_in_one_second_refuse_and_keep_the_first(tmp_path, monkeypatch):

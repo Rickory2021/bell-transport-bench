@@ -58,7 +58,7 @@ from qiskit import qasm3
 from bellbench import configs
 from bellbench.analysis import PortCounts, read_shots
 from bellbench.circuits import circuit_to_qasm, load_circuit
-from bellbench.fidelity import BASES, fidelity_from_counts
+from bellbench.fidelity import BASES, REJECTION_METHOD, fidelity_from_counts, infidelity_removed_per_rejection
 from bellbench.noise import NoiseControl
 from bellbench.pipeline import (
     basis_circuits,
@@ -102,6 +102,7 @@ COMPARISON_COLUMNS = (
     *SIMULATION_COLUMNS,
     "swaps", "router_swaps", "two_qubit_gates", "depth", "qubits_used", "scheduled_duration",
     "two_qubit_gates_per_accepted_pair",
+    "infidelity_removed_per_rejection", "infidelity_removed_per_rejection_se",
 )
 
 
@@ -298,6 +299,7 @@ class Analysis:
         kept, total = sum(self.accepted_shots.values()), sum(self.raw_shots.values())
         self.acceptance = kept / total
         self.interval = wilson_interval(kept, total)
+        self.removed_per_rejection = infidelity_removed_per_rejection(ports.all, ports.kept)
 
     def row(self, simulation: str) -> dict:
         row = {
@@ -660,10 +662,11 @@ def current_benchmark(name: str, root: Path | None = None) -> Path:
 
 
 def comparison_rows(runs: dict, data: dict) -> list[dict]:
-    """One row per run and simulation, with the cost and the two-qubit gates per accepted pair.
+    """One row per run and simulation, with the cost and the derived metrics.
 
     The gates per accepted pair are undefined (NaN) where a simulation kept no
-    shot, as its F is.
+    shot, as its F is. The infidelity removed per rejection and its standard
+    error are undefined where a simulation discarded no shot.
     """
     case_of = {(c["run"], c["simulation"]): c["case"] for c in data.get("cases", [])}
     rows = []
@@ -688,6 +691,8 @@ def comparison_rows(runs: dict, data: dict) -> list[dict]:
                 "two_qubit_gates_per_accepted_pair": (
                     run.cost["two_qubit_gates"] / a.acceptance if a.acceptance else math.nan
                 ),
+                "infidelity_removed_per_rejection": a.removed_per_rejection[0],
+                "infidelity_removed_per_rejection_se": a.removed_per_rejection[1],
             })
     return rows
 
@@ -696,20 +701,38 @@ def _benchmark_report(data: dict, rows: list[dict]) -> str:
     lines = [f"# {data['label']}", "", data["notes"], ""]
     if data.get("cases"):
         lines += [
-            "| Case | Processor | Simulation | F | Standard error | Acceptance | Two-qubit gates | SWAPs |",
-            "|---|---|---|---|---|---|---|---|",
+            "| Case | Processor | Simulation | F | Standard error | Acceptance | Two-qubit gates | SWAPs "
+            "| Infidelity removed per rejection |",
+            "|---|---|---|---|---|---|---|---|---|",
         ]
         for r in sorted((r for r in rows if r["case"] != ""), key=lambda r: r["case"]):
             lines.append(
                 f"| {r['case']} | {r['processor']} | {r['simulation']} | {r['fidelity']:.4f} | "
-                f"{r['fidelity_se']:.4f} | {r['acceptance']:.4f} | {r['two_qubit_gates']} | {r['swaps']} |"
+                f"{r['fidelity_se']:.4f} | {r['acceptance']:.4f} | {r['two_qubit_gates']} | {r['swaps']} | "
+                f"{_removed_cell(r)} |"
             )
-        lines += ["", "Cases not listed have no run yet.", ""]
-    lines += [f"Every row, with the derived metrics, is in comparison.csv. Standard error method: {rows[0]['se_method']}.", ""]
+        lines += [
+            "",
+            "Cases not listed have no run yet. The infidelity removed per rejection is (F - F raw) / (1 - p) "
+            f"within the run, with its standard error by the {REJECTION_METHOD}; it is n/a where no shot was "
+            "discarded.",
+            "",
+        ]
+    lines += [
+        "Every row, with the derived metrics, is in comparison.csv. "
+        f"F's standard error method: {rows[0]['se_method']}.",
+        "",
+    ]
     return "\n".join(lines)
 
 
 # -- Helpers -------------------------------------------------------------------------
+
+
+def _removed_cell(row: dict) -> str:
+    """The report's cell for the infidelity removed per rejection: the value and its standard error, or n/a."""
+    value, error = row["infidelity_removed_per_rejection"], row["infidelity_removed_per_rejection_se"]
+    return "n/a" if math.isnan(value) else f"{value:.3f} ± {error:.3f}"
 
 
 def _check_conditional_channels(name: str, compiled: dict, nc: NoiseControl) -> None:

@@ -1,7 +1,10 @@
 # tests/test_fidelity.py
 """The one Bell fidelity function gives the known answers, and its standard error follows its stated method.
 
-The example states are docs/CHALLENGE.md's table in Verifying the pair.
+The example states are docs/CHALLENGE.md's table in Verifying the pair. The
+infidelity removed per rejection gives a hand-computed answer, its standard
+error matches the spread of the value over counts redrawn from the same
+fractions, and it is undefined where no shot is discarded.
 """
 
 import math
@@ -18,6 +21,7 @@ from bellbench.fidelity import (
     correlator_from_counts,
     fidelity_from_counts,
     fidelity_from_density,
+    infidelity_removed_per_rejection,
 )
 
 
@@ -96,3 +100,60 @@ def test_exact_fidelity_from_density_matrix():
     assert fidelity_from_density(mixed).value == pytest.approx(0.5)
     with pytest.raises(ValueError, match="2 qubits"):
         fidelity_from_density(DensityMatrix.from_label("000"))
+
+
+# Each basis: 100 shots, 90 kept and perfect, 10 discarded with as many agreeing as not. So F kept is 1, the
+# discarded shots' F is 1/4, F raw is (1 + 0.9 + 0.9 + 0.9) / 4 = 0.925 and p is 0.9.
+KEPT = {"XX": {"00": 45, "11": 45}, "YY": {"01": 45, "10": 45}, "ZZ": {"00": 45, "11": 45}}
+EVERY = {
+    "XX": {"00": 48, "11": 47, "01": 3, "10": 2},
+    "YY": {"00": 3, "11": 2, "01": 47, "10": 48},
+    "ZZ": {"00": 48, "11": 47, "01": 3, "10": 2},
+}
+
+
+def test_infidelity_removed_per_rejection_known_answer():
+    value, error = infidelity_removed_per_rejection(EVERY, KEPT)
+    assert value == pytest.approx((1 - 0.925) / (1 - 0.9))
+    assert value == pytest.approx(1 - 0.25), "with one acceptance in every basis, F kept minus F discarded"
+    assert type(value) is float and type(error) is float and error > 0
+
+
+def _removed(cells):
+    """The value from counts (..., basis, cell), cells kept-agree, kept-differ, discarded-agree, discarded-differ."""
+    a, d, e, f = (cells[..., i] for i in range(4))
+    shots, kept = cells.sum(axis=-1), a + d
+    signs = np.array([1, -1, 1])
+    f_kept = (1 + (signs * (a - d) / kept).sum(axis=-1)) / 4
+    f_all = (1 + (signs * (a - d + e - f) / shots).sum(axis=-1)) / 4
+    p = kept.sum(axis=-1) / shots.sum(axis=-1)
+    return (f_kept - f_all) / (1 - p)
+
+
+def test_infidelity_removed_per_rejection_standard_error_matches_redrawn_counts():
+    # Shaped like a protected run: 20,000 shots a basis, about 3% discarded, the discarded F about 0.6.
+    cells = np.array([[19060, 340, 360, 240], [330, 19070, 250, 350], [19050, 350, 370, 230]])
+    every = {b: {"00": int(c[0] + c[2]), "01": int(c[1] + c[3])} for b, c in zip(BASES, cells)}
+    kept = {b: {"00": int(c[0]), "01": int(c[1])} for b, c in zip(BASES, cells)}
+    value, error = infidelity_removed_per_rejection(every, kept)
+    assert value == pytest.approx(float(_removed(cells)))
+    rng = np.random.default_rng(20261116)
+    redrawn = np.stack([rng.multinomial(c.sum(), c / c.sum(), size=20000) for c in cells], axis=1)
+    assert error == pytest.approx(float(_removed(redrawn).std()), rel=0.05)
+
+
+@pytest.mark.parametrize(
+    "every, kept",
+    [
+        (KEPT, KEPT),  # nothing discarded, p = 1
+        (EVERY, {**KEPT, "YY": {}}),  # a basis that kept nothing has no F kept
+    ],
+)
+def test_infidelity_removed_per_rejection_is_undefined_where_f_kept_or_a_discard_is_missing(every, kept):
+    value, error = infidelity_removed_per_rejection(every, kept)
+    assert math.isnan(value) and math.isnan(error)
+
+
+def test_kept_counts_beyond_all_counts_raise():
+    with pytest.raises(ValueError, match="basis XX's kept counts"):
+        infidelity_removed_per_rejection(EVERY, {**KEPT, "XX": {"00": 49, "11": 45}})
