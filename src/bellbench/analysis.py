@@ -29,6 +29,10 @@ A circuit file names its analysis as `{name, settings}`:
   frame lists each bit once, since a bit listed twice cancels itself; one bit
   may still sit in two groups.
 
+Each entry also says which of its checks flag a shot, a register under
+postselect and a group under parity; `check_flags` counts them per basis from the
+raw counts, for display only.
+
 Correction, which flips result bits to undo a detected error, is not here: a
 decoder joins the registry when a strategy first needs one.
 """
@@ -57,10 +61,12 @@ class PortCounts:
 
 @dataclass(frozen=True)
 class Entry:
-    """One registered analysis: `check` refuses settings that do not fit the registers; `read` reads the shots."""
+    """One registered analysis: `check` refuses settings that do not fit the registers; `read` reads the shots;
+    `flags`, when given, says which of its checks flagged each shot."""
 
     check: Callable[[Mapping, Registers], None]
     read: Callable[[Mapping[str, Mapping[str, int]], Registers, Mapping], PortCounts]
+    flags: Callable[[Mapping[str, str], Registers, Mapping], dict[str, bool]] | None = None
 
 
 # -- The contract ------------------------------------------------------------------
@@ -96,6 +102,26 @@ def read_shots(spec, raw: Mapping[str, Mapping[str, int]], registers: Registers,
     return ports
 
 
+def check_flags(spec, raw: Mapping[str, Mapping[str, int]], registers: Registers) -> dict[str, dict[str, int]]:
+    """How many shots each check of the analysis `spec` flagged, per basis, read from the raw counts.
+
+    A check is a register under postselect and a group under parity; a shot is
+    flagged by every check that reads it as an error, so one shot may count under
+    several. It reads only the counts: it changes nothing and simulates nothing.
+    """
+    check_analysis(spec, registers)
+    entry, settings = REGISTRY[spec["name"]], spec.get("settings", {})
+    if entry.flags is None:
+        raise ValueError(f"the {spec['name']} analysis does not say which of its checks flag a shot")
+    flagged = {}
+    for basis in BASES:
+        for key, n in raw[basis].items():
+            for label, fired in entry.flags(_split(key, registers), registers, settings).items():
+                counts = flagged.setdefault(label, {b: 0 for b in BASES})
+                counts[basis] += n if fired else 0
+    return flagged
+
+
 # -- postselect --------------------------------------------------------------------
 
 
@@ -120,6 +146,10 @@ def _read_postselect(raw, registers: Registers, settings: Mapping) -> PortCounts
             if all(set(b) <= {"0"} for b in bits.values()):
                 _add(kept[basis], port, n)
     return PortCounts(every, kept)
+
+
+def _flags_postselect(bits: Mapping[str, str], registers: Registers, settings: Mapping) -> dict[str, bool]:
+    return {name: set(bits[name]) != {"0"} for name, _ in registers if name != PORT_REGISTER}
 
 
 # -- parity ------------------------------------------------------------------------
@@ -170,9 +200,16 @@ def _read_parity(raw, registers: Registers, settings: Mapping) -> PortCounts:
     return PortCounts(every, kept)
 
 
+def _flags_parity(bits: Mapping[str, str], registers: Registers, settings: Mapping) -> dict[str, bool]:
+    sizes = dict(registers)
+    return {
+        " + ".join(group): bool(_parity(bits, [_parse_bit(b, sizes) for b in group])) for group in settings["checks"]
+    }
+
+
 REGISTRY = {
-    "postselect": Entry(_check_postselect, _read_postselect),
-    "parity": Entry(_check_parity, _read_parity),
+    "postselect": Entry(_check_postselect, _read_postselect, _flags_postselect),
+    "parity": Entry(_check_parity, _read_parity, _flags_parity),
 }
 
 
