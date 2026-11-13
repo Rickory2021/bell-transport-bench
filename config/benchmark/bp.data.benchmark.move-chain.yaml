@@ -24,17 +24,17 @@ shots: 20000
 base_seed: 20261116
 runs:
   # The reference: the organisers' baseline.
-  - {id: baseline-ibm2016, circuit: baseline-ibm2016, noise: boston-2026}
-  - {id: baseline-contemporary, circuit: baseline-contemporary, noise: boston-2026}
-  - {id: baseline-hyperbolic, circuit: baseline-hyperbolic, noise: boston-2026}
+  - {run: baseline-ibm2016, circuit: baseline-ibm2016, noise: boston-2026}
+  - {run: baseline-contemporary, circuit: baseline-contemporary, noise: boston-2026}
+  - {run: baseline-hyperbolic, circuit: baseline-hyperbolic, noise: boston-2026}
   # The move chain alone, filling no case.
-  - {id: move-ibm2016, circuit: move-chain-ibm2016, noise: boston-2026}
-  - {id: move-contemporary, circuit: move-chain-contemporary, noise: boston-2026}
-  - {id: move-hyperbolic, circuit: move-chain-hyperbolic, noise: boston-2026}
+  - {run: move-ibm2016, circuit: move-chain-ibm2016, noise: boston-2026}
+  - {run: move-contemporary, circuit: move-chain-contemporary, noise: boston-2026}
+  - {run: move-hyperbolic, circuit: move-chain-hyperbolic, noise: boston-2026}
   # The protection: the move chain with its XX check.
-  - {id: path-xx-ibm2016, circuit: move-chain-path-xx-ibm2016, noise: boston-2026, conditional: {mid_circuit_measurement_error: 0.01}}
-  - {id: spare-xx-contemporary, circuit: move-chain-spare-xx-contemporary, noise: boston-2026}
-  - {id: spare-xx-hyperbolic, circuit: move-chain-spare-xx-hyperbolic, noise: boston-2026}
+  - {run: path-xx-ibm2016, circuit: move-chain-path-xx-ibm2016, noise: boston-2026, conditional: {mid_circuit_measurement_error: 0.01}}
+  - {run: spare-xx-contemporary, circuit: move-chain-spare-xx-contemporary, noise: boston-2026}
+  - {run: spare-xx-hyperbolic, circuit: move-chain-spare-xx-hyperbolic, noise: boston-2026}
 cases:
   - {case: 1, run: baseline-ibm2016, simulation: ideal}
   - {case: 2, run: baseline-ibm2016, simulation: noisy}

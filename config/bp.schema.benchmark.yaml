@@ -47,11 +47,13 @@ properties:
     minItems: 1
     items:
       type: object
-      required: [id, circuit, noise]
+      required: [run, circuit, noise]
       additionalProperties: false
       properties:
-        id:
-          description: The run's name within this benchmark, which cases and the comparison table use.
+        run:
+          description: >-
+            The run's name within this benchmark, unique in the file: its folder in the benchmark's results, the
+            run column of the comparison table, and the run a case names.
           $ref: "#/$defs/slug"
         circuit: {$ref: "#/$defs/slug"}
         noise: {$ref: "#/$defs/slug"}
@@ -76,13 +78,26 @@ properties:
             reset_error: {type: [number, "null"]}
             mid_circuit_measurement_error: {type: [number, "null"]}
   cases:
-    description: For the core benchmark, which run and simulation fills each of the challenge's nine cases.
+    description: >-
+      For a benchmark that fills the challenge's nine cases (docs/CHALLENGE.md, The nine core cases), which run and
+      simulation fills each one; a benchmark without cases is a study whose runs fill none.
     type: array
     items:
       type: object
       required: [case, run, simulation]
       additionalProperties: false
       properties:
-        case: {type: integer, minimum: 1, maximum: 9}
-        run: {$ref: "#/$defs/slug"}
-        simulation: {enum: [ideal, noisy]}
+        case:
+          description: >-
+            The case's number in the challenge's grid: 1 to 3 the 2016-inspired model, 4 to 6 the contemporary
+            model, 7 to 9 the hyperbolic-inspired model, each as the ideal baseline, the noisy baseline and noisy
+            with protection.
+          type: integer
+          minimum: 1
+          maximum: 9
+        run:
+          description: The run, by its name in this file's runs.
+          $ref: "#/$defs/slug"
+        simulation:
+          description: Which of that run's two simulations fills the case.
+          enum: [ideal, noisy]

@@ -11,9 +11,9 @@ notes: >-
 shots: 20000
 base_seed: 20261116
 runs:
-  - {id: ibm2016, circuit: baseline-ibm2016, noise: boston-2026}
-  - {id: contemporary, circuit: baseline-contemporary, noise: boston-2026}
-  - {id: hyperbolic, circuit: baseline-hyperbolic, noise: boston-2026}
+  - {run: ibm2016, circuit: baseline-ibm2016, noise: boston-2026}
+  - {run: contemporary, circuit: baseline-contemporary, noise: boston-2026}
+  - {run: hyperbolic, circuit: baseline-hyperbolic, noise: boston-2026}
 cases:
   - {case: 1, run: ibm2016, simulation: ideal}
   - {case: 2, run: ibm2016, simulation: noisy}

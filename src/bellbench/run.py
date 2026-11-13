@@ -551,13 +551,13 @@ def load_benchmark(name: str) -> tuple[dict, dict]:
     """
     data, record = configs.load_recorded("benchmark", name)
     where = f"{record['path']}: $.cases"
-    ids = [r["id"] for r in data["runs"]]
+    ids = [r["run"] for r in data["runs"]]
     if len(set(ids)) != len(ids):
         raise ValueError(f"{record['path']}: $.runs: run ids must be unique; got {ids}")
     cases = [c["case"] for c in data.get("cases", [])]
     if len(set(cases)) != len(cases):
         raise ValueError(f"{where}: each case is filled once; got {cases}")
-    circuit_of = {r["id"]: r["circuit"] for r in data["runs"]}
+    circuit_of = {r["run"]: r["circuit"] for r in data["runs"]}
     filled = {}
     for c in data.get("cases", []):
         if c["run"] not in ids:
@@ -605,7 +605,7 @@ def run_benchmark(name: str, root: Path | None = None, shots: int | None = None)
     data, record = load_benchmark(name)
     runs = {}
     for spec in data["runs"]:
-        runs[spec["id"]] = CircuitRun(
+        runs[spec["run"]] = CircuitRun(
             spec["circuit"], spec["noise"], shots or data["shots"], data["base_seed"],
             spec.get("scale", 1.0), spec.get("overrides", ()), spec.get("conditional"),
         ).run()

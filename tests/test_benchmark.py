@@ -54,7 +54,7 @@ def test_core_benchmark_file_maps_the_baseline_cases():
 
 def test_each_core_case_names_its_model_and_simulation():
     data, _ = load_benchmark("core")
-    circuit_of = {r["id"]: r["circuit"] for r in data["runs"]}
+    circuit_of = {r["run"]: r["circuit"] for r in data["runs"]}
     named = {c["case"]: (circuit_of[c["run"]], c["simulation"]) for c in data["cases"]}
     assert named == {
         1: ("baseline-ibm2016", "ideal"), 2: ("baseline-ibm2016", "noisy"),
@@ -133,7 +133,7 @@ def test_the_mid_circuit_channel_is_set_only_where_a_circuit_reads_a_qubit_then_
         ports = tuple(configs.load_processor(loaded.processor)["ports"])
         reads_then_reuses = any(mid_circuit_measurements(c) for c in basis_circuits(loaded.circuit, ports).values())
         channel = r.get("conditional", {}).get("mid_circuit_measurement_error")
-        assert (channel is not None) == reads_then_reuses, r["id"]
+        assert (channel is not None) == reads_then_reuses, r["run"]
         assert "reset_error" not in r.get("conditional", {}), "no circuit here resets"
 
 
@@ -154,7 +154,7 @@ def test_the_move_chain_benchmark_fills_the_nine_cases_with_the_baseline_and_the
     """Each row's ideal and noisy cases are the organisers' baseline, its protected case the move chain with its XX
     check, and the move chain alone runs beside them filling no case, all under the core's noise profile."""
     data, _ = load_benchmark("move-chain")
-    runs = {r["id"]: r for r in data["runs"]}
+    runs = {r["run"]: r for r in data["runs"]}
     expected = {}
     for row, processor in enumerate(configs.CORE_PROCESSORS):
         xx = "move-chain-path-xx-ibm2016" if processor == "ibm2016" else f"move-chain-spare-xx-{processor}"
@@ -254,8 +254,8 @@ def _write_benchmark(root, name, runs, cases):
 
 def test_read_table_gives_cases_as_integers_and_no_case_as_na(config_copy):
     _write_benchmark(config_copy, "mixed", [
-        {"id": "a", "circuit": "baseline-ibm2016", "noise": "boston-2026"},
-        {"id": "b", "circuit": "baseline-contemporary", "noise": "boston-2026"},
+        {"run": "a", "circuit": "baseline-ibm2016", "noise": "boston-2026"},
+        {"run": "b", "circuit": "baseline-contemporary", "noise": "boston-2026"},
     ], [{"case": 1, "run": "a", "simulation": "ideal"}])
     table = read_table(run_benchmark("mixed", config_copy / "results", shots=50) / "comparison.csv")
     assert str(table["case"].dtype) == "Int64"
@@ -268,7 +268,7 @@ def test_a_case_whose_pair_ends_off_its_ports_is_refused(config_copy):
     off.h(0)
     off.cx(0, 4)
     save_circuit("off-ports", "Off the ports", "ibm2016", off, "A test circuit the router must move.")
-    _write_benchmark(config_copy, "off", [{"id": "a", "circuit": "off-ports", "noise": "boston-2026"}],
+    _write_benchmark(config_copy, "off", [{"run": "a", "circuit": "off-ports", "noise": "boston-2026"}],
                      [{"case": 1, "run": "a", "simulation": "ideal"}])
     with pytest.raises(ValueError, match="left the pair off its ports"):
         run_benchmark("off", config_copy / "results")
@@ -283,7 +283,7 @@ def test_a_case_whose_check_fires_with_no_noise_is_refused(config_copy):
     circuit.h(1)
     circuit.measure(1, check[0])
     save_circuit("lossy", "Lossy", "ibm2016", circuit, "A test circuit whose check fires without noise.")
-    _write_benchmark(config_copy, "lossy", [{"id": "a", "circuit": "lossy", "noise": "boston-2026"}],
+    _write_benchmark(config_copy, "lossy", [{"run": "a", "circuit": "lossy", "noise": "boston-2026"}],
                      [{"case": 1, "run": "a", "simulation": "ideal"}])
     with pytest.raises(ValueError, match=r"case 1: run 'a' kept 0\.\d+ of its ideal shots, not every one"):
         run_benchmark("lossy", config_copy / "results")
@@ -294,7 +294,7 @@ def test_a_case_whose_ideal_f_is_not_1_is_refused(config_copy):
     unpaired = QuantumCircuit(5)  # a superposition on one port and no entangling gate, so ideal F is about 1/4
     unpaired.h(0)
     save_circuit("unpaired", "Unpaired", "ibm2016", unpaired, "A test circuit that makes no pair.")
-    _write_benchmark(config_copy, "unpaired", [{"id": "a", "circuit": "unpaired", "noise": "boston-2026"}],
+    _write_benchmark(config_copy, "unpaired", [{"run": "a", "circuit": "unpaired", "noise": "boston-2026"}],
                      [{"case": 1, "run": "a", "simulation": "ideal"}])
     with pytest.raises(ValueError, match=r"case 1: run 'a' has ideal F .*, not 1"):
         run_benchmark("unpaired", config_copy / "results")
@@ -304,27 +304,30 @@ def test_a_case_whose_ideal_f_is_not_1_is_refused(config_copy):
 @pytest.mark.parametrize(
     "runs, cases, message",
     [
-        ([{"id": "a", "circuit": "baseline-ibm2016", "noise": "boston-2026"}] * 2, [], "run ids must be unique"),
-        ([{"id": "a", "circuit": "baseline-ibm2016", "noise": "boston-2026"}],
+        ([{"run": "a", "circuit": "baseline-ibm2016", "noise": "boston-2026"}] * 2, [], "run ids must be unique"),
+        # A file written before runs were named by run, as cases name them, is refused naming the missing key.
+        ([{"id": "a", "circuit": "baseline-ibm2016", "noise": "boston-2026"}], [],
+         r"\$\.runs\[0\]: 'run' is a required property"),
+        ([{"run": "a", "circuit": "baseline-ibm2016", "noise": "boston-2026"}],
          [{"case": 1, "run": "b", "simulation": "ideal"}], "names run 'b'"),
-        ([{"id": "a", "circuit": "baseline-ibm2016", "noise": "boston-2026"}],
+        ([{"run": "a", "circuit": "baseline-ibm2016", "noise": "boston-2026"}],
          [{"case": 1, "run": "a", "simulation": "ideal"}, {"case": 1, "run": "a", "simulation": "noisy"}],
          "each case is filled once"),
-        ([{"id": "a", "circuit": "baseline-ibm2016", "noise": "boston-2026"}],
+        ([{"run": "a", "circuit": "baseline-ibm2016", "noise": "boston-2026"}],
          [{"case": 2, "run": "a", "simulation": "noisy"}, {"case": 3, "run": "a", "simulation": "noisy"}],
          "cases 2 and 3 both name run 'a', noisy"),
-        ([{"id": "a", "circuit": "baseline-ibm2016", "noise": "boston-2026"}],
+        ([{"run": "a", "circuit": "baseline-ibm2016", "noise": "boston-2026"}],
          [{"case": 4, "run": "a", "simulation": "ideal"}],
          "case 4 is the contemporary model's ideal simulation; run 'a' is on ibm2016"),
-        ([{"id": "a", "circuit": "baseline-ibm2016", "noise": "boston-2026"}],
+        ([{"run": "a", "circuit": "baseline-ibm2016", "noise": "boston-2026"}],
          [{"case": 1, "run": "a", "simulation": "noisy"}],
          "case 1 is the ibm2016 model's ideal simulation; .* names its noisy simulation"),
-        ([{"id": "a", "circuit": "baseline-hyperbolic", "noise": "boston-2026"}],
+        ([{"run": "a", "circuit": "baseline-hyperbolic", "noise": "boston-2026"}],
          [{"case": 9, "run": "a", "simulation": "ideal"}],
          "case 9 is the hyperbolic model's noisy simulation"),
         # A second run id on a baseline cannot fill a protected case: its circuit measures no check.
-        ([{"id": "a", "circuit": "baseline-ibm2016", "noise": "boston-2026"},
-          {"id": "b", "circuit": "baseline-ibm2016", "noise": "boston-2026"}],
+        ([{"run": "a", "circuit": "baseline-ibm2016", "noise": "boston-2026"},
+          {"run": "b", "circuit": "baseline-ibm2016", "noise": "boston-2026"}],
          [{"case": 2, "run": "a", "simulation": "noisy"}, {"case": 3, "run": "b", "simulation": "noisy"}],
          "case 3 is a protected case; run 'b''s circuit 'baseline-ibm2016' measures no check register"),
     ],
@@ -342,7 +345,7 @@ def test_a_protected_case_needs_a_circuit_that_measures_a_check(config_copy, reg
     circuit.add_register(reg)
     circuit.measure(5, reg[0])  # a qubit off the pair's path, so the read changes nothing
     save_circuit("read-one", "Read one", "hyperbolic", circuit, "A test circuit that reads one spare qubit.")
-    _write_benchmark(config_copy, "protected", [{"id": "a", "circuit": "read-one", "noise": "boston-2026"}],
+    _write_benchmark(config_copy, "protected", [{"run": "a", "circuit": "read-one", "noise": "boston-2026"}],
                      [{"case": 9, "run": "a", "simulation": "noisy"}])
     if register == "flag":
         with pytest.raises(ValueError, match="case 9 is a protected case; .* measures no check register"):
