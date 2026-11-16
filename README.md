@@ -28,7 +28,7 @@ make run RUN=<run folder>       # rebuild a run from its record and report any d
 make report RUN=<run folder>    # redraw a run folder's diagrams and report.md
 ```
 
-**A run or benchmark made from committed code lands in `results/runs/`.** One made while `src/` or `config/` has uncommitted changes, or from a trial circuit in `workspace/circuits/`, lands in `workspace/runs/`, which is never committed; to keep it, commit the change, or promote the trial and commit it, and make it again. What each benchmark answers, and where its folders land, is in [DESIGN.md, section 6](docs/DESIGN.md#6-benchmarks-and-results). `make help` lists every target.
+**A run or benchmark made from committed code lands in `results/runs/`.** One made while `src/` or `config/` has uncommitted changes lands in `workspace/runs/`, which is never committed, and so does a run of a trial circuit in `workspace/circuits/`; a benchmark that names a trial is refused. To keep a result, commit the change, or promote the trial and commit it, and make it again. What each benchmark answers, and where its folders land, is in [DESIGN.md, section 6](docs/DESIGN.md#6-benchmarks-and-results). `make help` lists every target.
 
 ## Layout
 

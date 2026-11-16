@@ -6,10 +6,12 @@ shots in a temporary copy of the repo's config and its committed move-chain
 benchmark, fetch the committed baseline, build and run a trial, compare the two
 and keep the trial's run in workspace/; with its commented promote line on, the
 trial moves into config/circuit/. A fresh render from the template, process and
-invoke gives the committed notebook byte for byte.
+invoke gives the committed notebook byte for byte. The usage example in
+workbench.py's docstring is the notebook's, and runs as written.
 """
 
 import json
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -17,6 +19,7 @@ from pathlib import Path
 import pytest
 
 from bellbench import configs
+from bellbench import workbench as workbench_module
 
 ROOT = Path(__file__).resolve().parents[1]
 NOTEBOOK = ROOT / "notebooks" / "bp.output.workbench.ipynb"
@@ -50,6 +53,24 @@ def test_the_code_cells_run_in_order(config_copy, with_promote):
     assert "Comparison, noisy simulations" in repr(namespace["wb"].compare(base, trial))
     promoted = (configs.ROOT / "config" / "circuit" / configs.file_name("circuit", TRIAL)).is_file()
     assert promoted == with_promote and (TRIAL in configs.trial_names()) != with_promote
+
+
+def test_the_example_in_the_workbench_docstring_runs_as_written(config_copy):
+    shutil.copytree(ROOT / MOVE_CHAIN, config_copy / MOVE_CHAIN)
+    example = [line[4:] for line in workbench_module.__doc__.splitlines() if line.startswith("    ")]
+    assert example[0] == "from bellbench.workbench import Workbench, builders" and len(example) == 9
+    notebook = "\n".join(_code_cells()).replace(PROMOTE, "wb.promote(")
+    baseline = re.search(r'^BASELINE = ("[a-z0-9-]+")', notebook, re.MULTILINE).group(1)
+    notebook = notebook.replace('"move-chain", BASELINE)', f'"move-chain", {baseline})')  # the notebook names it once
+    namespace = {}
+    for line in example:
+        call = line.split("  #")[0]
+        assert call in notebook or call == "wb = Workbench()", f"the notebook has no cell line {call!r}"
+        exec(compile(line, "the docstring of workbench.py", "exec"), namespace)
+        if "wb" in namespace:
+            namespace["wb"].shots = 50
+    assert namespace["trial"].self_test is None and namespace["base"].self_test is None
+    assert TRIAL not in configs.trial_names()  # the example's last line promoted it
 
 
 def test_the_committed_notebook_is_a_fresh_render(tmp_path):

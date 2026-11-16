@@ -1,19 +1,18 @@
 # src/bellbench/workbench.py
 """The Workbench: a notebook session's defaults, and results that show themselves.
 
-A teammate's notebook needs one import:
+A teammate's notebook needs one import, which brings the builders with it, and
+the workbench notebook's cells are this example:
 
-    from bellbench.workbench import Workbench
-    from bellbench import builders
-
-    wb = Workbench()                                   # the core benchmark's noise profile, shots and seed
-    wb.build("try-move-xx", "ibm2016", builders.move_chain, builders.bus_xx)
-    wb.show("try-move-xx")                             # the written circuit, its analysis and the graph
-    result = wb.run("try-move-xx")                     # shows F, the shots per basis, the cost and the checks
-    base = wb.fetch("move-chain", "baseline-ibm2016")  # a committed run, without rerunning it
-    wb.compare(base, result)
-    wb.keep(result)                                    # writes the run folder; a trial's lands in workspace/
-    wb.promote("try-move-xx")                          # moves the trial into config/circuit/, to commit
+    from bellbench.workbench import Workbench, builders
+    wb = Workbench()  # the core benchmark's noise profile, shots and seed
+    base = wb.fetch("move-chain", "baseline-contemporary")  # a committed run, without rerunning it
+    wb.build("try-move-xx", "contemporary", builders.move_chain, (builders.bus_xx, {"on": [0, 4, 5, 6, 7]}))
+    wb.show("try-move-xx")  # the written circuit, its analysis and the graph
+    trial = wb.run("try-move-xx")  # shows F, the shots per basis, the cost and the checks
+    wb.compare(base, trial)
+    wb.keep(trial)  # writes the run folder; a trial's lands in workspace/
+    wb.promote("try-move-xx")  # moves the trial into config/circuit/, to commit
 
 `build` saves every circuit it makes as a trial in workspace/circuits/, with
 the analysis that reads its shots: the one the builders write, or the one
@@ -38,6 +37,7 @@ import pandas as pd
 import yaml
 from qiskit import QuantumCircuit, qasm3
 
+# builders is used here and offered to notebooks from here: the workbench notebook imports it beside Workbench.
 from bellbench import builders, configs
 from bellbench.analysis import check_flags, names_flags, read_shots
 from bellbench.circuits import circuit_from_qasm, load_circuit, promote, save_circuit

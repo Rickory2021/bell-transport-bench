@@ -1,5 +1,5 @@
 # tests/test_benchmark.py
-"""A benchmark makes the runs its file lists, refuses a case that fails the self-test, and writes its folder.
+"""A benchmark makes the runs its file lists, refuses a run that fails the self-test, and writes its folder.
 
 Covers docs/DESIGN.md, section 6, as D-78, D-81 and D-86 settle them: the core
 benchmark file maps cases 1, 2, 4, 5, 7 and 8; a benchmark writes a new stamped

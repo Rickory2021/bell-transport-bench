@@ -1,8 +1,9 @@
 # notebooks/bp.process.workbench.yaml
 #
 # Renders the workbench notebook from its template (docs/DESIGN.md, section 1).
-# The invoke supplies the default circuit and noise profile; the template reads
-# the shots and base seed from the core benchmark file when the notebook runs.
+# The invoke supplies the committed run the trial is compared with and the noise
+# profile; the Workbench takes the shots and base seed from the core benchmark
+# when the notebook runs.
 
 vars:
   $schema: "https://json-schema.org/draft/2020-12/schema"
@@ -11,7 +12,9 @@ vars:
   required: [circuit, noise]
   properties:
     circuit:
-      description: The committed move-chain run the trial is compared with, by its run id, which is its circuit's name.
+      description: >-
+        The committed move-chain run the trial is compared with, by its run id in the move-chain benchmark file,
+        such as baseline-contemporary or move-contemporary. A run id is not always its circuit's name.
       type: string
       pattern: '^[a-z0-9][a-z0-9-]*$'
     noise:

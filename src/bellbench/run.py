@@ -34,8 +34,8 @@ the run's labels, never from its folder name, so a remade run repeats them.
 `make run RUN=<path>` (docs/DESIGN.md, section 5).
 `write_views` draws a run folder's diagrams and report.md from its files, so the
 views can be remade at any time (D-74): `make report RUN=<path>`.
-`run_benchmark` makes every run a benchmark file lists, checks the core
-benchmark's self-test, and writes a new folder,
+`run_benchmark` makes every run a benchmark file lists, refuses any run of
+any benchmark that fails the self-test, and writes a new folder,
 <root>/runs/benchmark/<name>/<stamp>/, holding each run in a folder named by its
 run id, the run list bp.data.runs.yaml (checked against
 config/bp.schema.runs.yaml), comparison.csv and report.md:

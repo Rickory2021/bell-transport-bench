@@ -206,7 +206,9 @@ def promote(name: str, overwrite: bool = False) -> Path:
     as it was and the trial is left untouched, so a bad trial moves nowhere. A
     committed circuit of that name is refused unless `overwrite=True`. A run made
     from the trial keeps its record, which then names a file that no longer
-    exists, so it cannot be rerun.
+    exists, so it can be neither rerun nor fetched; a run of the promoted
+    circuit under the same settings repeats its numbers, since the seeds derive
+    from the circuit's name.
     """
     trial_path = configs.trial_folder() / configs.file_name("circuit", name)
     target = configs.config_folder("circuit") / configs.file_name("circuit", name)

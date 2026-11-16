@@ -64,5 +64,6 @@ folder = wb.keep(trial)
 folder
 
 # %%
-# promote: move a trial worth keeping into config/circuit/, ready to commit.
+# promote: move a trial worth keeping into config/circuit/, ready to commit. A run kept from the trial can then be
+# neither rerun nor fetched, since its trial file is gone; run the promoted circuit again to repeat it.
 # wb.promote("try-move-xx")
