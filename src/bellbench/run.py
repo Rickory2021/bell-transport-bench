@@ -89,7 +89,9 @@ STAMP = "%Y%m%dT%H%M%SZ"  # the UTC time that names run and benchmark folders
 # is the key Qiskit writes: one bit string per register, separated by spaces,
 # the last register first, and inside each string the highest bit first, so the
 # port register's string ends with the first port's bit. `read_table` reads any
-# of the three with its text columns kept as text.
+# of the three with its text columns kept as text. A folder written before a
+# column was added is never edited, so its table lacks that column and still
+# reads: ADDED_COLUMNS lists each such column, and a reader selects by name.
 SIMULATION_COLUMNS = (
     "simulation",
     "fidelity", "fidelity_se", "fidelity_raw", "fidelity_raw_se", "se_method",
@@ -106,6 +108,9 @@ COMPARISON_COLUMNS = (
     "two_qubit_gates_per_accepted_pair",
     "infidelity_removed_per_rejection", "infidelity_removed_per_rejection_se",
 )
+# The columns each CSV gained after folders holding it were committed, in the order they were added. A table
+# written before one of them was added has the declared columns without it and without every later one.
+ADDED_COLUMNS = {"comparison.csv": ("shots_total",)}
 
 
 class CircuitRun:
@@ -868,8 +873,10 @@ def read_table(path):
     Text columns stay text, so an outcome such as "01" or "01 0" keeps its bits
     (read as a number, "01" would become 1; the bit order is in the CSV
     contract above). comparison.csv's case is a nullable integer, empty (<NA>)
-    for a run that fills no case; nan in a number column is NaN. A file of
-    another name, or whose header is not its declared columns, raises a
+    for a run that fills no case; nan in a number column is NaN. A table written
+    before a column was added (ADDED_COLUMNS) reads as it was written, without
+    that column, so select columns by name. A file of another name, or whose
+    header is neither its declared columns nor an earlier set of them, raises a
     ValueError naming it.
     """
     import pandas as pd
@@ -881,9 +888,11 @@ def read_table(path):
     columns = tables[path.name]
     with open(path, newline="", encoding="utf-8") as f:
         header = tuple(next(csv.reader(f), ()))
-    if header != columns:
+    added = ADDED_COLUMNS.get(path.name, ())
+    written = [tuple(c for c in columns if c not in added[k:]) for k in range(len(added) + 1)]
+    if header not in written:
         raise ValueError(f"{path}: the header is not the declared columns of {path.name}; got {list(header)}")
-    dtype = {c: str for c in columns if c in TEXT_COLUMNS} | ({"case": "Int64"} if "case" in columns else {})
+    dtype = {c: str for c in header if c in TEXT_COLUMNS} | ({"case": "Int64"} if "case" in header else {})
     return pd.read_csv(path, dtype=dtype, keep_default_na=False, na_values=["", "nan"])
 
 
