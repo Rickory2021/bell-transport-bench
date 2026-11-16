@@ -498,6 +498,17 @@ def test_every_run_folder_holds_the_same_pictures_whatever_diagrams_says(tmp_pat
     assert len({_files(folder)[f"written/{basis}.png"] for basis in ("zz", "xx", "yy")}) == 3  # one per reading
 
 
+def test_a_timeline_draws_the_qubits_that_act_without_gate_names_and_names_its_colours_in_a_legend():
+    run = CircuitRun("move-chain-path-xx-ibm2016", "boston-2026", shots=50, base_seed=SEED).compile()
+    ax = run_module.timeline_figure(run.compiled["ZZ"].compiled, run.nc).axes[0]
+    drawn = [text.get_text() for text in ax.texts]
+    assert sorted(t for t in drawn if "q" in t) == [f"${{\\rm q}}_{{{q}}}$" for q in (0, 3, 4)]  # of ibm2016's five
+    assert not any("CZ" in t or "Measure" in t or "X" in t for t in drawn)  # no gate names on the blocks
+    legend = [text.get_text() for text in ax.get_legend().get_texts()]
+    assert sorted(legend) == sorted(["${\\rm R}_z$, takes no time", "${\\rm √X}$", "${\\rm CZ}$", "${\\rm Measure}$"])
+    assert ax.figure.get_size_inches()[0] == run_module.TIMELINE_WIDTH == 18  # wider than qiskit's own 14 inches
+
+
 def test_a_timeline_picture_has_a_wider_margin_than_the_other_pictures(tmp_path, monkeypatch):
     folder = CircuitRun("baseline-ibm2016", "boston-2026", shots=50, base_seed=SEED).run().write(tmp_path)
     wide = _files(folder)

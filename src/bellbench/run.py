@@ -80,6 +80,7 @@ SIMULATIONS = ("ideal", "noisy")
 DIAGRAMS = ("lean", "full")  # still accepted and recorded; every run draws the same pictures (write_views)
 OLD_VIEWS = ("circuit-zz.png", "circuit-xx.png", "circuit-yy.png", "written.png", "timeline.png")  # the earlier layout
 TIMELINE_MARGIN = 0.4  # inches of white around a timeline picture; matplotlib's own default, 0.1, is kept elsewhere
+TIMELINE_WIDTH = 18  # inches; qiskit's own is 14, which leaves short gates a few pixels wide beside a measurement
 PACKAGES = ("qiskit", "qiskit-aer", "qiskit-ibm-runtime", "qiskit-qasm3-import", "numpy")
 WILSON_Z = 1.959963984540054  # a 95% interval
 STAMP = "%Y%m%dT%H%M%SZ"  # the UTC time that names run and benchmark folders
@@ -526,11 +527,54 @@ def drawn_figure(draw, size):
 
 
 def timeline_figure(compiled: QuantumCircuit, nc: NoiseControl):
-    """Qiskit's timeline of a compiled circuit's schedule under `nc`, as a Figure made without pyplot."""
+    """Qiskit's timeline of a compiled circuit's schedule under `nc`, as a Figure made without pyplot.
+
+    It draws the qubits that act, each gate as a block in its gate's colour and no gate names: a gate lasts a
+    few time steps beside a measurement about ten times longer, so its name is wider than its block and names
+    overlap. A legend under the axis names each colour from the gates this circuit holds.
+    """
     from qiskit.visualization import timeline_drawer
+    from qiskit.visualization.timeline.stylesheet import IQXSimple
 
     scheduled = schedule(compiled, nc)
-    return drawn_figure(lambda ax: timeline_drawer(scheduled, target=nc.target, axis=ax), _timeline_size)
+
+    def draw(ax):
+        timeline_drawer(scheduled, target=nc.target, axis=ax, style=IQXSimple())  # the style hides idle qubits too
+        _timeline_legend(ax, scheduled, nc)
+
+    return drawn_figure(draw, _timeline_size)
+
+
+def _timeline_legend(ax, scheduled: QuantumCircuit, nc: NoiseControl) -> None:
+    """A legend under a timeline: each gate the schedule holds in the colour qiskit drew it, in order of first use.
+
+    A gate that takes no time, such as rz, is drawn as qiskit's turning-arrow mark and is named with that mark.
+    """
+    from matplotlib.lines import Line2D
+    from matplotlib.patches import Patch
+    from qiskit.visualization.timeline.stylesheet import default_style
+
+    style = default_style()
+    colours, symbols = style["formatter.color.gates"], style["formatter.latex_symbol.gates"]
+    seen: dict[str, bool] = {}  # gate name -> whether any use of it takes time
+    for instruction in scheduled.data:
+        name = instruction.operation.name
+        if name in ("delay", "barrier"):
+            continue
+        qubits = tuple(scheduled.find_bit(q).index for q in instruction.qubits)
+        seen[name] = seen.get(name, False) or bool(nc.target[name][qubits].duration)
+    handles, labels = [], []
+    for name, takes_time in seen.items():
+        label = f"${symbols[name]}$" if name in symbols else name
+        if takes_time:
+            handles.append(Patch(color=colours.get(name, style["formatter.color.default_gate"])))
+            labels.append(label)
+        else:
+            mark = style["formatter.latex_symbol.frame_change"]
+            handles.append(Line2D([], [], linestyle="none", marker=f"${mark}$", markersize=11, color="black"))
+            labels.append(f"{label}, takes no time")
+    ax.legend(handles, labels, loc="upper center", bbox_to_anchor=(0.5, -0.28), ncol=len(handles), frameon=False,
+              fontsize=11)
 
 
 def circuit_size(ax) -> tuple[float, float]:
@@ -540,12 +584,11 @@ def circuit_size(ax) -> tuple[float, float]:
 
 
 def _timeline_size(ax) -> tuple[float, float]:
-    """The size qiskit's timeline drawer gives a figure of its own, from its default style and the axis height."""
+    """A timeline's size: TIMELINE_WIDTH wide, and as tall as qiskit's default style makes its rows."""
     from qiskit.visualization.timeline.stylesheet import default_style
 
-    style = default_style()
     y0, y1 = ax.get_ylim()
-    return style["formatter.general.fig_width"], style["formatter.general.fig_unit_height"] * (y1 - y0)
+    return TIMELINE_WIDTH, default_style()["formatter.general.fig_unit_height"] * (y1 - y0)
 
 
 def _run_report(folder: Path, record: dict) -> str:

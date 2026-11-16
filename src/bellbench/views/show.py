@@ -191,8 +191,8 @@ def _timeline_html(view: Compiled, basis: Basis = "ZZ") -> str:
     """A compiled circuit over time, twice: our chart of when each qubit is busy, then qiskit's own timeline.
 
     The chart gives time in µs for the qubits that act: a two-qubit gate, a single-qubit gate, a measurement, or
-    waiting. Qiskit's timeline names each gate on every qubit, in the processor's time steps; it is the picture
-    a run folder keeps in timeline/, drawn by the same function.
+    waiting. Qiskit's timeline draws each gate as a block in its gate's colour, in the processor's time steps;
+    it is the picture a run folder keeps in timeline/, drawn by the same function.
     """
     noise = view.noise_control()
     if not noise.has_durations:
@@ -234,7 +234,7 @@ def _timeline_html(view: Compiled, basis: Basis = "ZZ") -> str:
     ax.legend(handles, list(BUSY_COLORS) + ["waiting"], loc="upper center", bbox_to_anchor=(0.5, -0.12 - 0.45 / len(rows)),
               ncol=4, frameon=False, fontsize=8)
     ax.set_title(f"Compiled {basis} circuit over time: {total:.3f} µs", fontsize=10)
-    caption = (f"<p>The same {basis} schedule as Qiskit draws it: every gate by name, on every qubit, in the "
+    caption = (f"<p>The same {basis} schedule as Qiskit draws it: one block per gate, coloured by gate, in the "
                "processor's time steps (dt). A run folder keeps this picture in <code>timeline/</code>.</p>")
     return img(fig) + caption + img(timeline_figure(view.compiled[basis], noise))
 
