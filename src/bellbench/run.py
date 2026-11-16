@@ -21,7 +21,8 @@ measured qubit makes its measurement mid-circuit.
 `write` makes the run folder: <root>/runs/workbench/<circuit>/<noise>/<stamp>/
 for a run made on its own, or the folder a benchmark names for each of its runs.
 <root> is results/ for a run made from committed code and config, workspace/
-otherwise. The git state is read when `run` starts, so the record describes the
+otherwise, as for a run of a trial circuit, which git does not track (configs.py).
+The git state is read when `run` starts, so the record describes the
 tree the numbers came from, and a write after a later commit still lands in
 workspace/. A run folder holds bp.data.result.yaml, the settings and records,
 checked against config/bp.schema.result.yaml; simulations.csv, one row of
@@ -33,8 +34,8 @@ the run's labels, never from its folder name, so a remade run repeats them.
 `make run RUN=<path>` (docs/DESIGN.md, section 5).
 `write_views` draws a run folder's diagrams and report.md from its files, so the
 views can be remade at any time (D-74): `make report RUN=<path>`.
-`run_benchmark` makes every run a benchmark file lists, checks the core
-benchmark's self-test, and writes a new folder,
+`run_benchmark` makes every run a benchmark file lists, refuses any run of
+any benchmark that fails the self-test, and writes a new folder,
 <root>/runs/benchmark/<name>/<stamp>/, holding each run in a folder named by its
 run id, the run list bp.data.runs.yaml (checked against
 config/bp.schema.runs.yaml), comparison.csv and report.md:
@@ -88,7 +89,9 @@ STAMP = "%Y%m%dT%H%M%SZ"  # the UTC time that names run and benchmark folders
 # is the key Qiskit writes: one bit string per register, separated by spaces,
 # the last register first, and inside each string the highest bit first, so the
 # port register's string ends with the first port's bit. `read_table` reads any
-# of the three with its text columns kept as text.
+# of the three with its text columns kept as text. A folder written before a
+# column was added is never edited, so its table lacks that column and still
+# reads: ADDED_COLUMNS lists each such column, and a reader selects by name.
 SIMULATION_COLUMNS = (
     "simulation",
     "fidelity", "fidelity_se", "fidelity_raw", "fidelity_raw_se", "se_method",
@@ -101,10 +104,13 @@ TEXT_COLUMNS = ("simulation", "se_method", "basis", "outcome", "run", "circuit",
 COMPARISON_COLUMNS = (
     "case", "run", "circuit", "processor", "noise", "scale", "overrides",
     *SIMULATION_COLUMNS,
-    "swaps", "router_swaps", "two_qubit_gates", "depth", "qubits_used", "scheduled_duration",
+    "swaps", "router_swaps", "two_qubit_gates", "depth", "qubits_used", "scheduled_duration", "shots_total",
     "two_qubit_gates_per_accepted_pair",
     "infidelity_removed_per_rejection", "infidelity_removed_per_rejection_se",
 )
+# The columns each CSV gained after folders holding it were committed, in the order they were added. A table
+# written before one of them was added has the declared columns without it and without every later one.
+ADDED_COLUMNS = {"comparison.csv": ("shots_total",)}
 
 
 class CircuitRun:
@@ -137,7 +143,7 @@ class CircuitRun:
         self.seeds = {step: derive_seed(base_seed, *self.labels, step) for step in ("transpile", *SIMULATIONS)}
         self.derived_seeds = dict(self.seeds)  # what the labels give; from_yaml may run with recorded seeds instead
         self.compiled = self.cost = self.duration = self.git_state = None
-        self.simulations, self.analysis = {}, {}
+        self.simulations, self.scores = {}, {}
 
     @property
     def settings_hash(self) -> str | None:
@@ -171,7 +177,7 @@ class CircuitRun:
             method = (methods or {}).get(name, "automatic")
             sim = simulate(scheduled, noise_model, self.shots, self.seeds[name], method)
             self.simulations[name] = sim
-            self.analysis[name] = Analysis(read_shots(self.circuit.analysis, sim.raw, self.layout, self.shots))
+            self.scores[name] = Score(read_shots(self.circuit.analysis, sim.raw, self.layout, self.shots))
         return self
 
     @property
@@ -216,7 +222,7 @@ class CircuitRun:
         """Aer's seeds and methods for one simulation, and `empty_bases`, the bases that kept no shot, when any."""
         sim = self.simulations[name]
         record = {"seeds": dict(sim.seeds), "methods": dict(sim.methods)}
-        empty = [b for b in BASES if self.analysis[name].accepted_shots[b] == 0]
+        empty = [b for b in BASES if self.scores[name].accepted_shots[b] == 0]
         if empty:
             record["empty_bases"] = empty
         return record
@@ -248,7 +254,8 @@ class CircuitRun:
         """Write the run folder and return it.
 
         By default the folder is <root>/runs/workbench/<circuit>/<noise>/<stamp>/,
-        with `root` results/ or workspace/ as the git state says. A benchmark
+        with `root` results/ only when the git state was clean and every file the
+        run used is in config/, and workspace/ otherwise, as for a trial circuit. A benchmark
         passes `folder` instead, which must not exist yet. A circuit, processor or
         noise file that changed since the run was built is refused before the
         folder is made, so a refused write leaves no folder.
@@ -257,7 +264,8 @@ class CircuitRun:
         configs.check_config("result", record, "the run record")
         if folder is None:
             if root is None:
-                root = configs.ROOT / ("workspace" if record["provenance"]["uncommitted"] else "results")
+                kept = not record["provenance"]["uncommitted"] and not _uses_files_outside_config(record)
+                root = configs.ROOT / ("results" if kept else "workspace")
             stamp = _stamp()
             if self.nc.scale != 1:
                 stamp += f"-x{self.nc.scale:g}"
@@ -277,7 +285,7 @@ class CircuitRun:
 
     def simulation_rows(self) -> list[dict]:
         """One row of numbers per simulation, as simulations.csv holds them."""
-        return [self.analysis[name].row(name) for name in SIMULATIONS]
+        return [self.scores[name].row(name) for name in SIMULATIONS]
 
     def count_rows(self) -> list[dict]:
         """Every outcome of every basis circuit, keyed as Qiskit writes it: one bit string per register, last first."""
@@ -289,10 +297,10 @@ class CircuitRun:
         ]
 
 
-# -- Analysis ------------------------------------------------------------------------
+# -- Score ---------------------------------------------------------------------------
 
 
-class Analysis:
+class Score:
     """One simulation's port counts, scored: F over all shots and over kept ones, the acceptance and its interval."""
 
     def __init__(self, ports: PortCounts):
@@ -353,10 +361,8 @@ def rerun(path: Path) -> tuple[int, list[str]]:
     """
     folder = Path(path)
     folder = folder.parent if folder.name == RESULT_FILE else folder
-    if not (folder / RESULT_FILE).is_file():
-        return REFUSED, [f"refused: {folder / RESULT_FILE} does not exist; give a run folder or its {RESULT_FILE}"]
-    record = yaml.safe_load((folder / RESULT_FILE).read_text(encoding="utf-8"))
     try:
+        record = load_record(folder)
         run = CircuitRun.from_yaml(record)
     except (ValueError, FileNotFoundError) as e:
         return REFUSED, [f"refused: {e}"]
@@ -387,7 +393,38 @@ def rerun(path: Path) -> tuple[int, list[str]]:
     return (DIFFER if differ else MATCH), lines
 
 
+# -- Reading a run folder ----------------------------------------------------------------
+
+
+def load_record(folder: Path) -> dict:
+    """The record of the run folder `folder`, or of its result file, checked before anything is read from it.
+
+    Every reader of a run folder starts here: a rerun, a redraw of its views and
+    the Workbench's fetch, so each refuses the same folders in the same words.
+    Raises a FileNotFoundError when the folder holds no record, or when the
+    record names a circuit, processor or noise file that no longer exists, and a
+    ValueError when the record does not fit its schema, was recorded in another
+    result format, or names a file that changed since the run.
+    """
+    folder = Path(folder)
+    folder = folder.parent if folder.name == RESULT_FILE else folder
+    if not (folder / RESULT_FILE).is_file():
+        raise FileNotFoundError(f"{folder / RESULT_FILE} does not exist; give a run folder or its {RESULT_FILE}")
+    record = yaml.safe_load((folder / RESULT_FILE).read_text(encoding="utf-8"))
+    configs.check_config("result", record, "the run record")
+    _check_result_format(record)
+    _check_recorded_files(record)
+    return record
+
+
 # -- Views ----------------------------------------------------------------------------
+
+def _uses_files_outside_config(record: dict) -> bool:
+    """Whether the run used a file outside config/, such as a trial circuit, which git does not track."""
+    nc = record["noise_control"]
+    paths = (record["circuit"]["path"], nc["processor"]["path"], nc["noise"]["path"])
+    return any(not path.startswith("config/") for path in paths)
+
 
 def _check_recorded_files(record: dict) -> None:
     """Refuse a circuit, processor or noise file that a run record names and that changed since the run."""
@@ -414,9 +451,7 @@ def write_views(folder: Path) -> list[Path]:
     from bellbench.figures import draw_processor
 
     folder = Path(folder)
-    record = yaml.safe_load((folder / RESULT_FILE).read_text(encoding="utf-8"))
-    _check_result_format(record)
-    _check_recorded_files(record)
+    record = load_record(folder)
     proc = yaml.safe_load((configs.ROOT / record["noise_control"]["processor"]["path"]).read_text(encoding="utf-8"))
     written = []
 
@@ -425,7 +460,7 @@ def write_views(folder: Path) -> list[Path]:
         written.append(folder / name)
 
     used = [tuple(int(q) for q in edge.split("-")) for edge in record["cost"]["two_qubit_gates_by_edge"]["ZZ"]]
-    save(_figure(lambda ax: draw_processor(ax, proc, used_edges=used), lambda ax: (4, 4.3)), "graph.png")
+    save(drawn_figure(lambda ax: draw_processor(ax, proc, used_edges=used), lambda ax: (4, 4.3)), "graph.png")
     drawings = {"circuit-zz.png": record["compiled"]["ZZ"]}
     if record["diagrams"] == "full":
         drawings |= {"written.png": record["written"], "circuit-xx.png": record["compiled"]["XX"],
@@ -435,17 +470,20 @@ def write_views(folder: Path) -> list[Path]:
         # qiskit draws a global phase through pyplot even on a given axis, which would make a window object; the
         # phase changes no measured outcome, so the views leave it out.
         circuit.global_phase = 0
-        save(_figure(lambda ax: circuit.draw("mpl", idle_wires=False, fold=40, ax=ax), _circuit_size), name)
+        save(drawn_figure(lambda ax: circuit.draw("mpl", idle_wires=False, fold=40, ax=ax), circuit_size), name)
     if record["diagrams"] == "full" and record["scheduled_duration"] is not None:
         nc = NoiseControl.from_yaml(record["noise_control"])
         scheduled = schedule(qasm3.loads(record["compiled"]["ZZ"]), nc)
-        save(_figure(lambda ax: timeline_drawer(scheduled, target=nc.target, axis=ax), _timeline_size), "timeline.png")
+        save(
+            drawn_figure(lambda ax: timeline_drawer(scheduled, target=nc.target, axis=ax), _timeline_size),
+            "timeline.png",
+        )
     (folder / "report.md").write_text(_run_report(folder, record), encoding="utf-8")
     written.append(folder / "report.md")
     return written
 
 
-def _figure(draw, size):
+def drawn_figure(draw, size):
     """A matplotlib Figure, made without pyplot, holding what `draw(ax)` puts on an axis.
 
     `size(ax)` gives the figure's size in inches from an axis the drawing was
@@ -462,7 +500,7 @@ def _figure(draw, size):
     return fig
 
 
-def _circuit_size(ax) -> tuple[float, float]:
+def circuit_size(ax) -> tuple[float, float]:
     """The size qiskit's circuit drawer gives a figure of its own: its axis limits times its scale factor."""
     (x0, x1), (y0, y1) = ax.get_xlim(), ax.get_ylim()
     return (x1 - x0) * 0.8361111, (y1 - y0) * 0.8361111
@@ -553,13 +591,24 @@ def load_benchmark(name: str) -> tuple[dict, dict]:
     its run's circuit is on the case's model, one row per model in
     CORE_PROCESSORS order, and cases 1, 4 and 7 are ideal, all others noisy.
     A protected case, 3, 6 or 9, needs a run whose circuit measures into a
-    check register, so it cannot repeat its baseline.
+    check register, so it cannot repeat its baseline. A benchmark names only
+    committed circuits, never a trial, since its file is committed and others run it.
     """
     data, record = configs.load_recorded("benchmark", name)
     where = f"{record['path']}: $.cases"
     ids = [r["run"] for r in data["runs"]]
     if len(set(ids)) != len(ids):
         raise ValueError(f"{record['path']}: $.runs: run ids must be unique; got {ids}")
+    for r in data["runs"]:
+        try:
+            path = configs.config_path("circuit", r["circuit"])
+        except FileNotFoundError:
+            continue  # a missing circuit is refused where the run loads it, naming the known ones
+        if configs.is_trial(path):
+            raise ValueError(
+                f"{record['path']}: $.runs: run {r['run']!r} names the trial circuit {r['circuit']!r}; a benchmark "
+                "names only committed circuits, so promote it and commit it first"
+            )
     cases = [c["case"] for c in data.get("cases", [])]
     if len(set(cases)) != len(cases):
         raise ValueError(f"{where}: each case is filled once; got {cases}")
@@ -595,10 +644,11 @@ def _measures_a_check(circuit) -> bool:
 
 
 def run_benchmark(name: str, root: Path | None = None, shots: int | None = None) -> Path:
-    """Make every run the benchmark lists and write a new folder; refuses before writing if a case fails its self-test.
+    """Make every run the benchmark lists and write a new folder; refuses before writing if a run fails its self-test.
 
-    The self-test: the pair ends on the ports, and the ideal simulation gives
-    F = 1 and keeps every shot.
+    The self-test, which every run passes, whether it fills a case or not: the
+    pair ends on the ports, and the ideal simulation gives F = 1 and keeps every
+    shot. A refusal names the run, and the cases it fills.
 
     The folder is <root>/runs/benchmark/<name>/<stamp>/, and each run is written
     in it under its run id. `root` is results/ only when the git state read as the
@@ -615,19 +665,11 @@ def run_benchmark(name: str, root: Path | None = None, shots: int | None = None)
             spec["circuit"], spec["noise"], shots or data["shots"], data["base_seed"],
             spec.get("scale", 1.0), spec.get("overrides", ()), spec.get("conditional"),
         ).run()
+    cases_of = {}
     for case in data.get("cases", []):
-        run = runs[case["run"]]
-        if not run.cost["pair_on_ports"]:
-            raise ValueError(f"benchmark {name!r}: case {case['case']}: run {case['run']!r} left the pair off its ports")
-        if run.analysis["ideal"].accepted.value != 1.0:
-            ideal = run.analysis["ideal"].accepted.value
-            raise ValueError(f"benchmark {name!r}: case {case['case']}: run {case['run']!r} has ideal F {ideal}, not 1")
-        if run.analysis["ideal"].acceptance != 1.0:
-            kept = run.analysis["ideal"].acceptance
-            raise ValueError(
-                f"benchmark {name!r}: case {case['case']}: run {case['run']!r} kept {kept} of its ideal shots, "
-                "not every one, so a check fires with no noise"
-            )
+        cases_of.setdefault(case["run"], []).append(case["case"])
+    for run_id, run in runs.items():
+        _self_test(name, run_id, run, cases_of.get(run_id, []))
     run_list = {"benchmark": record, "runs": list(runs), "cases": data.get("cases", [])}
     if root is None:
         clean = not start[1] and all(run.git_state == start for run in runs.values())
@@ -648,6 +690,42 @@ def run_benchmark(name: str, root: Path | None = None, shots: int | None = None)
     return folder
 
 
+def self_test_failure(pair_on_ports: bool, ideal_fidelity: float, ideal_acceptance: float) -> str | None:
+    """The part of the self-test a run fails, or None when it passes.
+
+    "ports" when the pair ends off its ports, else "fidelity" when the ideal
+    simulation does not give F = 1, else "acceptance" when it does not keep every
+    shot. The test is stated here alone; a benchmark and the Workbench each word
+    its answer for their reader.
+    """
+    if not pair_on_ports:
+        return "ports"
+    if ideal_fidelity != 1.0:
+        return "fidelity"
+    if ideal_acceptance != 1.0:
+        return "acceptance"
+    return None
+
+
+def _self_test(benchmark: str, run_id: str, run: CircuitRun, cases: list[int]) -> None:
+    """Refuse a run that fails the self-test (`self_test_failure`).
+
+    The message names the benchmark, the cases the run fills, if any, and the run.
+    """
+    filled = f"case{'s' if len(cases) > 1 else ''} {', '.join(map(str, cases))}: " if cases else ""
+    where = f"benchmark {benchmark!r}: {filled}run {run_id!r}"
+    ideal = run.scores["ideal"]
+    failed = self_test_failure(run.cost["pair_on_ports"], ideal.accepted.value, ideal.acceptance)
+    if failed == "ports":
+        raise ValueError(f"{where} left the pair off its ports")
+    if failed == "fidelity":
+        raise ValueError(f"{where} has ideal F {ideal.accepted.value}, not 1")
+    if failed == "acceptance":
+        raise ValueError(
+            f"{where} kept {ideal.acceptance} of its ideal shots, not every one, so a check fires with no noise"
+        )
+
+
 def current_benchmark(name: str, root: Path | None = None) -> Path:
     """The benchmark's current folder: the finished one with the latest stamp under <root>/runs/benchmark/<name>/.
 
@@ -666,7 +744,9 @@ def current_benchmark(name: str, root: Path | None = None) -> Path:
 
 
 def comparison_rows(runs: dict, data: dict) -> list[dict]:
-    """One row per run and simulation, with the cost and the derived metrics.
+    """One row per run and simulation, with the cost, the total shots and the derived metrics.
+
+    The total shots are the raw shots of the simulation's three bases together.
 
     The gates per accepted pair are undefined (NaN) where a simulation kept no
     shot, as its F is. The infidelity removed per rejection and its standard
@@ -676,7 +756,7 @@ def comparison_rows(runs: dict, data: dict) -> list[dict]:
     rows = []
     for run_id, run in runs.items():
         for name in SIMULATIONS:
-            a = run.analysis[name]
+            s = run.scores[name]
             rows.append({
                 "case": case_of.get((run_id, name), ""),
                 "run": run_id,
@@ -685,18 +765,19 @@ def comparison_rows(runs: dict, data: dict) -> list[dict]:
                 "noise": run.nc.noise_name,
                 "scale": run.nc.scale,
                 "overrides": len(run.nc.overrides),
-                **a.row(name),
+                **s.row(name),
                 "swaps": run.cost["swaps"],
                 "router_swaps": run.cost["router_swaps"],
                 "two_qubit_gates": run.cost["two_qubit_gates"],
                 "depth": run.cost["depth"],
                 "qubits_used": len(run.cost["qubits_used"]),
                 "scheduled_duration": run.duration if run.duration is not None else "",
+                "shots_total": sum(s.raw_shots.values()),
                 "two_qubit_gates_per_accepted_pair": (
-                    run.cost["two_qubit_gates"] / a.acceptance if a.acceptance else math.nan
+                    run.cost["two_qubit_gates"] / s.acceptance if s.acceptance else math.nan
                 ),
-                "infidelity_removed_per_rejection": a.removed_per_rejection[0],
-                "infidelity_removed_per_rejection_se": a.removed_per_rejection[1],
+                "infidelity_removed_per_rejection": s.removed_per_rejection[0],
+                "infidelity_removed_per_rejection_se": s.removed_per_rejection[1],
             })
     return rows
 
@@ -720,6 +801,22 @@ def _benchmark_report(data: dict, rows: list[dict]) -> str:
             "Cases not listed have no run yet. The infidelity removed per rejection is (F - F raw) / (1 - p) "
             f"within the run, with its standard error by the {REJECTION_METHOD}; it is n/a where no shot was "
             "discarded.",
+            "",
+        ]
+    else:
+        lines += [
+            "| Run | F | Standard error | F raw | Acceptance | Two-qubit gates | Total shots |",
+            "|---|---|---|---|---|---|---|",
+        ]
+        for r in (r for r in rows if r["simulation"] == "noisy"):
+            lines.append(
+                f"| {r['run']} | {r['fidelity']:.4f} | {r['fidelity_se']:.4f} | {r['fidelity_raw']:.4f} | "
+                f"{r['acceptance']:.4f} | {r['two_qubit_gates']} | {r['shots_total']} |"
+            )
+        lines += [
+            "",
+            "One row per run, its noisy simulation; every run's ideal simulation passed the self-test, F = 1 with "
+            "every shot kept. Total shots are the raw shots of the three bases together.",
             "",
         ]
     lines += [
@@ -817,8 +914,10 @@ def read_table(path):
     Text columns stay text, so an outcome such as "01" or "01 0" keeps its bits
     (read as a number, "01" would become 1; the bit order is in the CSV
     contract above). comparison.csv's case is a nullable integer, empty (<NA>)
-    for a run that fills no case; nan in a number column is NaN. A file of
-    another name, or whose header is not its declared columns, raises a
+    for a run that fills no case; nan in a number column is NaN. A table written
+    before a column was added (ADDED_COLUMNS) reads as it was written, without
+    that column, so select columns by name. A file of another name, or whose
+    header is neither its declared columns nor an earlier set of them, raises a
     ValueError naming it.
     """
     import pandas as pd
@@ -830,9 +929,11 @@ def read_table(path):
     columns = tables[path.name]
     with open(path, newline="", encoding="utf-8") as f:
         header = tuple(next(csv.reader(f), ()))
-    if header != columns:
+    added = ADDED_COLUMNS.get(path.name, ())
+    written = [tuple(c for c in columns if c not in added[k:]) for k in range(len(added) + 1)]
+    if header not in written:
         raise ValueError(f"{path}: the header is not the declared columns of {path.name}; got {list(header)}")
-    dtype = {c: str for c in columns if c in TEXT_COLUMNS} | ({"case": "Int64"} if "case" in columns else {})
+    dtype = {c: str for c in header if c in TEXT_COLUMNS} | ({"case": "Int64"} if "case" in header else {})
     return pd.read_csv(path, dtype=dtype, keep_default_na=False, na_values=["", "nan"])
 
 

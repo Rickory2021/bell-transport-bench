@@ -21,7 +21,10 @@ in real time (s, ms, us or ns), never in dt, which is a noise profile's clock
 tick while a circuit file belongs to a processor (docs/DESIGN.md, section 7).
 
 The transport and check functions build circuits; `save_circuit` writes what
-they build as a circuit file. `swap_chain` is the baseline transport: the
+they build as a circuit file, in config/circuit/, or with `trial=True` as a
+trial in workspace/circuits/, which git ignores. `promote` moves a trial into
+config/circuit/ to be committed. A circuit's name is never both a committed
+circuit and a trial. `swap_chain` is the baseline transport: the
 organisers' recipe of explicit SWAPs out along a port path, which paths.py
 chooses, and back (D-30).
 Run as a module, this writes the three core baseline circuit files.
@@ -63,9 +66,13 @@ class CircuitFile:
     record: dict
 
 
-def load_circuit(name: str) -> CircuitFile:
-    """The circuit file for `name`, checked; raises a ValueError naming the file and the field."""
-    data, record = configs.load_recorded("circuit", name)
+def load_circuit(name: str, path: Path | None = None) -> CircuitFile:
+    """The circuit file for `name`, checked; raises a ValueError naming the file and the field.
+
+    `path` loads that file in place of the one the name finds: `promote` checks
+    the file it has just written while the trial of the same name still exists.
+    """
+    data, record = configs.load_recorded("circuit", name, path)
     try:
         processor = configs.load_processor(data["processor"])
     except FileNotFoundError as e:
@@ -139,12 +146,23 @@ def save_circuit(
     notes: str,
     analysis: Mapping | None = None,
     overwrite: bool = False,
+    trial: bool = False,
 ) -> Path:
     """Write `circuit` as the circuit file `name`, then load it back so a bad file never stays on disk.
 
     `analysis` is `{name, settings}` from the registry in analysis.py; by default postselect.
+    The file goes in config/circuit/, or with `trial=True` in workspace/circuits/;
+    a name the other folder already holds is refused, so one name is one circuit.
     """
-    path = configs.config_folder("circuit") / configs.file_name("circuit", name)
+    committed = configs.config_folder("circuit") / configs.file_name("circuit", name)
+    trial_path = configs.trial_folder() / configs.file_name("circuit", name)
+    path, other = (trial_path, committed) if trial else (committed, trial_path)
+    if other.exists():
+        kind = "a committed circuit" if trial else "a trial circuit"
+        raise ValueError(
+            f"{configs.repo_path(other)} is {kind} named {name!r}; one name is one circuit, so choose another name"
+            + ("" if trial else " or promote the trial")
+        )
     if path.exists() and not overwrite:
         raise FileExistsError(f"{configs.repo_path(path)} exists; pass overwrite=True to replace it")
     if analysis is not None and not isinstance(analysis, Mapping):
@@ -162,8 +180,7 @@ def save_circuit(
     }
     path.parent.mkdir(parents=True, exist_ok=True)
     previous = path.read_text(encoding="utf-8") if path.exists() else None
-    text = f"# {configs.repo_path(path)}\n\n" + yaml.dump(data, Dumper=configs.Dumper, sort_keys=False)
-    path.write_text(text, encoding="utf-8")
+    path.write_text(_file_text(path, data), encoding="utf-8")
     try:
         load_circuit(name)
     except Exception:
@@ -173,6 +190,51 @@ def save_circuit(
             path.write_text(previous, encoding="utf-8")
         raise
     return path
+
+
+def _file_text(path: Path, data: Mapping) -> str:
+    """A circuit file's text: a comment naming its path from the repo's root, then its fields as YAML."""
+    return f"# {configs.repo_path(path)}\n\n" + yaml.dump(data, Dumper=configs.Dumper, sort_keys=False)
+
+
+def promote(name: str, overwrite: bool = False) -> Path:
+    """Move the trial circuit `name` from workspace/circuits/ into config/circuit/, to be committed.
+
+    The file is written in config/circuit/ from the trial's parsed content, then
+    loaded back and checked, and only then is the trial deleted. If the written
+    file does not load, or the check is interrupted, config/circuit/ is put back
+    as it was and the trial is left untouched, so a bad trial moves nowhere. A
+    committed circuit of that name is refused unless `overwrite=True`. A run made
+    from the trial keeps its record, which then names a file that no longer
+    exists, so it can be neither rerun nor fetched; a run of the promoted
+    circuit under the same settings repeats its numbers, since the seeds derive
+    from the circuit's name.
+    """
+    trial_path = configs.trial_folder() / configs.file_name("circuit", name)
+    target = configs.config_folder("circuit") / configs.file_name("circuit", name)
+    if not trial_path.is_file():
+        trials = ", ".join(configs.trial_names()) or "none"
+        folder = configs.repo_path(configs.trial_folder())
+        raise FileNotFoundError(f"no trial circuit named {name!r} in {folder}; trials: {trials}")
+    if target.exists() and not overwrite:
+        raise FileExistsError(f"{configs.repo_path(target)} exists; pass overwrite=True to replace it")
+    trial_text = trial_path.read_text(encoding="utf-8")
+    previous = target.read_text(encoding="utf-8") if target.exists() else None
+    try:
+        data = yaml.safe_load(trial_text)
+    except yaml.YAMLError as e:
+        raise ValueError(f"{configs.repo_path(trial_path)}: the trial does not parse as YAML: {e}") from None
+    target.write_text(_file_text(target, data), encoding="utf-8")
+    try:
+        load_circuit(name, target)
+    except BaseException:  # an interrupt too: an unchecked file must not stay in config/circuit/
+        if previous is None:
+            target.unlink()
+        else:
+            target.write_text(previous, encoding="utf-8")
+        raise
+    trial_path.unlink()
+    return target
 
 
 # -- Transports ------------------------------------------------------------------

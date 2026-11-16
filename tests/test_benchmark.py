@@ -1,5 +1,5 @@
 # tests/test_benchmark.py
-"""A benchmark makes the runs its file lists, refuses a case that fails the self-test, and writes its folder.
+"""A benchmark makes the runs its file lists, refuses a run that fails the self-test, and writes its folder.
 
 Covers docs/DESIGN.md, section 6, as D-78, D-81 and D-86 settle them: the core
 benchmark file maps cases 1, 2, 4, 5, 7 and 8; a benchmark writes a new stamped
@@ -287,14 +287,15 @@ def test_the_derived_metrics_follow_the_cost_columns_in_order():
 
 
 def test_a_simulation_that_kept_no_shot_has_no_gates_per_accepted_pair():
-    analysis = {
+    scores = {
         name: SimpleNamespace(
-            acceptance=acceptance, removed_per_rejection=removed, row=lambda n: {"simulation": n}
+            acceptance=acceptance, removed_per_rejection=removed, row=lambda n: {"simulation": n},
+            raw_shots={"XX": 10, "YY": 10, "ZZ": 10},
         )
         for name, acceptance, removed in (("ideal", 1.0, (math.nan, math.nan)), ("noisy", 0.0, (0.39, 0.016)))
     }
     run = SimpleNamespace(
-        analysis=analysis, circuit=SimpleNamespace(name="c", processor="ibm2016"),
+        scores=scores, circuit=SimpleNamespace(name="c", processor="ibm2016"),
         nc=SimpleNamespace(noise_name="boston-2026", scale=1.0, overrides=[]),
         cost={"swaps": 2, "router_swaps": 0, "two_qubit_gates": 7, "depth": 8, "qubits_used": [0, 3, 4]},
         duration=None,

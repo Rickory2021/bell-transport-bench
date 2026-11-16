@@ -37,6 +37,8 @@ BASES = ("XX", "YY", "ZZ")
 OUTCOMES = ("00", "01", "10", "11")
 UNCERTAINTY_METHOD = "binomial per basis: var(c) = (1 - c^2)/N, independent bases, SE(F) = sqrt(sum var)/4"
 REJECTION_METHOD = "delta method over each basis's kept and discarded counts, independent bases"
+# A variance sum below 0 by no more than this fraction of its positive terms is rounding, and taken as 0.
+ROUNDING = 1e-12
 SIGNS = {"XX": 1, "YY": -1, "ZZ": 1}  # each correlator's sign in F
 
 
@@ -153,7 +155,27 @@ def infidelity_removed_per_rejection(
         n = (a, d, e, f)
         terms.append(math.fsum(c * x * x for c, x in zip(n, g)))
         terms.append(-math.fsum(c * x for c, x in zip(n, g)) ** 2 / shots)
-    return float(value), math.sqrt(math.fsum(terms))
+    return float(value), _standard_error(terms)
+
+
+def _standard_error(terms: list[float]) -> float:
+    """The square root of the variance `terms` sum to, which is 0 where the sum is negative only by rounding.
+
+    A variance of exactly 0, as where every shot kept and discarded agrees, can
+    sum to a tiny negative number in floating point. A sum more negative than
+    ROUNDING times its positive terms is a real error, and raises. A sum that is
+    not a number is passed on as NaN: an undefined term leaves the error
+    undefined, never an exact 0.
+    """
+    variance = math.fsum(terms)
+    if math.isnan(variance):
+        return math.nan
+    if variance >= 0:
+        return math.sqrt(variance)
+    scale = math.fsum(t for t in terms if t > 0)
+    if variance < -ROUNDING * scale:
+        raise ValueError(f"the variance sums to {variance}, below 0 by more than rounding (positive terms {scale})")
+    return 0.0
 
 
 def _fidelity(correlators: dict[str, Correlator], method: str) -> Fidelity:

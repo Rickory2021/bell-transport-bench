@@ -136,10 +136,14 @@ class BuildState:
             + "."
         )
 
-    def save(self, name: str, label: str, overwrite: bool = False) -> Path:
-        """Write the circuit file `name`, with the analysis the builders wrote and the notes saying how."""
+    def save(self, name: str, label: str, overwrite: bool = False, trial: bool = False) -> Path:
+        """Write the circuit file `name`, with the analysis the builders wrote and the notes saying how.
+
+        With `trial=True` it is a trial, in workspace/circuits/ (circuits.save_circuit).
+        """
         return save_circuit(
-            name, label, self.processor, self.circuit, self.notes(), analysis=self.analysis(), overwrite=overwrite
+            name, label, self.processor, self.circuit, self.notes(), analysis=self.analysis(), overwrite=overwrite,
+            trial=trial,
         )
 
 

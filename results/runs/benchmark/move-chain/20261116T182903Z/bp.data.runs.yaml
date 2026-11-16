@@ -1,0 +1,41 @@
+benchmark:
+  path: config/benchmark/bp.data.benchmark.move-chain.yaml
+  hash: sha256:a785609c53e3c2bbd2d7616b5bb97559aaae7b8a09b82a615032cd43a4f97ec1
+runs:
+- baseline-ibm2016
+- baseline-contemporary
+- baseline-hyperbolic
+- move-ibm2016
+- move-contemporary
+- move-hyperbolic
+- path-xx-ibm2016
+- spare-xx-contemporary
+- spare-xx-hyperbolic
+cases:
+- case: 1
+  run: baseline-ibm2016
+  simulation: ideal
+- case: 2
+  run: baseline-ibm2016
+  simulation: noisy
+- case: 3
+  run: path-xx-ibm2016
+  simulation: noisy
+- case: 4
+  run: baseline-contemporary
+  simulation: ideal
+- case: 5
+  run: baseline-contemporary
+  simulation: noisy
+- case: 6
+  run: spare-xx-contemporary
+  simulation: noisy
+- case: 7
+  run: baseline-hyperbolic
+  simulation: ideal
+- case: 8
+  run: baseline-hyperbolic
+  simulation: noisy
+- case: 9
+  run: spare-xx-hyperbolic
+  simulation: noisy
