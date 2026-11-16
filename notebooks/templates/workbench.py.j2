@@ -13,7 +13,7 @@
 # | Step | What you do |
 # |---|---|
 # | [3.1 Start the session](#section-3-1) | Set the noise profile, shots and seed everything below runs with |
-# | [3.2 Your circuit](#section-3-2) | Name it, then write it in Qiskit (3.2a) or build it from the builders (3.2b) |
+# | [3.2 Your circuit](#section-3-2) | Name it, then write it in Qiskit (3.2a), build it from the builders (3.2b) or start from an existing circuit (3.2c) |
 # | [3.3 Check it](#section-3-3) | See what it is and what compiling costs, before spending a shot |
 # | [3.4 Run it](#section-3-4) | Run it ideal and noisy and read its result |
 # | [3.5 Compare it](#section-3-5) | Set it beside committed runs |
@@ -46,7 +46,7 @@ wb = Workbench(noise=NOISE, shots=SHOTS, base_seed=BASE_SEED, conditional=CONDIT
 #
 # ## 3.2 Your circuit
 #
-# **Name the circuit, then make it one of two ways: write it in Qiskit (3.2a) or let the builders write it (3.2b).** Use one of the two. Either way `build` checks the circuit as loading a circuit file would, and saves it as a trial in `workspace/circuits/`, which git ignores.
+# **Name the circuit, then make it one of three ways: write it in Qiskit (3.2a), let the builders write it (3.2b), or start from an existing circuit (3.2c).** Use one of the three. Either way `build` checks the circuit as loading a circuit file would, and saves it as a trial in `workspace/circuits/`, which git ignores.
 #
 # - **Edit:** the name, label and processor below. `CIRCUIT_NAME` is the name the circuit keeps from here on: `promote` moves it into `config/circuit/` under this name, and a benchmark file lists it by this name.
 # - **Refused when:** the name already belongs to a committed circuit.
@@ -88,6 +88,19 @@ trial = wb.build(CIRCUIT_NAME, circuit, processor=PROCESSOR, analysis=ANALYSIS, 
 # %%
 # trial = wb.build(CIRCUIT_NAME, PROCESSOR, wb.builders.move_chain, label=LABEL)                                    # the same move chain
 # trial = wb.build(CIRCUIT_NAME, PROCESSOR, wb.builders.move_chain, (wb.builders.bus_xx, {"on": "spare"}), label=LABEL)  # with an XX check
+
+# %% [markdown]
+# ### 3.2c Or start from an existing circuit
+#
+# - **Do:** name a committed circuit or a trial, edit a copy of its gates, and build the copy under `CIRCUIT_NAME`. A committed circuit's own name is refused, so the copy needs a new one.
+# - **Call:** `wb.show(name).circuit` is the circuit file, loaded without compiling: its `circuit`, `analysis` and `processor`. Keep its `analysis` while the check bits stay the same; a new check bit needs its register on `circuit` and its name in `ANALYSIS`, as in 3.2a.
+# - **You get:** a trial, as from 3.2a. The lines are commented out so that running the whole notebook keeps the circuit you wrote in 3.2a; remove the `#` to use them instead.
+
+# %%
+# base = wb.show("move-chain-spare-xx-hyperbolic").circuit   # a committed circuit or a trial, loaded, not compiled
+# circuit, ANALYSIS, PROCESSOR = base.circuit.copy(), base.analysis, base.processor
+# circuit.cx(3, 11)                                            # your edits to the copy
+# trial = wb.build(CIRCUIT_NAME, circuit, processor=PROCESSOR, analysis=ANALYSIS, label=LABEL)
 
 # %% [markdown]
 # <a id="section-3-3"></a>
