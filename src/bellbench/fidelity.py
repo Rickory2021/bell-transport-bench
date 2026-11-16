@@ -163,9 +163,13 @@ def _standard_error(terms: list[float]) -> float:
 
     A variance of exactly 0, as where every shot kept and discarded agrees, can
     sum to a tiny negative number in floating point. A sum more negative than
-    ROUNDING times its positive terms is a real error, and raises.
+    ROUNDING times its positive terms is a real error, and raises. A sum that is
+    not a number is passed on as NaN: an undefined term leaves the error
+    undefined, never an exact 0.
     """
     variance = math.fsum(terms)
+    if math.isnan(variance):
+        return math.nan
     if variance >= 0:
         return math.sqrt(variance)
     scale = math.fsum(t for t in terms if t > 0)

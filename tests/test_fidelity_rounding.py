@@ -5,8 +5,10 @@ An ideal run whose check discards shots, where every kept and discarded shot
 agrees, has an infidelity removed per rejection of 0 with a variance of exactly
 0. Summed in floating point, that variance can come out just below 0, which
 math.sqrt refuses; a sum below 0 by more than rounding is a real error and
-still raises.
+still raises, and a sum that is not a number stays not a number.
 """
+
+import math
 
 import pytest
 
@@ -33,3 +35,8 @@ def test_a_sum_below_0_by_more_than_rounding_raises():
 
 def test_a_positive_sum_is_its_square_root():
     assert _standard_error([2.25, 0.0]) == 1.5
+
+
+@pytest.mark.parametrize("terms", [[math.nan], [1.0, math.nan], [-1.0, math.nan]])
+def test_a_sum_that_is_not_a_number_is_passed_on_not_given_as_0(terms):
+    assert math.isnan(_standard_error(terms))
