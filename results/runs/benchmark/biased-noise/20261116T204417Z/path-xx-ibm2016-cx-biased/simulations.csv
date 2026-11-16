@@ -1,3 +1,0 @@
-simulation,fidelity,fidelity_se,fidelity_raw,fidelity_raw_se,se_method,corr_XX,corr_YY,corr_ZZ,acceptance,acceptance_low,acceptance_high,shots_raw_XX,shots_accepted_XX,shots_raw_YY,shots_accepted_YY,shots_raw_ZZ,shots_accepted_ZZ
-ideal,1.0,0.0,1.0,0.0,"binomial per basis: var(c) = (1 - c^2)/N, independent bases, SE(F) = sqrt(sum var)/4",1.0,-1.0,1.0,1.0,0.9999359797851721,1.0,20000,20000,20000,20000,20000,20000
-noisy,0.979542764566074,0.0007346282291663099,0.9371,0.0012145498137170001,"binomial per basis: var(c) = (1 - c^2)/N, independent bases, SE(F) = sqrt(sum var)/4",0.9602926934251588,-0.9589550228925398,0.9989233419465977,0.9287833333333333,0.9266978832006202,0.9308138818638171,20000,18586,20000,18565,20000,18576
