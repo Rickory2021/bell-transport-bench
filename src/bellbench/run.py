@@ -142,7 +142,7 @@ class CircuitRun:
         self.labels = (circuit, noise, repr(self.nc.scale), self.settings_hash or "none")
         self.seeds = {step: derive_seed(base_seed, *self.labels, step) for step in ("transpile", *SIMULATIONS)}
         self.derived_seeds = dict(self.seeds)  # what the labels give; from_yaml may run with recorded seeds instead
-        self.compiled = self.cost = self.duration = self.git_state = None
+        self.compiled = self.cost = self.scheduled = self.duration = self.git_state = None
         self.simulations, self.scores = {}, {}
 
     @property
@@ -155,6 +155,24 @@ class CircuitRun:
 
     # -- Running ---------------------------------------------------------------
 
+    def compile(self, require_channels: bool = False) -> "CircuitRun":
+        """The run's steps before it simulates: the three basis circuits, compiled once, the cost, and the schedule.
+
+        Sets `compiled`, `cost`, `scheduled` and `duration`, and simulates nothing,
+        so a circuit can be looked at before it runs. `run` calls this first, with
+        `require_channels=True`, which stops a circuit that resets a qubit, or
+        measures one and acts on it again, while the matching conditional channel
+        is unset; without it such a circuit still compiles, to be shown.
+        """
+        circuits = basis_circuits(self.circuit.circuit, self.nc.ports)
+        self.compiled = compile_bases(circuits, self.nc, self.seeds["transpile"])
+        if require_channels:
+            _check_conditional_channels(self.circuit.name, self.compiled, self.nc)
+        self.cost = cost(self.compiled, self.nc.ports)
+        self.scheduled = {basis: schedule(c.compiled, self.nc) for basis, c in self.compiled.items()}
+        self.duration = scheduled_duration(self.scheduled["ZZ"], self.nc)
+        return self
+
     def run(self, methods: dict[str, str] | None = None) -> "CircuitRun":
         """Compile, cost, schedule, simulate ideal and noisy, and read the shots; `methods` repeats a recorded run's.
 
@@ -162,12 +180,8 @@ class CircuitRun:
         first, so they describe the code and config the numbers came from.
         """
         self.git_state = _git_state()
-        circuits = basis_circuits(self.circuit.circuit, self.nc.ports)
-        self.compiled = compile_bases(circuits, self.nc, self.seeds["transpile"])
-        _check_conditional_channels(self.circuit.name, self.compiled, self.nc)
-        self.cost = cost(self.compiled, self.nc.ports)
-        scheduled = {basis: schedule(c.compiled, self.nc) for basis, c in self.compiled.items()}
-        self.duration = scheduled_duration(scheduled["ZZ"], self.nc)
+        self.compile(require_channels=True)
+        scheduled = dict(self.scheduled)
         if self.nc.conditional["mid_circuit_measurement_error"] is not None:
             scheduled = {basis: mark_mid_circuit_measurements(c) for basis, c in scheduled.items()}
         if self.nc.conditional["starting_excitation"] is not None:
