@@ -54,7 +54,7 @@ from importlib.metadata import version
 from pathlib import Path
 
 import yaml
-from qiskit import qasm3
+from qiskit import QuantumCircuit, qasm3
 
 from bellbench import configs
 from bellbench.analysis import PortCounts, read_shots
@@ -470,8 +470,6 @@ def write_views(folder: Path) -> list[Path]:
     notebook keeps its inline plots, and a GUI backend such as TkAgg has nothing
     that Aer's worker threads could free.
     """
-    from qiskit.visualization import timeline_drawer
-
     from bellbench.figures import draw_processor
 
     folder = Path(folder)
@@ -500,11 +498,9 @@ def write_views(folder: Path) -> list[Path]:
                  f"{group}/{basis.lower()}.png")
     if record["scheduled_duration"] is not None:
         for basis in BASES:
-            scheduled = schedule(compiled[basis], nc)
             # qiskit's timeline puts its qubit names, last tick and axis title at the figure's edge, so the picture
             # gets a wider margin than a circuit's.
-            save(drawn_figure(lambda ax: timeline_drawer(scheduled, target=nc.target, axis=ax), _timeline_size),
-                 f"timeline/{basis.lower()}.png", margin=TIMELINE_MARGIN)
+            save(timeline_figure(compiled[basis], nc), f"timeline/{basis.lower()}.png", margin=TIMELINE_MARGIN)
     for name in OLD_VIEWS:
         (folder / name).unlink(missing_ok=True)
     (folder / "report.md").write_text(_run_report(folder, record), encoding="utf-8")
@@ -527,6 +523,14 @@ def drawn_figure(draw, size):
     fig = Figure(figsize=size(ax), facecolor="white")
     draw(fig.add_subplot())
     return fig
+
+
+def timeline_figure(compiled: QuantumCircuit, nc: NoiseControl):
+    """Qiskit's timeline of a compiled circuit's schedule under `nc`, as a Figure made without pyplot."""
+    from qiskit.visualization import timeline_drawer
+
+    scheduled = schedule(compiled, nc)
+    return drawn_figure(lambda ax: timeline_drawer(scheduled, target=nc.target, axis=ax), _timeline_size)
 
 
 def circuit_size(ax) -> tuple[float, float]:
