@@ -102,6 +102,12 @@ modifiers:
       - '^results/.*\.png$'
     note: "Diagrams in run folders. A Project re-encodes images, so its copies are not the repo's files; each run's record holds its circuits as OpenQASM 3, which the export keeps."
 
+  first-results:
+    silent: false
+    patterns:
+      - '^results/runs/benchmark/[^/]+/20261113T\d{6}Z/'
+    note: "The first benchmark folders, from 13 November, which the repo keeps as history. Each benchmark's remade folder holds the same numbers, so the export carries the remade folders alone."
+
   # -- Toggleable (profiles decide direction) -------------------------
 
   scripts:
