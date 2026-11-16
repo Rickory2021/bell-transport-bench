@@ -6,15 +6,22 @@ copy of config/ in a temporary root; tests that fetch read the committed
 move-chain benchmark and write nothing.
 """
 
+from pathlib import Path
+
 import pytest
+import yaml
 
 from bellbench import builders, configs
 from bellbench import run as run_module
-from bellbench.analysis import check_flags
+from bellbench.analysis import check_flags, read_shots
+from bellbench.fidelity import BASES
 from bellbench.run import CircuitRun, current_benchmark, load_benchmark, read_table
 from bellbench.workbench import Workbench
 
 SHOTS = 200
+OVERRIDE = {"qubits": [0, 3], "field": "gates.cz.error_probability", "value": 0.05}
+CHANNEL = "mid_circuit_measurement_error"
+PROTECTED = ("move-chain", "spare-xx-contemporary")  # a committed run whose one check discards shots
 # A Bell pair on ibm2016's ports 0 and 4 along 0-3-4, with an optional read of the idle qubit 1.
 QASM = """OPENQASM 3.0;
 include "stdgates.inc";
@@ -49,6 +56,24 @@ def test_a_run_takes_one_runs_settings_over_the_sessions(config_copy):
     assert wb.run("baseline-ibm2016", noise="organiser-cx2").label == "baseline-ibm2016 under organiser-cx2"
 
 
+def _settings(result):
+    """The settings a run record holds: its base seed, scale, overrides and one conditional channel."""
+    noise = result.record["noise_control"]
+    return result.record["base_seed"], noise["scale"], noise["overrides"], noise["conditional"][CHANNEL]
+
+
+def test_a_run_takes_every_setting_of_the_session(config_copy):
+    wb = Workbench(shots=SHOTS, base_seed=7, scale=3.0, overrides=[OVERRIDE], conditional={CHANNEL: 0.02})
+    assert _settings(wb.run("baseline-ibm2016")) == (7, 3.0, [OVERRIDE], 0.02)
+
+
+def test_every_setting_given_for_one_run_wins_over_the_sessions(config_copy):
+    wb = Workbench(shots=SHOTS, base_seed=7, scale=3.0, overrides=[OVERRIDE], conditional={CHANNEL: 0.02})
+    result = wb.run("baseline-ibm2016", base_seed=8, scale=2.0, overrides=[], conditional={CHANNEL: 0.01})
+    assert _settings(result) == (8, 2.0, [], 0.01)
+    assert result.record["seeds"] != wb.run("baseline-ibm2016").record["seeds"]
+
+
 def test_a_result_shows_every_table_as_html_and_text(config_copy):
     wb = Workbench(shots=SHOTS)
     wb.build("trial-xx", "contemporary", builders.move_chain, (builders.bus_xx, {"on": [0, 4, 5, 6, 7]}))
@@ -69,6 +94,47 @@ def test_a_fetched_run_gives_the_recorded_numbers():
         assert result.rows[name]["fidelity"] == pytest.approx(recorded.loc[name, "fidelity"], abs=1e-12)
         assert result.rows[name]["acceptance"] == pytest.approx(recorded.loc[name, "acceptance"], abs=1e-12)
     assert Workbench().fetch(folder).rows == result.rows
+
+
+def test_a_run_whose_circuit_file_changed_is_not_fetched(config_copy):
+    folder = sorted((Path(__file__).resolve().parents[1] / "results/runs/benchmark/move-chain").glob("*"))[-1]
+    wb = Workbench()
+    assert wb.fetch(folder / "baseline-ibm2016").self_test is None
+    path = config_copy / "config" / "circuit" / configs.file_name("circuit", "baseline-ibm2016")
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    path.write_text(yaml.safe_dump(data | {"label": "Another circuit"}, sort_keys=False), encoding="utf-8")
+    with pytest.raises(ValueError, match=r"bp\.data\.circuit\.baseline-ibm2016\.yaml changed since it was recorded"):
+        wb.fetch(folder / "baseline-ibm2016")
+
+
+def test_a_results_tables_and_compare_hold_its_numbers():
+    wb = Workbench()
+    result = wb.fetch(*PROTECTED)
+    tables = dict(result.tables())
+    for name, row in result.rows.items():
+        summary = tables["F and acceptance"].loc[name]
+        assert summary["F"] == row["fidelity"] and summary["F standard error"] == row["fidelity_se"]
+        assert summary["F raw"] == row["fidelity_raw"] and summary["F raw standard error"] == row["fidelity_raw_se"]
+        assert summary["acceptance"] == row["acceptance"]
+        assert summary["acceptance 95% interval"] == f"{row['acceptance_low']:.4f} to {row['acceptance_high']:.4f}"
+        assert summary["total shots"] == sum(row[f"shots_raw_{b}"] for b in BASES) == 3 * result.record["shots"]
+        for b in BASES:
+            basis = tables["Per basis"].loc[(name, b)]
+            assert basis["shots"] == row[f"shots_raw_{b}"] and basis["kept"] == row[f"shots_accepted_{b}"]
+            assert basis["correlator (kept)"] == row[f"corr_{b}"]
+    noisy, cost = result.rows["noisy"], result.record["cost"]
+    assert all(noisy[f"shots_accepted_{b}"] < noisy[f"shots_raw_{b}"] for b in BASES)  # so kept is not raw
+    assert tables["Cost"].iloc[0]["two-qubit gates"] == cost["two_qubit_gates"]
+    assert tables["Cost"].iloc[0]["depth"] == cost["depth"]
+    (label, flagged), = check_flags(result.analysis, result.raw["noisy"], result.registers).items()
+    assert tables["Shots each check flagged"].loc[label, "noisy ZZ"] == flagged["ZZ"] > 0
+    (_, compared), = wb.compare(result).tables
+    row = compared.iloc[0]
+    assert (row["F"], row["standard error"], row["F raw"]) == (
+        noisy["fidelity"], noisy["fidelity_se"], noisy["fidelity_raw"]
+    )
+    assert (row["acceptance"], row["two-qubit gates"]) == (noisy["acceptance"], cost["two_qubit_gates"])
+    assert row["total shots"] == 3 * result.record["shots"] and row["self-test"] == "passes"
 
 
 def test_a_view_re_reads_the_counts_and_is_never_kept():
@@ -130,6 +196,16 @@ def test_a_result_whose_ideal_run_fails_the_self_test_says_so(config_copy):
     assert "FAILS" in table and "passes" in table
 
 
+def test_a_result_whose_pair_ends_off_its_ports_fails_the_self_test():
+    wb = Workbench()
+    result = wb.fetch("move-chain", "baseline-ibm2016")
+    assert result.self_test is None
+    result.record["cost"]["pair_on_ports"] = False  # as a run records routing that left the pair elsewhere
+    assert result.self_test == "the pair ends off its ports"
+    assert "Warning: the self-test fails: the pair ends off its ports" in repr(result)
+    assert "FAILS" in repr(wb.compare(result))
+
+
 def test_keep_writes_a_trials_run_into_workspace(config_copy, monkeypatch):
     monkeypatch.setattr(run_module, "_git_state", lambda: ("abc123", False))
     wb = Workbench(shots=SHOTS)
@@ -152,11 +228,27 @@ def test_show_draws_the_circuit_and_its_graph(config_copy):
 
 
 def test_check_flags_counts_each_check_per_basis():
-    raw = {b: {"00 00": 50, "11 01": 30, "00 11": 20} for b in ("XX", "YY", "ZZ")}  # port last-first, then check
+    # Port last-first, then check. The flagged and unflagged shots differ in number, so a flag cannot pass as
+    # its opposite: 40 shots read a check bit as 1, and 60 read none.
+    raw = {b: {"00 00": 60, "11 01": 30, "00 11": 10} for b in ("XX", "YY", "ZZ")}
     registers = [("check", 2), ("port", 2)]
-    assert check_flags({"name": "postselect"}, raw, registers) == {"check": {"XX": 50, "YY": 50, "ZZ": 50}}
+    assert check_flags({"name": "postselect"}, raw, registers) == {"check": {"XX": 40, "YY": 40, "ZZ": 40}}
     parity = {"name": "parity", "settings": {"checks": [["check[0]", "check[1]"]]}}
     assert check_flags(parity, raw, registers) == {"check[0] + check[1]": {"XX": 30, "YY": 30, "ZZ": 30}}
+
+
+def test_the_shots_no_check_flags_are_the_shots_kept():
+    """With one check, a shot is either flagged by it or kept, under each analysis and on a committed run."""
+    raw = {b: {"00 00": 60, "11 01": 30, "00 11": 10} for b in BASES}
+    registers = [("check", 2), ("port", 2)]
+    for spec in ({"name": "postselect"}, {"name": "parity", "settings": {"checks": [["check[0]", "check[1]"]]}}):
+        (flagged,) = check_flags(spec, raw, registers).values()
+        kept = read_shots(spec, raw, registers, 100).kept
+        assert all(flagged[b] + sum(kept[b].values()) == 100 for b in BASES)
+    result = Workbench().fetch(*PROTECTED)
+    for name, row in result.rows.items():
+        (flagged,) = check_flags(result.analysis, result.raw[name], result.registers).values()
+        assert all(flagged[b] + row[f"shots_accepted_{b}"] == row[f"shots_raw_{b}"] for b in BASES)
 
 
 def test_an_analysis_that_does_not_say_what_its_checks_flag_is_refused(monkeypatch):
