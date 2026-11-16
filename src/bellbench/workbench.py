@@ -23,8 +23,14 @@ run.py's; the Workbench only holds the session's settings and calls them.
 A result is the same whether it was just run or fetched from a run folder:
 its record, its raw counts and its analysis, scored here by run.Score. With
 `analysis=`, `fetch` re-reads the recorded counts another way; that result is
-labelled a view, and is never kept, since no run made it. The display is plain
-pandas tables, with a text form outside Jupyter.
+labelled a view, and is never kept, since no run made it.
+
+In a notebook, a result, a shown circuit and a comparison draw themselves with
+the views in bellbench.views: `show` takes `step`, `compiled` and `timeline`
+for its folded debug views, `compare` takes `circuits=True`, and `benchmark`
+and `benchmark_line` show a benchmark's runs and the line that adds a circuit
+to one. The builders are also on the session, as `wb.builders`. Outside a
+notebook, and through `tables()`, a result is plain pandas tables and text.
 """
 
 import base64
@@ -57,6 +63,10 @@ from bellbench.run import (
     read_table,
     self_test_failure,
 )
+from bellbench.views.base import Part, View, emit, html
+from bellbench.views.compare import benchmark_line_parts, benchmark_parts, compare_parts
+from bellbench.views.result import result_parts, result_view
+from bellbench.views.show import Compiled, show_parts
 
 DEFAULTS_FROM = "core"  # the benchmark whose noise profile, shots and base seed a session starts from
 
@@ -69,6 +79,8 @@ class Workbench:
     Every setting defaults to the core benchmark's, so a baseline run repeats
     its seeds; any of them can be set for the session here, or for one run.
     """
+
+    builders = builders  # the transports and checks that build steps name, reached as wb.builders
 
     def __init__(
         self,
@@ -161,9 +173,30 @@ class Workbench:
         save_circuit(name, label or name, processor, circuit, notes, analysis=analysis, overwrite=True, trial=True)
         return name
 
-    def show(self, circuit: str) -> "CircuitView":
-        """The circuit file `circuit`, committed or a trial: its written gates, its analysis and its processor."""
-        return CircuitView(load_circuit(circuit))
+    def show(self, circuit: "str | Result", *, step: bool = False, compiled: bool | str = False,
+             timeline: bool | str = False) -> "CircuitView":
+        """The circuit file `circuit`, committed or a trial, before it runs; or the circuit of a result.
+
+        In a notebook it draws a header, the processor graph beside the written
+        circuit, and what compiling costs under the session's settings, without
+        simulating. `step`, `compiled` and `timeline` each add a debug view, folded
+        until clicked: the stepper on the written circuit, the compiled ZZ circuit
+        with how XX and YY differ, and a busy and idle chart in µs;
+        `compiled="all"` and `timeline="all"` draw all three basis circuits.
+        """
+        if isinstance(circuit, Result):
+            result = circuit
+            file = load_circuit(configs.name_from_record(result.record["circuit"], "circuit"))
+            source = lambda: Compiled.of_record(result.record, result.run is not None)  # noqa: E731
+        else:
+            file = load_circuit(circuit)
+            source = lambda: self._compiled(circuit)  # noqa: E731
+        return CircuitView(file, lambda: show_parts(source(), step=step, compiled=compiled, timeline=timeline))
+
+    def _compiled(self, circuit: str) -> Compiled:
+        """The circuit file `circuit` compiled now under the session's settings, without simulating."""
+        run = CircuitRun(circuit, self.noise, self.shots, self.base_seed, self.scale, self.overrides, self.conditional)
+        return Compiled.of_run(run.compile())
 
     def promote(self, name: str, overwrite: bool = False) -> Path:
         """Move the trial `name` into config/circuit/, to be committed (bellbench.circuits.promote)."""
@@ -216,8 +249,13 @@ class Workbench:
         """Write a fresh result's run folder: under results/runs/ only from a clean tree and committed files."""
         return result.keep()
 
-    def compare(self, *results: "Result") -> "Table":
-        """One row per result's noisy simulation, with whether its ideal run passed the self-test."""
+    def compare(self, *results: "Result", circuits: bool = False) -> "Table":
+        """One row per result's noisy simulation, with whether its ideal run passed the self-test.
+
+        In a notebook it draws a warning when the runs differ in noise settings, a
+        numbered table and a bar per run of its F, the first run as the reference
+        band; `circuits=True` adds each run's written circuit beside its graph.
+        """
         if not results:
             raise TypeError("compare takes one or more results")
         rows = []
@@ -233,7 +271,22 @@ class Workbench:
                 "total shots": sum(noisy[f"shots_raw_{b}"] for b in BASES),
                 "self-test": "passes" if r.self_test is None else "FAILS",
             })
-        return Table([("Comparison, noisy simulations", pd.DataFrame(rows))])
+        def parts() -> list[Part]:
+            shown = [Compiled.of_record(r.record, r.run is not None) for r in results] if circuits else None
+            return compare_parts([result_view(r) for r in results], shown)
+
+        return Table([("Comparison, noisy simulations", pd.DataFrame(rows))], parts=parts)
+
+    def benchmark(self, name: str | Path) -> View:
+        """A benchmark's runs: bars of F per processor on one axis, then its case table or its run table.
+
+        `name` is a committed benchmark's name, for its current folder, or a benchmark folder.
+        """
+        return View(benchmark_parts(name))
+
+    def benchmark_line(self, name: str) -> View:
+        """The line that adds the circuit `name` to a benchmark file's runs, from the session's noise settings."""
+        return View(benchmark_line_parts(name, self.noise, self.conditional))
 
 
 class Result:
@@ -246,10 +299,11 @@ class Result:
         compiled = {basis: qasm3.loads(text) for basis, text in record["compiled"].items()}
         self.registers = [(r.name, r.size) for r in compiled["ZZ"].cregs]
         self.gates = {basis: dict(c.count_ops()) for basis, c in compiled.items()}
-        self.rows = {
-            name: Score(read_shots(self.analysis, raw[name], self.registers, record["shots"])).row(name)
+        self.scores = {
+            name: Score(read_shots(self.analysis, raw[name], self.registers, record["shots"]))
             for name in SIMULATIONS
         }
+        self.rows = {name: score.row(name) for name, score in self.scores.items()}
 
     @classmethod
     def from_run(cls, run: CircuitRun) -> "Result":
@@ -351,6 +405,10 @@ class Result:
     def _repr_html_(self) -> str:
         return Table(self.tables(), self._heading())._repr_html_()
 
+    def _ipython_display_(self) -> None:
+        """In a notebook, the result laid out point first (bellbench.views.result)."""
+        emit(result_parts(self))
+
     def __repr__(self) -> str:
         return repr(Table(self.tables(), self._heading()))
 
@@ -376,8 +434,12 @@ def _label(circuit: str, noise: str, settings: Mapping) -> str:
 class CircuitView:
     """A circuit file shown before it runs: its written gates, its analysis and its processor's graph."""
 
-    def __init__(self, circuit):
-        self.circuit = circuit
+    def __init__(self, circuit, parts: Callable[[], list[Part]] | None = None):
+        self.circuit, self._parts = circuit, parts
+
+    def _ipython_display_(self) -> None:
+        """In a notebook, the view `show` builds (bellbench.views.show); without one, the plain HTML form."""
+        emit(self._parts() if self._parts else [html(self._repr_html_())])
 
     def _figures(self) -> list[bytes]:
         proc = configs.load_processor(self.circuit.processor)
@@ -412,8 +474,13 @@ class CircuitView:
 class Table:
     """Titled pandas tables, shown as HTML in Jupyter and as text elsewhere."""
 
-    def __init__(self, tables: list[tuple[str, pd.DataFrame]], heading: Sequence[str] = ()):
-        self.tables, self.heading = tables, list(heading)
+    def __init__(self, tables: list[tuple[str, pd.DataFrame]], heading: Sequence[str] = (),
+                 parts: Callable[[], list[Part]] | None = None):
+        self.tables, self.heading, self._parts = tables, list(heading), parts
+
+    def _ipython_display_(self) -> None:
+        """In a notebook, the view these tables came with (bellbench.views.compare); without one, the plain tables."""
+        emit(self._parts() if self._parts else [html(self._repr_html_())])
 
     def _repr_html_(self) -> str:
         parts = [f"<p>{escape(line, quote=False)}</p>" for line in self.heading]
