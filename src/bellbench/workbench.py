@@ -39,7 +39,7 @@ import yaml
 from qiskit import QuantumCircuit, qasm3
 
 from bellbench import builders, configs
-from bellbench.analysis import check_flags, read_shots
+from bellbench.analysis import check_flags, names_flags, read_shots
 from bellbench.circuits import circuit_from_qasm, load_circuit, promote, save_circuit
 from bellbench.fidelity import BASES
 from bellbench.figures import draw_processor
@@ -322,6 +322,10 @@ class Result:
             "scheduled duration (µs)": round(duration * 1e6, 3) if duration is not None else "not scheduled",
         }])
         gates = pd.DataFrame(self.gates).fillna(0).astype(int).sort_index()
+        tables = [("F and acceptance", summary), ("Per basis", bases), ("Cost", costs),
+                  ("Gates in each compiled basis circuit", gates)]
+        if not names_flags(self.analysis):
+            return tables  # the heading says the flagged shots are not shown
         flagged = {
             name: check_flags(self.analysis, self.raw[name], self.registers) for name in SIMULATIONS
         }
@@ -329,8 +333,6 @@ class Result:
             f"{name} {b}": {check: counts[b] for check, counts in flagged[name].items()}
             for name in SIMULATIONS for b in BASES
         })
-        tables = [("F and acceptance", summary), ("Per basis", bases), ("Cost", costs),
-                  ("Gates in each compiled basis circuit", gates)]
         if not checks.empty:
             tables.append(("Shots each check flagged", checks))
         return tables
@@ -339,6 +341,11 @@ class Result:
         lines = [self.label, f"{self.record['shots']} shots per basis, analysis {self.analysis['name']}"]
         if self.self_test is not None:
             lines.append(f"Warning: the self-test fails: {self.self_test}. Check the circuit and its analysis.")
+        if not names_flags(self.analysis):
+            lines.append(
+                f"The {self.analysis['name']} analysis does not say which of its checks flag a shot, so the shots "
+                "each check flagged are not shown."
+            )
         return lines
 
     def _repr_html_(self) -> str:

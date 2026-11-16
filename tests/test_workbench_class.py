@@ -350,3 +350,20 @@ def test_an_analysis_that_does_not_say_what_its_checks_flag_is_refused(monkeypat
     monkeypatch.setitem(analysis_module.REGISTRY, "silent", analysis_module.Entry(entry.check, entry.read))
     with pytest.raises(ValueError, match="does not say which of its checks flag a shot"):
         check_flags({"name": "silent"}, {b: {"00": 1} for b in ("XX", "YY", "ZZ")}, [("port", 2)])
+
+
+def test_a_result_read_by_an_analysis_without_flags_shows_its_other_tables_and_says_so(monkeypatch):
+    from bellbench import analysis as analysis_module
+
+    wb = Workbench()
+    entry = analysis_module.REGISTRY["parity"]
+    monkeypatch.setitem(analysis_module.REGISTRY, "silent", analysis_module.Entry(entry.check, entry.read))
+    shown = wb.fetch(*PROTECTED)
+    silent = wb.fetch(*PROTECTED, analysis={"name": "silent", "settings": shown.analysis["settings"]})
+    assert silent.rows == shown.rows  # the same reader, so the same numbers
+    titles = [title for title, _ in shown.tables()]
+    assert titles[-1] == "Shots each check flagged" and [title for title, _ in silent.tables()] == titles[:-1]
+    line = "The silent analysis does not say which of its checks flag a shot, so the shots each check flagged are not"
+    assert line in repr(silent) and line in silent._repr_html_()
+    assert "does not say which" not in repr(shown) and "does not say which" not in shown._repr_html_()
+    assert "silent" in repr(wb.compare(shown, silent))

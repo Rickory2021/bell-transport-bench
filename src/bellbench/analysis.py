@@ -29,9 +29,11 @@ A circuit file names its analysis as `{name, settings}`:
   frame lists each bit once, since a bit listed twice cancels itself; one bit
   may still sit in two groups.
 
-Each entry also says which of its checks flag a shot, a register under
+Both entries also say which of their checks flag a shot, a register under
 postselect and a group under parity; `check_flags` counts them per basis from the
-raw counts, for display only.
+raw counts, for display only. An entry may leave its flags out: `names_flags`
+says whether it has them, and a result read by one that has none shows no
+flagged shots and says so.
 
 Correction, which flips result bits to undo a detected error, is not here: a
 decoder joins the registry when a strategy first needs one.
@@ -100,6 +102,11 @@ def read_shots(spec, raw: Mapping[str, Mapping[str, int]], registers: Registers,
         if sum(kept.values()) > shots:
             raise ValueError(f"the {spec['name']} analysis kept more shots than were run in {basis}")
     return ports
+
+
+def names_flags(spec) -> bool:
+    """Whether the analysis `spec` names says which of its checks flag a shot; `check_flags` needs it to."""
+    return REGISTRY[spec["name"]].flags is not None
 
 
 def check_flags(spec, raw: Mapping[str, Mapping[str, int]], registers: Registers) -> dict[str, dict[str, int]]:
