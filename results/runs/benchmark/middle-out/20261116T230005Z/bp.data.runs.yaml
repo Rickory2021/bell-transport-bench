@@ -1,0 +1,14 @@
+benchmark:
+  path: config/benchmark/bp.data.benchmark.middle-out.yaml
+  hash: sha256:af496a585c5c6ad4da1da36d5ab7563a4bee26c6c9c5018b4da0e1ec9ae6fa83
+runs:
+- move-contemporary
+- move-hyperbolic
+- spare-xx-contemporary
+- spare-xx-hyperbolic
+- middle-out-contemporary
+- middle-out-hyperbolic
+- middle-out-xx-contemporary
+- middle-out-xx-hyperbolic
+- middle-out-zz-xx-hyperbolic
+cases: []

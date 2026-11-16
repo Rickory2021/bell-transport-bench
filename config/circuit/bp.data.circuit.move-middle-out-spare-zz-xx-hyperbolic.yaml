@@ -1,0 +1,47 @@
+# config/circuit/bp.data.circuit.move-middle-out-spare-zz-xx-hyperbolic.yaml
+
+name: move-middle-out-spare-zz-xx-hyperbolic
+label: move_middle_out then bus_zz and bus_xx on two spare paths, hyperbolic
+processor: hyperbolic
+analysis:
+  name: parity
+  settings:
+    checks:
+    - - check_zz[0]
+    - - check_xx[0]
+      - check_xx[1]
+      - check_xx[2]
+      - frame_z_zz[0]
+    frame_z:
+    - frame_z_zz[0]
+notes: Built in the Workbench from a Qiskit circuit.
+circuit: |
+  OPENQASM 3.0;
+  include "stdgates.inc";
+  bit[1] check_zz;
+  bit[1] frame_z_zz;
+  bit[3] check_xx;
+  qubit[13] q;
+  h q[1];
+  cx q[1], q[9];
+  cx q[1], q[0];
+  cx q[0], q[1];
+  cx q[9], q[12];
+  cx q[12], q[9];
+  cx q[0], q[3];
+  cx q[3], q[11];
+  cx q[12], q[11];
+  check_zz[0] = measure q[11];
+  h q[3];
+  frame_z_zz[0] = measure q[3];
+  h q[2];
+  cx q[2], q[6];
+  cx q[6], q[10];
+  cx q[2], q[0];
+  cx q[10], q[12];
+  h q[2];
+  check_xx[0] = measure q[2];
+  h q[6];
+  check_xx[1] = measure q[6];
+  h q[10];
+  check_xx[2] = measure q[10];
