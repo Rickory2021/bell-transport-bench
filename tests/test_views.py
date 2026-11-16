@@ -6,18 +6,21 @@ committed run or benchmark and checks the view against the result's own
 numbers. Only bellbench.workbench imports the views; they draw without pyplot,
 and import IPython only at the moment a notebook shows one. The calls a
 notebook already makes keep what they return: `show(...).circuit`,
-`compare(...).tables`, a result's `tables()` and text.
+`compare(...).tables`, a result's `tables()` and text. The tutorial's lesson
+views display where a cell calls them.
 """
 
 import re
 import sys
 from pathlib import Path
 
+import numpy as np
 import pytest
+from qiskit import QuantumCircuit
 
 from bellbench import builders
 from bellbench.run import CircuitRun
-from bellbench.views import base
+from bellbench.views import base, lessons
 from bellbench.views.base import View, emit, fold, markdown
 from bellbench.views.compare import benchmark_line_parts, benchmark_parts, compare_parts
 from bellbench.views.result import result_parts, result_view
@@ -247,3 +250,63 @@ def test_show_does_not_compile_until_a_notebook_shows_it(monkeypatch):
 
     monkeypatch.setattr(workbench_module.CircuitRun, "compile", lambda self: pytest.fail("show compiled"))
     assert Workbench().show("move-chain-path-xx-ibm2016").circuit.processor == "ibm2016"
+
+
+# -- The tutorial's lesson views ------------------------------------------------------
+
+
+@pytest.fixture
+def shown(monkeypatch):
+    """The parts the lesson views display, in order, instead of displaying them."""
+    parts = []
+    monkeypatch.setattr(lessons, "emit", parts.extend)
+    return parts
+
+
+def test_tex_writes_a_vector_as_a_column_and_takes_a_shared_size_out_in_front():
+    assert lessons.tex(np.array([1, 1j]) / np.sqrt(2)) == r"\frac{1}{\sqrt{2}}\begin{pmatrix} 1 \\ i \end{pmatrix}"
+    assert lessons.tex(np.array([[0, 1], [1, 0]])) == r"\begin{pmatrix} 0 & 1 \\ 1 & 0 \end{pmatrix}"
+    assert lessons.tex(np.array([1, -1, 1, -1]) / 2).startswith(r"\frac{1}{2}\begin{pmatrix} 1 \\ -1")
+    assert lessons.tex(np.array([0.6, 0.8])) == r"\begin{pmatrix} 0.6 \\ 0.8 \end{pmatrix}"  # no shared size
+
+
+def test_matrix_of_orders_rows_and_columns_with_qubit_0_first():
+    cx = QuantumCircuit(2)
+    cx.cx(0, 1)  # control qubit 0: |10> and |11> swap when qubit 0 is written first
+    assert np.array_equal(lessons.matrix_of(cx), [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 0, 1], [0, 0, 1, 0]])
+
+
+def test_whole_writes_a_whole_expectation_value_with_a_true_minus_sign():
+    assert [lessons.whole(v) for v in (0.9999999, -1.0000001, 1e-12, -1e-12)] == ["+1", "−1", "0", "0"]
+
+
+def test_algebra_shows_one_equation_per_line(shown):
+    lessons.algebra("a = b", r"c = \frac{1}{2}")
+    assert [(part.kind, part.content) for part in shown] == [("latex", "a = b"), ("latex", r"c = \frac{1}{2}")]
+
+
+def test_the_steppers_show_one_frame_per_gate_and_say_where_they_stop(shown):
+    one = QuantumCircuit(1)
+    one.h(0)
+    one.s(0)
+    lessons.bloch_steps(one, notes=["start", "after H", "after S"])
+    assert _kinds(shown) == ["stepper"] and shown[0].still  # a still for a viewer without HTML
+    assert all(f"after {gate}" in shown[0].content for gate in "HS") and shown[0].content.count("data:image/png") >= 1
+    with pytest.raises(ValueError, match="the Bloch sphere draws one qubit"):
+        lessons.bloch_steps(QuantumCircuit(2), notes=[])
+    shown.clear()
+    stopped = QuantumCircuit(2, 1)
+    stopped.h(0)
+    stopped.measure(0, 0)
+    stopped.cx(0, 1)
+    lessons.state_steps(stopped, notes=["start", "after H"])
+    assert _kinds(shown) == ["stepper", "markdown"]
+    assert shown[1].content == "The step-through stops at a measure on qubit 0, before the end of the circuit."
+
+
+def test_journey_shows_a_circuit_on_its_processor_graph(shown):
+    pair = QuantumCircuit(5)
+    pair.h(0)
+    pair.cx(0, 3)
+    lessons.journey(pair, "ibm2016", "a pair on 0 and 3")
+    assert _kinds(shown) == ["html"] and "a pair on 0 and 3" in shown[0].content and "<script>" in shown[0].content
