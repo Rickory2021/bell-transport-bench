@@ -1,0 +1,26 @@
+# notebooks/bp.process.tutorial.yaml
+#
+# Renders the tutorial notebook, Parts 1 and 2 of the workspace, from its
+# template (docs/DESIGN.md, section 1). The invoke supplies the noise profile
+# Part 2's session runs on.
+
+vars:
+  $schema: "https://json-schema.org/draft/2020-12/schema"
+  type: object
+  additionalProperties: false
+  required: [noise]
+  properties:
+    noise:
+      description: The noise profile Part 2's session runs on.
+      type: string
+      pattern: '^[a-z0-9][a-z0-9-]*$'
+
+map:
+  defaults.noise: {var: noise}
+
+emit:
+  ipynb:
+    render: scripts/blueprint-render/renderers/ipynb.py
+    template: notebooks/templates/tutorial.py.j2
+
+output: adjacent

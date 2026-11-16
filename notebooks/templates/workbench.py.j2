@@ -1,69 +1,194 @@
 # notebooks/templates/workbench.py.j2
-# The workbench notebook's template, in the percent format. blueprint-render fills
-# it from notebooks/bp.invoke.workbench.yaml and writes notebooks/bp.output.workbench.ipynb;
-# make workbench copies that into workspace/. Edit this file, never the output.
+# The workbench notebook's template, Part 3 of the workspace, in the percent format. blueprint-render fills it
+# from notebooks/bp.invoke.workbench.yaml and writes notebooks/bp.output.workbench.ipynb; make workbench copies
+# that into workspace/workbench.ipynb. Edit this file, never the output.
 
 # %% [markdown]
-# # Workbench
+# <a id="top"></a>
 #
-# **Try a circuit, run it, and compare it with the committed results, one cell per step.** The `Workbench` holds this session's settings and calls the package (`src/bellbench/`), which does all the work and writes every file.
+# # Bell-pair workbench: Part 3
 #
-# - **Edit and run your copy in `workspace/`**, which `make workbench` makes. The notebook in `notebooks/` is generated; edits there are lost on the next render.
-# - **A circuit you build is a trial,** saved in `workspace/circuits/`, which is never committed. A run of a trial, kept, lands in `workspace/runs/`. When a trial is worth keeping, `promote` moves it into `config/circuit/`, ready to commit.
-# - **Each result shows itself:** F and acceptance, each basis's shots and correlator, the cost, the gates, what each check flagged, and a warning if its ideal run fails the self-test.
+# **Make a circuit, check it, run it, compare it, and keep it, one step at a time.** Each step puts its settings where it uses them, says what to call, and says what you get. Parts 1 and 2 are the tutorial, whose guide says how to read each view: [How to read each view](tutorial.ipynb#reading-the-views).
 #
-# The cells: the import, the session's settings, then `fetch`, `build`, `show`, `run`, `compare`, `keep` and `promote`.
+# | Step | What you do |
+# |---|---|
+# | [3.1 Start the session](#section-3-1) | Set the noise profile, shots and seed everything below runs with |
+# | [3.2 Your circuit](#section-3-2) | Name it, then write it in Qiskit (3.2a) or build it from the builders (3.2b) |
+# | [3.3 Check it](#section-3-3) | See what it is and what compiling costs, before spending a shot |
+# | [3.4 Run it](#section-3-4) | Run it ideal and noisy and read its result |
+# | [3.5 Compare it](#section-3-5) | Set it beside committed runs |
+# | [3.6 Keep it](#section-3-6) | Keep the run, promote the circuit, and add it to a benchmark |
+
+# %% [markdown]
+# <a id="section-3-1"></a>
+#
+# ## 3.1 Start the session
+#
+# **One session holds the settings every later step compiles and runs with.**
+#
+# - **Edit:** the four settings below.
+# - **Call:** `Workbench(noise=..., shots=..., base_seed=..., conditional=...)`. Any setting left out takes the core benchmark's value.
+# - **You get:** `wb`, the object every step below calls. To try one run under other settings without changing the session, pass them to that run: `wb.run(name, shots=2000)`.
 
 # %%
-# The one import. builders holds the transports and checks that build steps name.
-from bellbench.workbench import Workbench, builders
+from qiskit import QuantumCircuit
+from bellbench.workbench import Workbench
+
+NOISE = "{{ defaults.noise }}"   # a profile in config/noise/
+SHOTS = 500             # per basis; the committed benchmarks use 20,000
+BASE_SEED = None        # None is the core benchmark's base seed, so a baseline here repeats its committed run
+CONDITIONAL = {}        # a channel the circuit needs, such as {"mid_circuit_measurement_error": 0.01}
+
+wb = Workbench(noise=NOISE, shots=SHOTS, base_seed=BASE_SEED, conditional=CONDITIONAL or None)
+
+# %% [markdown]
+# <a id="section-3-2"></a>
+#
+# ## 3.2 Your circuit
+#
+# **Name the circuit, then make it one of two ways: write it in Qiskit (3.2a) or let the builders write it (3.2b).** Use one of the two. Either way `build` checks the circuit as loading a circuit file would, and saves it as a trial in `workspace/circuits/`, which git ignores.
+#
+# - **Edit:** the name, label and processor below. `CIRCUIT_NAME` is the name the circuit keeps from here on: `promote` moves it into `config/circuit/` under this name, and a benchmark file lists it by this name.
+# - **Refused when:** the name already belongs to a committed circuit.
 
 # %%
-# The session's settings. Each defaults to the core benchmark's, so a baseline run repeats its seeds.
-wb = Workbench(
-    noise="{{ defaults.noise }}",
-    # shots=4000,                  # per basis circuit, in each of the ideal and noisy simulations
-    # scale=1.0,                   # multiplies every gate error, both readout errors and the decay rates
-    # overrides=[{"qubits": [0, 1], "field": "gates.cz.error_probability", "value": 0.01}],
-    # A circuit that resets a qubit, or reads one and acts on it again, needs the matching channel, swept over a
-    # range rather than claimed at one value: {"reset_error": p, "mid_circuit_measurement_error": p}.
-    # conditional={"reset_error": 0.01, "mid_circuit_measurement_error": 0.01},
-)
-BASELINE = "{{ defaults.circuit }}"  # the committed baseline the trial is compared with
-wb
+CIRCUIT_NAME = "my-move-chain"                     # lowercase words joined by hyphens
+LABEL = "move_chain written by hand, hyperbolic"   # one line saying what the circuit is
+PROCESSOR = "hyperbolic"                           # ibm2016, contemporary or hyperbolic
+
+# %% [markdown]
+# ### 3.2a Write it in Qiskit
+#
+# - **Do:** write your gates on the processor's qubits, all starting in |0⟩. Do not measure the ports; the run does that.
+# - **Edit:** `ANALYSIS`, which says how the circuit's own measured bits are read. Leave it `None` when the circuit measures nothing; a circuit with a check names its reading, as in the tutorial's [2.3](tutorial.ipynb#section-2-3).
+# - **Call:** `wb.build(CIRCUIT_NAME, circuit, processor=PROCESSOR, analysis=ANALYSIS, label=LABEL)`. OpenQASM 3 text works in place of `circuit`.
+# - **You get:** the trial's name, for the steps below. Building the same name again replaces the trial.
+# - **Refused when:** the circuit measures a bit and `ANALYSIS` is `None`, measures a port, or conditions a gate on a result.
 
 # %%
-# fetch: a committed run, shown without running it again. With analysis=..., its counts are re-read another way,
-# labelled as a view.
-base = wb.fetch("move-chain", BASELINE)
-base
+ANALYSIS = None                # such as {"name": "parity", "settings": {"checks": [["check_xx[0]"]]}}
+
+circuit = QuantumCircuit(13)   # the processor's qubits
+circuit.h(0)                   # the pair on port 0 and qubit 1
+circuit.cx(0, 1)
+circuit.cx(1, 9)               # move the far half to 9...
+circuit.cx(9, 1)
+circuit.cx(9, 12)              # ...then to port 12
+circuit.cx(12, 9)
+
+trial = wb.build(CIRCUIT_NAME, circuit, processor=PROCESSOR, analysis=ANALYSIS, label=LABEL)
+
+# %% [markdown]
+# ### 3.2b Or build it from the builders
+#
+# - **Do:** name builder steps in order, a transport first, then any checks. A step that takes arguments is a `(step, arguments)` pair. The builders find the path between the ports, track which qubits are in |0⟩, and write the reading for any check they add, so there is no `ANALYSIS` to set.
+# - **Call:** `wb.build(CIRCUIT_NAME, PROCESSOR, step, step, ..., label=LABEL)`. The steps are in `wb.builders`: the transports `swap_forward`, `move_chain`, `swap_middle_out`, `move_middle_out`, `ghz_uncompute` and `ghz_measure`, then the checks `vacancy`, `bus_zz` and `bus_xx`.
+# - **You get:** the same trial as 3.2a would save, under the same name. The line is commented out so that running the whole notebook keeps the circuit you wrote in 3.2a; remove the `#` to use it instead.
 
 # %%
-# build: a trial circuit from builder steps, each a step or a (step, its arguments) pair. Building a name again
-# replaces that trial. OpenQASM text or a Qiskit circuit works too, with its processor, and its analysis when it
-# measures any bit:
-# wb.build("my-pair", qasm_text, processor="ibm2016", analysis={"name": "postselect"})
-wb.build("try-move-xx", "contemporary", builders.move_chain, (builders.bus_xx, {"on": [0, 4, 5, 6, 7]}))
+# trial = wb.build(CIRCUIT_NAME, PROCESSOR, wb.builders.move_chain, label=LABEL)                                    # the same move chain
+# trial = wb.build(CIRCUIT_NAME, PROCESSOR, wb.builders.move_chain, (wb.builders.bus_xx, {"on": "spare"}), label=LABEL)  # with an XX check
+
+# %% [markdown]
+# <a id="section-3-3"></a>
+#
+# ## 3.3 Check it
+#
+# **`show` puts the circuit on one screen before you spend a shot on it.**
+#
+# - **Call:** `wb.show(trial)`. It compiles under the session's settings and simulates nothing.
+# - **Options:** three debug views, each folded until you open it. `step=True` steps through the written circuit with no noise. `compiled="all"` draws the three circuits a run compiles from yours, ZZ, XX and YY: ZZ measures the ports as they are, XX and YY first rotate each port so the same measurement reads it along x or y. `compiled=True` draws ZZ alone. `timeline="all"` shows when each qubit is busy in each of the three, and `timeline=True` in ZZ alone. Under each chart is the same schedule as Qiskit draws it, gate by gate; a run folder keeps that picture in `timeline/`.
+# - **You get:** a header, the processor graph beside the written circuit, one cost line, and the gates by type. A warning appears only when compiling uses a coupler the written circuit does not.
+# - **Look for:** the last step of the step-through ending with the pair on the ports.
 
 # %%
-# show: the written circuit, the analysis that reads its shots, and the processor's graph with its ports.
-wb.show("try-move-xx")
+wb.show(trial, step=True, compiled="all", timeline="all")
+
+# %% [markdown]
+# <a id="section-3-4"></a>
+#
+# ## 3.4 Run it
+#
+# **`run` compiles the circuit and simulates it ideal and noisy; the result shows itself.**
+#
+# - **Call:** `wb.run(trial)`. Settings given here apply to this run only, such as `wb.run(trial, shots=2000)` or `wb.run(trial, noise="organiser-cx2")`.
+# - **You get:** a result: F of the kept shots with its acceptance, F of every shot, each basis, what each check flagged, and the cost. Nothing more is written to disk until 3.6a.
+# - **Look for:** a warning above the headline. The ideal run must give F = 1 with every shot kept; if it does not, the circuit or its reading is wrong, and noise is not the cause.
 
 # %%
-# run: compile, simulate ideal and noisy, and score. Settings given here apply to this run only.
-trial = wb.run("try-move-xx")
-trial
+my_run = wb.run(trial)
+my_run
+
+# %% [markdown]
+# <a id="section-3-5"></a>
+#
+# ## 3.5 Compare it
+#
+# **`compare` sets your run beside committed ones: a table, then a bar per run of its F.** Each bar carries its F and an error bar of one standard error; a run with a check gets a second bar for its kept shots, with the acceptance; the first run is the reference band. The axis does not start at 0, so read the numbers on the bars, not their lengths.
+#
+# - **Edit:** the benchmark and the runs in it to compare with. A run's id is its folder's name under `results/runs/benchmark/<benchmark>/<stamp>/`.
+# - **Call:** `wb.fetch(benchmark, run)` loads a committed run without running it again; `wb.compare(first, ..., last)` takes any results, the reference first.
+# - **Options:** `circuits=True` adds each run's written circuit beside its processor graph, with the couplers it uses, numbered as in the table.
+# - **Look for:** a warning that the runs differ in noise settings. A difference between such runs is conditional on that, not only on the circuits.
 
 # %%
-# compare: one row per result's noisy simulation, and whether its ideal run passed the self-test.
-wb.compare(base, trial)
+BENCHMARK = "move-chain"                                   # a committed benchmark
+COMPARE_WITH = ["baseline-hyperbolic", "move-hyperbolic"]  # runs in it; the first is the reference band
+
+wb.compare(*(wb.fetch(BENCHMARK, run) for run in COMPARE_WITH), my_run, circuits=True)
+
+# %% [markdown]
+# <a id="section-3-6"></a>
+#
+# ## 3.6 Keep it
+#
+# **Three steps save the work: keep the run, promote the circuit, and add it to a benchmark.** Until 3.6b everything you made here sits in `workspace/`, which git ignores.
+#
+# | Step | Where it writes |
+# |---|---|
+# | 3.6a Keep the run | `workspace/runs/workbench/<circuit>/<noise>/<stamp>/` |
+# | 3.6b Promote the circuit | `config/circuit/` |
+# | 3.6c Add it to a benchmark | `config/benchmark/`, then `results/runs/benchmark/` |
+#
+# ### 3.6a Keep the run
+#
+# - **Call:** `wb.keep(my_run)`.
+# - **You get:** the run's folder: its record, its numbers, its raw counts, its diagrams and a report. A run of a trial always lands under `workspace/`, because a run that uses a file outside the repo cannot be rebuilt from the repo.
 
 # %%
-# keep: write a result's run folder. A trial's lands in workspace/runs/, never committed.
-folder = wb.keep(trial)
-folder
+folder = wb.keep(my_run)
+folder.relative_to(folder.parents[5]).as_posix()  # from the repo's root
+
+# %% [markdown]
+# ### 3.6b Promote the circuit
+#
+# - **Call:** `wb.promote(CIRCUIT_NAME)`. Remove the `#` when the circuit is worth keeping.
+# - **You get:** the circuit file in `config/circuit/`, ready to commit, and the trial gone from `workspace/circuits/`: one name, one file. From here the name loads the committed file.
+# - **Refused when:** `config/circuit/` already holds that name. `wb.promote(CIRCUIT_NAME, overwrite=True)` replaces it.
+# - **Know:** a run kept from the trial keeps its record but can no longer be rerun, since its trial file is gone. The run that counts is the one a benchmark makes in 3.6c.
 
 # %%
-# promote: move a trial worth keeping into config/circuit/, ready to commit. A run kept from the trial can then be
-# neither rerun nor fetched, since its trial file is gone; run the promoted circuit again to repeat it.
-# wb.promote("try-move-xx")
+# wb.promote(CIRCUIT_NAME)
+
+# %% [markdown]
+# ### 3.6c Add it to a benchmark
+#
+# - **Call:** `wb.benchmark_line(CIRCUIT_NAME)` prints the line for this circuit under the session's noise settings.
+# - **Do:** add the line under `runs:` in a benchmark file, `config/benchmark/bp.data.benchmark.<benchmark>.yaml`, and under `cases:` too if it fills one of the nine cases. Then `make benchmark NAME=<benchmark>` runs every circuit the file lists.
+# - **You get:** a new folder under `results/runs/benchmark/<benchmark>/<stamp>/`, once every circuit passes the self-test.
+# - **Know:** a benchmark made while `config/` has uncommitted changes lands in `workspace/` instead, so the circuit and the benchmark file are committed first. How to commit is in [CONTRIBUTING.md](../CONTRIBUTING.md).
+
+# %%
+wb.benchmark_line(CIRCUIT_NAME)
+
+# %% [markdown]
+# <a id="section-3-7"></a>
+#
+# ## 3.7 Where to go next
+#
+# - [The tutorial](tutorial.ipynb): Qiskit circuit logic, then how a circuit meets the benchmark, step by step.
+# - [CHALLENGE.md](../docs/CHALLENGE.md): the task, the nine cases, and the [Terms](../docs/CHALLENGE.md#terms).
+# - [DESIGN.md](../docs/DESIGN.md): why the benchmark works this way, section by section.
+# - [The README's science rules](../README.md#science-rules): how every result here is worded.
+#
+# [Back to the top](#top)

@@ -54,7 +54,7 @@ from importlib.metadata import version
 from pathlib import Path
 
 import yaml
-from qiskit import qasm3
+from qiskit import QuantumCircuit, qasm3
 
 from bellbench import configs
 from bellbench.analysis import PortCounts, read_shots
@@ -77,7 +77,10 @@ from bellbench.pipeline import (
 RESULT_FORMAT = 2  # 1: OpenQASM 2 and a counts.csv column per role; 2: OpenQASM 3 and the full outcome key
 RESULT_FILE = "bp.data.result.yaml"
 SIMULATIONS = ("ideal", "noisy")
-DIAGRAMS = ("lean", "full")
+DIAGRAMS = ("lean", "full")  # still accepted and recorded; every run draws the same pictures (write_views)
+OLD_VIEWS = ("circuit-zz.png", "circuit-xx.png", "circuit-yy.png", "written.png", "timeline.png")  # the earlier layout
+TIMELINE_MARGIN = 0.4  # inches of white around a timeline picture; matplotlib's own default, 0.1, is kept elsewhere
+TIMELINE_WIDTH = 18  # inches; qiskit's own is 14, which leaves short gates a few pixels wide beside a measurement
 PACKAGES = ("qiskit", "qiskit-aer", "qiskit-ibm-runtime", "qiskit-qasm3-import", "numpy")
 WILSON_Z = 1.959963984540054  # a 95% interval
 STAMP = "%Y%m%dT%H%M%SZ"  # the UTC time that names run and benchmark folders
@@ -142,7 +145,7 @@ class CircuitRun:
         self.labels = (circuit, noise, repr(self.nc.scale), self.settings_hash or "none")
         self.seeds = {step: derive_seed(base_seed, *self.labels, step) for step in ("transpile", *SIMULATIONS)}
         self.derived_seeds = dict(self.seeds)  # what the labels give; from_yaml may run with recorded seeds instead
-        self.compiled = self.cost = self.duration = self.git_state = None
+        self.compiled = self.cost = self.scheduled = self.duration = self.git_state = None
         self.simulations, self.scores = {}, {}
 
     @property
@@ -155,6 +158,24 @@ class CircuitRun:
 
     # -- Running ---------------------------------------------------------------
 
+    def compile(self, require_channels: bool = False) -> "CircuitRun":
+        """The run's steps before it simulates: the three basis circuits, compiled once, the cost, and the schedule.
+
+        Sets `compiled`, `cost`, `scheduled` and `duration`, and simulates nothing,
+        so a circuit can be looked at before it runs. `run` calls this first, with
+        `require_channels=True`, which stops a circuit that resets a qubit, or
+        measures one and acts on it again, while the matching conditional channel
+        is unset; without it such a circuit still compiles, to be shown.
+        """
+        circuits = basis_circuits(self.circuit.circuit, self.nc.ports)
+        self.compiled = compile_bases(circuits, self.nc, self.seeds["transpile"])
+        if require_channels:
+            _check_conditional_channels(self.circuit.name, self.compiled, self.nc)
+        self.cost = cost(self.compiled, self.nc.ports)
+        self.scheduled = {basis: schedule(c.compiled, self.nc) for basis, c in self.compiled.items()}
+        self.duration = scheduled_duration(self.scheduled["ZZ"], self.nc)
+        return self
+
     def run(self, methods: dict[str, str] | None = None) -> "CircuitRun":
         """Compile, cost, schedule, simulate ideal and noisy, and read the shots; `methods` repeats a recorded run's.
 
@@ -162,12 +183,8 @@ class CircuitRun:
         first, so they describe the code and config the numbers came from.
         """
         self.git_state = _git_state()
-        circuits = basis_circuits(self.circuit.circuit, self.nc.ports)
-        self.compiled = compile_bases(circuits, self.nc, self.seeds["transpile"])
-        _check_conditional_channels(self.circuit.name, self.compiled, self.nc)
-        self.cost = cost(self.compiled, self.nc.ports)
-        scheduled = {basis: schedule(c.compiled, self.nc) for basis, c in self.compiled.items()}
-        self.duration = scheduled_duration(scheduled["ZZ"], self.nc)
+        self.compile(require_channels=True)
+        scheduled = dict(self.scheduled)
         if self.nc.conditional["mid_circuit_measurement_error"] is not None:
             scheduled = {basis: mark_mid_circuit_measurements(c) for basis, c in scheduled.items()}
         if self.nc.conditional["starting_excitation"] is not None:
@@ -436,18 +453,24 @@ def _check_recorded_files(record: dict) -> None:
 def write_views(folder: Path) -> list[Path]:
     """Draw a run folder's diagrams and report.md from its record and numbers; returns the files written.
 
-    lean: the processor graph with its ports and the couplers the compiled ZZ
-    circuit uses, and the compiled ZZ circuit. full adds the written circuit, the
-    XX and YY circuits and the timeline of the scheduled ZZ circuit
-    (docs/DESIGN.md, section 5). Before drawing anything it refuses a circuit,
-    processor or noise file that changed since the run, so no view is ever drawn
-    from files the run did not use. Each view is drawn on its own matplotlib
-    Figure, never through pyplot, so matplotlib's backend is never switched and no
-    window object is made: a notebook keeps its inline plots, and a GUI backend
-    such as TkAgg has nothing that Aer's worker threads could free.
-    """
-    from qiskit.visualization import timeline_drawer
+    Every run folder holds the same pictures, in the order show displays them
+    (docs/DESIGN.md, section 5): graph.png, the processor graph with its ports
+    and the couplers the compiled ZZ circuit uses, and three folders with one
+    picture per reading, zz.png, xx.png and yy.png. written/ is the circuit as
+    written, with that reading's basis change and port measurement; compiled/ is
+    the same circuit compiled for the processor; timeline/ is the compiled
+    circuit's schedule, and is absent under a noise profile without durations.
+    The record's `diagrams` value no longer chooses a set. A folder drawn before
+    this layout held its pictures beside the record, under the names in
+    OLD_VIEWS; a redraw removes them, so a folder never holds both layouts.
 
+    Before drawing anything it refuses a circuit, processor or noise file that
+    changed since the run, so no view is ever drawn from files the run did not
+    use. Each view is drawn on its own matplotlib Figure, never through pyplot,
+    so matplotlib's backend is never switched and no window object is made: a
+    notebook keeps its inline plots, and a GUI backend such as TkAgg has nothing
+    that Aer's worker threads could free.
+    """
     from bellbench.figures import draw_processor
 
     folder = Path(folder)
@@ -455,29 +478,32 @@ def write_views(folder: Path) -> list[Path]:
     proc = yaml.safe_load((configs.ROOT / record["noise_control"]["processor"]["path"]).read_text(encoding="utf-8"))
     written = []
 
-    def save(fig, name):
-        fig.savefig(folder / name, dpi=150, facecolor="white", bbox_inches="tight", metadata={"Software": None})
+    def save(fig, name, margin=0.1):
+        (folder / name).parent.mkdir(exist_ok=True)
+        fig.savefig(folder / name, dpi=150, facecolor="white", bbox_inches="tight", pad_inches=margin,
+                    metadata={"Software": None})
         written.append(folder / name)
 
     used = [tuple(int(q) for q in edge.split("-")) for edge in record["cost"]["two_qubit_gates_by_edge"]["ZZ"]]
     save(drawn_figure(lambda ax: draw_processor(ax, proc, used_edges=used), lambda ax: (4, 4.3)), "graph.png")
-    drawings = {"circuit-zz.png": record["compiled"]["ZZ"]}
-    if record["diagrams"] == "full":
-        drawings |= {"written.png": record["written"], "circuit-xx.png": record["compiled"]["XX"],
-                     "circuit-yy.png": record["compiled"]["YY"]}
-    for name, text in drawings.items():
-        circuit = qasm3.loads(text)
-        # qiskit draws a global phase through pyplot even on a given axis, which would make a window object; the
-        # phase changes no measured outcome, so the views leave it out.
-        circuit.global_phase = 0
-        save(drawn_figure(lambda ax: circuit.draw("mpl", idle_wires=False, fold=40, ax=ax), circuit_size), name)
-    if record["diagrams"] == "full" and record["scheduled_duration"] is not None:
-        nc = NoiseControl.from_yaml(record["noise_control"])
-        scheduled = schedule(qasm3.loads(record["compiled"]["ZZ"]), nc)
-        save(
-            drawn_figure(lambda ax: timeline_drawer(scheduled, target=nc.target, axis=ax), _timeline_size),
-            "timeline.png",
-        )
+    nc = NoiseControl.from_yaml(record["noise_control"])
+    compiled = {basis: qasm3.loads(record["compiled"][basis]) for basis in BASES}
+    drawings = {"written": basis_circuits(qasm3.loads(record["written"]), nc.ports), "compiled": compiled}
+    for group, circuits in drawings.items():
+        for basis in BASES:
+            circuit = circuits[basis]
+            # qiskit draws a global phase through pyplot even on a given axis, which would make a window object;
+            # the phase changes no measured outcome, so the views leave it out.
+            circuit.global_phase = 0
+            save(drawn_figure(lambda ax: circuit.draw("mpl", idle_wires=False, fold=40, ax=ax), circuit_size),
+                 f"{group}/{basis.lower()}.png")
+    if record["scheduled_duration"] is not None:
+        for basis in BASES:
+            # qiskit's timeline puts its qubit names, last tick and axis title at the figure's edge, so the picture
+            # gets a wider margin than a circuit's.
+            save(timeline_figure(compiled[basis], nc), f"timeline/{basis.lower()}.png", margin=TIMELINE_MARGIN)
+    for name in OLD_VIEWS:
+        (folder / name).unlink(missing_ok=True)
     (folder / "report.md").write_text(_run_report(folder, record), encoding="utf-8")
     written.append(folder / "report.md")
     return written
@@ -500,6 +526,57 @@ def drawn_figure(draw, size):
     return fig
 
 
+def timeline_figure(compiled: QuantumCircuit, nc: NoiseControl):
+    """Qiskit's timeline of a compiled circuit's schedule under `nc`, as a Figure made without pyplot.
+
+    It draws the qubits that act, each gate as a block in its gate's colour and no gate names: a gate lasts a
+    few time steps beside a measurement about ten times longer, so its name is wider than its block and names
+    overlap. A legend under the axis names each colour from the gates this circuit holds.
+    """
+    from qiskit.visualization import timeline_drawer
+    from qiskit.visualization.timeline.stylesheet import IQXSimple
+
+    scheduled = schedule(compiled, nc)
+
+    def draw(ax):
+        timeline_drawer(scheduled, target=nc.target, axis=ax, style=IQXSimple())  # the style hides idle qubits too
+        _timeline_legend(ax, scheduled, nc)
+
+    return drawn_figure(draw, _timeline_size)
+
+
+def _timeline_legend(ax, scheduled: QuantumCircuit, nc: NoiseControl) -> None:
+    """A legend under a timeline: each gate the schedule holds in the colour qiskit drew it, in order of first use.
+
+    A gate that takes no time, such as rz, is drawn as qiskit's turning-arrow mark and is named with that mark.
+    """
+    from matplotlib.lines import Line2D
+    from matplotlib.patches import Patch
+    from qiskit.visualization.timeline.stylesheet import default_style
+
+    style = default_style()
+    colours, symbols = style["formatter.color.gates"], style["formatter.latex_symbol.gates"]
+    seen: dict[str, bool] = {}  # gate name -> whether any use of it takes time
+    for instruction in scheduled.data:
+        name = instruction.operation.name
+        if name in ("delay", "barrier"):
+            continue
+        qubits = tuple(scheduled.find_bit(q).index for q in instruction.qubits)
+        seen[name] = seen.get(name, False) or bool(nc.target[name][qubits].duration)
+    handles, labels = [], []
+    for name, takes_time in seen.items():
+        label = f"${symbols[name]}$" if name in symbols else name
+        if takes_time:
+            handles.append(Patch(color=colours.get(name, style["formatter.color.default_gate"])))
+            labels.append(label)
+        else:
+            mark = style["formatter.latex_symbol.frame_change"]
+            handles.append(Line2D([], [], linestyle="none", marker=f"${mark}$", markersize=11, color="black"))
+            labels.append(f"{label}, takes no time")
+    ax.legend(handles, labels, loc="upper center", bbox_to_anchor=(0.5, -0.28), ncol=len(handles), frameon=False,
+              fontsize=11)
+
+
 def circuit_size(ax) -> tuple[float, float]:
     """The size qiskit's circuit drawer gives a figure of its own: its axis limits times its scale factor."""
     (x0, x1), (y0, y1) = ax.get_xlim(), ax.get_ylim()
@@ -507,12 +584,11 @@ def circuit_size(ax) -> tuple[float, float]:
 
 
 def _timeline_size(ax) -> tuple[float, float]:
-    """The size qiskit's timeline drawer gives a figure of its own, from its default style and the axis height."""
+    """A timeline's size: TIMELINE_WIDTH wide, and as tall as qiskit's default style makes its rows."""
     from qiskit.visualization.timeline.stylesheet import default_style
 
-    style = default_style()
     y0, y1 = ax.get_ylim()
-    return style["formatter.general.fig_width"], style["formatter.general.fig_unit_height"] * (y1 - y0)
+    return TIMELINE_WIDTH, default_style()["formatter.general.fig_unit_height"] * (y1 - y0)
 
 
 def _run_report(folder: Path, record: dict) -> str:

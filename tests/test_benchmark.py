@@ -31,6 +31,7 @@ from bellbench.circuits import load_circuit, save_circuit, swap_chain
 from bellbench.pipeline import basis_circuits, mid_circuit_measurements
 from bellbench.run import (
     COMPARISON_COLUMNS,
+    OLD_VIEWS,
     RESULT_FILE,
     RUN_LIST,
     CircuitRun,
@@ -181,6 +182,8 @@ def test_the_move_chain_benchmark_runs_end_to_end(tmp_path):
     assert sorted(table["case"].dropna()) == list(range(1, 10))
     ideal = table[table["simulation"] == "ideal"]
     assert (ideal["fidelity"] == 1.0).all() and (ideal["acceptance"] == 1.0).all()
+    runs = [path for path in folder.iterdir() if path.is_dir()]
+    assert len(runs) == 9 and all(PICTURES <= set(_files(run)) for run in runs)  # the pictures a workbench run holds
 
 
 # -- The mid-circuit sweep ----------------------------------------------------------------
@@ -476,31 +479,69 @@ def test_the_report_says_the_pair_arrived_only_when_the_ideal_f_is_1(config_copy
     assert _report_row(baseline).endswith("| yes |")
 
 
-@pytest.mark.parametrize("diagrams, files", [
-    ("lean", {"graph.png", "circuit-zz.png", "report.md"}),
-    pytest.param(
-        "full",
-        {"graph.png", "circuit-zz.png", "written.png", "circuit-xx.png", "circuit-yy.png", "timeline.png", "report.md"},
-        marks=pytest.mark.slow,
-    ),
-])
-def test_views_are_drawn(tmp_path, diagrams, files):
+PICTURES = {"graph.png"} | {f"{group}/{basis}.png" for group in ("written", "compiled", "timeline")
+                             for basis in ("zz", "xx", "yy")}
+
+
+def _files(folder):
+    """Every file in a run folder, by its path from the folder."""
+    return {p.relative_to(folder).as_posix(): p.read_bytes() for p in folder.rglob("*") if p.is_file()}
+
+
+@pytest.mark.parametrize("diagrams", ["lean", "full"])
+def test_every_run_folder_holds_the_same_pictures_whatever_diagrams_says(tmp_path, diagrams):
     run = CircuitRun("baseline-ibm2016", "boston-2026", shots=100, base_seed=SEED, diagrams=diagrams)
     folder = run.run().write(tmp_path)
-    assert files <= {p.name for p in folder.iterdir()}
-    assert {p.name for p in write_views(folder)} == files
+    assert set(_files(folder)) == PICTURES | {"report.md", "bp.data.result.yaml", "counts.csv", "simulations.csv"}
+    assert yaml.safe_load((folder / "bp.data.result.yaml").read_text(encoding="utf-8"))["diagrams"] == diagrams
+    assert {p.relative_to(folder).as_posix() for p in write_views(folder)} == PICTURES | {"report.md"}
+    assert len({_files(folder)[f"written/{basis}.png"] for basis in ("zz", "xx", "yy")}) == 3  # one per reading
+
+
+def test_a_timeline_draws_the_qubits_that_act_without_gate_names_and_names_its_colours_in_a_legend():
+    run = CircuitRun("move-chain-path-xx-ibm2016", "boston-2026", shots=50, base_seed=SEED).compile()
+    ax = run_module.timeline_figure(run.compiled["ZZ"].compiled, run.nc).axes[0]
+    drawn = [text.get_text() for text in ax.texts]
+    assert sorted(t for t in drawn if "q" in t) == [f"${{\\rm q}}_{{{q}}}$" for q in (0, 3, 4)]  # of ibm2016's five
+    assert not any("CZ" in t or "Measure" in t or "X" in t for t in drawn)  # no gate names on the blocks
+    legend = [text.get_text() for text in ax.get_legend().get_texts()]
+    assert sorted(legend) == sorted(["${\\rm R}_z$, takes no time", "${\\rm √X}$", "${\\rm CZ}$", "${\\rm Measure}$"])
+    assert ax.figure.get_size_inches()[0] == run_module.TIMELINE_WIDTH == 18  # wider than qiskit's own 14 inches
+
+
+def test_a_timeline_picture_has_a_wider_margin_than_the_other_pictures(tmp_path, monkeypatch):
+    folder = CircuitRun("baseline-ibm2016", "boston-2026", shots=50, base_seed=SEED).run().write(tmp_path)
+    wide = _files(folder)
+    monkeypatch.setattr(run_module, "TIMELINE_MARGIN", 0.1)  # matplotlib's default, which the other pictures keep
+    write_views(folder)
+    narrow = _files(folder)
+    for basis in ("zz", "xx", "yy"):
+        name = f"timeline/{basis}.png"
+        added = int.from_bytes(wide[name][16:20], "big") - int.from_bytes(narrow[name][16:20], "big")  # PNG widths
+        assert added == pytest.approx(2 * (0.4 - 0.1) * 150, abs=2)  # both sides, at 150 dots per inch
+    assert all(wide[name] == narrow[name] for name in wide if not name.startswith("timeline/"))
+
+
+def test_a_redraw_replaces_the_earlier_picture_names_and_a_profile_without_durations_has_no_timeline(tmp_path):
+    folder = CircuitRun("baseline-ibm2016", "organiser-cx2", shots=50, base_seed=SEED).run().write(tmp_path)
+    assert not (folder / "timeline").exists() and (folder / "compiled" / "yy.png").is_file()
+    for name in OLD_VIEWS:
+        (folder / name).write_bytes(b"a picture from the earlier layout")
+    write_views(folder)
+    assert not any((folder / name).exists() for name in OLD_VIEWS)
+    assert set(_files(folder)) & PICTURES == PICTURES - {f"timeline/{basis}.png" for basis in ("zz", "xx", "yy")}
 
 
 def test_views_refuse_a_changed_file_before_drawing(config_copy):
     run = CircuitRun("baseline-ibm2016", "boston-2026", shots=100, base_seed=SEED)
     folder = run.run().write(config_copy / "results")
-    before = {p.name: p.read_bytes() for p in folder.iterdir()}
+    before = _files(folder)
     path = config_copy / "config" / "processor" / "bp.data.processor.ibm2016.yaml"
     path.write_text(path.read_text(encoding="utf-8").replace("label: ", "label: Edited ", 1), encoding="utf-8")
     with pytest.raises(ValueError, match="bp.data.processor.ibm2016.yaml changed since it was recorded"):
         write_views(folder)
     assert main(["report", str(folder)]) == 2
-    assert {p.name: p.read_bytes() for p in folder.iterdir()} == before, "a refused redraw changes no file"
+    assert _files(folder) == before, "a refused redraw changes no file"
 
 
 @pytest.mark.slow
@@ -516,12 +557,8 @@ def test_views_draw_without_pyplot_or_a_backend_switch(tmp_path, monkeypatch):
     monkeypatch.setattr(plt, "new_figure_manager", refuse)  # every pyplot figure is made through it
     monkeypatch.setattr(plt, "switch_backend", refuse)
     monkeypatch.setattr(matplotlib, "use", refuse)
-    folder = CircuitRun("baseline-contemporary", "boston-2026", shots=50, base_seed=SEED, diagrams="full").run().write(
-        tmp_path
-    )
-    assert {"graph.png", "circuit-zz.png", "written.png", "circuit-xx.png", "circuit-yy.png", "timeline.png"} <= {
-        p.name for p in folder.iterdir()
-    }
+    folder = CircuitRun("baseline-contemporary", "boston-2026", shots=50, base_seed=SEED).run().write(tmp_path)
+    assert PICTURES <= set(_files(folder))
     # qiskit draws a global phase through pyplot; the exporter drops it today, so a record edited to hold one tests
     # that the views leave it out.
     path = folder / "bp.data.result.yaml"

@@ -134,6 +134,29 @@ def test_a_reset_or_a_reused_measured_qubit_stops_while_its_channel_is_unset(con
         CircuitRun(name, "boston-2026", shots=100, base_seed=SEED).run()
 
 
+def test_compile_gives_what_run_compiles_and_simulates_nothing():
+    compiled = CircuitRun("move-chain-spare-xx-contemporary", "boston-2026", shots=50, base_seed=SEED).compile()
+    assert compiled.simulations == {} and compiled.scores == {} and compiled.git_state is None
+    assert set(compiled.scheduled) == set(compiled.compiled) == {"XX", "YY", "ZZ"}
+    ran = CircuitRun("move-chain-spare-xx-contemporary", "boston-2026", shots=50, base_seed=SEED).run()
+    assert compiled.cost == ran.cost and compiled.duration == ran.duration
+    assert {b: run_module.circuit_to_qasm(c.compiled) for b, c in compiled.compiled.items()} == ran.export_as_yaml()[
+        "compiled"
+    ]
+    with pytest.raises(RuntimeError, match="has not run yet"):
+        compiled.export_as_yaml()
+
+
+def test_compile_shows_a_circuit_that_run_stops_for_an_unset_channel():
+    """The path check reads a qubit the pair then reuses, which needs the mid-circuit channel to run."""
+    blocked = CircuitRun("move-chain-path-xx-ibm2016", "boston-2026", shots=50, base_seed=SEED)
+    assert blocked.compile().cost["two_qubit_gates"] > 0
+    with pytest.raises(ValueError, match="mid_circuit_measurement_error is unset"):
+        blocked.compile(require_channels=True)
+    with pytest.raises(ValueError, match="mid_circuit_measurement_error is unset"):
+        blocked.run()
+
+
 @pytest.mark.parametrize("p, low, high", [(0.0, 0.9, 1.0), (1.0, 0.0, 0.1)])
 def test_a_reset_runs_once_its_channel_is_set(config_copy, p, low, high):
     """Qubit 1 is reset and then read: the ideal run keeps every shot, and the noisy one keeps a shot only when

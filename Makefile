@@ -33,8 +33,8 @@ help:
 	@echo "                                     difference or a refusal; the last line make prints names the"
 	@echo "                                     rerun's own code (Error 1 a difference, Error 2 a refusal)"
 	@echo "    make report RUN=<path>           Redraw a run folder's diagrams and report.md"
-	@echo "    make workbench                   Render the workbench and copy it to workspace/workbench.ipynb"
-	@echo "    make workbench FORCE=1           The same, replacing an existing workspace copy"
+	@echo "    make workbench                   Render the tutorial and the workbench and copy them into workspace/"
+	@echo "    make workbench FORCE=1           The same, replacing existing workspace copies"
 	@echo ""
 	@echo "  Docs figures:"
 	@echo "    make figures                     Draw docs/assets/processor-models.png from the processor files"
@@ -94,15 +94,19 @@ report:
 	@test -n "$(RUN)" || { echo "usage: make report RUN=<run folder or its bp.data.result.yaml>"; exit 2; }
 	uv run python -m bellbench.run report $(RUN)
 
-WORKBENCH = notebooks/bp.output.workbench.ipynb
+# The notebooks make workbench renders: each from notebooks/bp.invoke.<name>.yaml into
+# notebooks/bp.output.<name>.ipynb, then copied to workspace/<name>.ipynb, where a teammate edits and runs it.
+WORKBENCH_NOTEBOOKS = workbench tutorial
 
-workbench:
-	$(MAKE) -C $(BLUEPRINT_DIR) invoke PROJECT_ROOT=$(CURDIR) FILE=notebooks/bp.invoke.workbench.yaml FORCE=true OUTPUT=adjacent
+workbench: $(WORKBENCH_NOTEBOOKS:%=workbench-%)
+
+workbench-%:
+	$(MAKE) -C $(BLUEPRINT_DIR) invoke PROJECT_ROOT=$(CURDIR) FILE=notebooks/bp.invoke.$*.yaml FORCE=true OUTPUT=adjacent
 	@mkdir -p workspace
-	@if [ -e workspace/workbench.ipynb ] && [ -z "$(FORCE)" ]; then \
-		echo "workspace/workbench.ipynb exists; make workbench FORCE=1 replaces it"; \
+	@if [ -e workspace/$*.ipynb ] && [ -z "$(FORCE)" ]; then \
+		echo "workspace/$*.ipynb exists; make workbench FORCE=1 replaces it"; \
 	else \
-		cp $(WORKBENCH) workspace/workbench.ipynb && echo "wrote workspace/workbench.ipynb"; \
+		cp notebooks/bp.output.$*.ipynb workspace/$*.ipynb && echo "wrote workspace/$*.ipynb"; \
 	fi
 
 # -- Docs figures --------------------------------------------------------

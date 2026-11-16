@@ -107,7 +107,7 @@ properties:
       ideal: {$ref: "#/$defs/seed"}
       noisy: {$ref: "#/$defs/seed"}
   diagrams:
-    description: lean draws the graph and the compiled ZZ circuit; full adds the written circuit, the XX and YY circuits and the schedule's timeline.
+    description: Recorded as the run was given it. It no longer chooses a run folder's pictures, which are the same for every run (docs/DESIGN.md, section 5).
     enum: [lean, full]
   registers:
     description: >-

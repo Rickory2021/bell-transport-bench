@@ -186,7 +186,7 @@ def cost(compiled: Mapping[str, Compiled], ports: Sequence[int]) -> dict:
         raise ValueError(f"cost reads the compiled ZZ circuit; got the bases {sorted(compiled)}")
     zz = compiled["ZZ"]
     swaps = zz.routed.count_ops().get("swap", 0)
-    by_edge = {basis: _two_qubit_by_edge(c.compiled) for basis, c in compiled.items()}
+    by_edge = {basis: two_qubit_by_edge(c.compiled) for basis, c in compiled.items()}
     used = sorted({zz.compiled.find_bit(q).index for inst in zz.compiled.data for q in inst.qubits if inst.operation.name != "barrier"})
     return {
         "swaps": swaps,
@@ -199,7 +199,8 @@ def cost(compiled: Mapping[str, Compiled], ports: Sequence[int]) -> dict:
     }
 
 
-def _two_qubit_by_edge(circuit: QuantumCircuit) -> dict[str, int]:
+def two_qubit_by_edge(circuit: QuantumCircuit) -> dict[str, int]:
+    """A circuit's two-qubit gates per coupler, as {"a-b": count} with a < b, sorted."""
     counts = Counter()
     for inst in circuit.data:
         if len(inst.qubits) == 2 and inst.operation.name not in NON_GATES:
