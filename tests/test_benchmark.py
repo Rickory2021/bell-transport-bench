@@ -496,6 +496,19 @@ def test_every_run_folder_holds_the_same_pictures_whatever_diagrams_says(tmp_pat
     assert len({_files(folder)[f"written/{basis}.png"] for basis in ("zz", "xx", "yy")}) == 3  # one per reading
 
 
+def test_a_timeline_picture_has_a_wider_margin_than_the_other_pictures(tmp_path, monkeypatch):
+    folder = CircuitRun("baseline-ibm2016", "boston-2026", shots=50, base_seed=SEED).run().write(tmp_path)
+    wide = _files(folder)
+    monkeypatch.setattr(run_module, "TIMELINE_MARGIN", 0.1)  # matplotlib's default, which the other pictures keep
+    write_views(folder)
+    narrow = _files(folder)
+    for basis in ("zz", "xx", "yy"):
+        name = f"timeline/{basis}.png"
+        added = int.from_bytes(wide[name][16:20], "big") - int.from_bytes(narrow[name][16:20], "big")  # PNG widths
+        assert added == pytest.approx(2 * (0.4 - 0.1) * 150, abs=2)  # both sides, at 150 dots per inch
+    assert all(wide[name] == narrow[name] for name in wide if not name.startswith("timeline/"))
+
+
 def test_a_redraw_replaces_the_earlier_picture_names_and_a_profile_without_durations_has_no_timeline(tmp_path):
     folder = CircuitRun("baseline-ibm2016", "organiser-cx2", shots=50, base_seed=SEED).run().write(tmp_path)
     assert not (folder / "timeline").exists() and (folder / "compiled" / "yy.png").is_file()

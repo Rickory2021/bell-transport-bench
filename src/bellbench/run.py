@@ -79,6 +79,7 @@ RESULT_FILE = "bp.data.result.yaml"
 SIMULATIONS = ("ideal", "noisy")
 DIAGRAMS = ("lean", "full")  # still accepted and recorded; every run draws the same pictures (write_views)
 OLD_VIEWS = ("circuit-zz.png", "circuit-xx.png", "circuit-yy.png", "written.png", "timeline.png")  # the earlier layout
+TIMELINE_MARGIN = 0.4  # inches of white around a timeline picture; matplotlib's own default, 0.1, is kept elsewhere
 PACKAGES = ("qiskit", "qiskit-aer", "qiskit-ibm-runtime", "qiskit-qasm3-import", "numpy")
 WILSON_Z = 1.959963984540054  # a 95% interval
 STAMP = "%Y%m%dT%H%M%SZ"  # the UTC time that names run and benchmark folders
@@ -478,9 +479,10 @@ def write_views(folder: Path) -> list[Path]:
     proc = yaml.safe_load((configs.ROOT / record["noise_control"]["processor"]["path"]).read_text(encoding="utf-8"))
     written = []
 
-    def save(fig, name):
+    def save(fig, name, margin=0.1):
         (folder / name).parent.mkdir(exist_ok=True)
-        fig.savefig(folder / name, dpi=150, facecolor="white", bbox_inches="tight", metadata={"Software": None})
+        fig.savefig(folder / name, dpi=150, facecolor="white", bbox_inches="tight", pad_inches=margin,
+                    metadata={"Software": None})
         written.append(folder / name)
 
     used = [tuple(int(q) for q in edge.split("-")) for edge in record["cost"]["two_qubit_gates_by_edge"]["ZZ"]]
@@ -499,8 +501,10 @@ def write_views(folder: Path) -> list[Path]:
     if record["scheduled_duration"] is not None:
         for basis in BASES:
             scheduled = schedule(compiled[basis], nc)
+            # qiskit's timeline puts its qubit names, last tick and axis title at the figure's edge, so the picture
+            # gets a wider margin than a circuit's.
             save(drawn_figure(lambda ax: timeline_drawer(scheduled, target=nc.target, axis=ax), _timeline_size),
-                 f"timeline/{basis.lower()}.png")
+                 f"timeline/{basis.lower()}.png", margin=TIMELINE_MARGIN)
     for name in OLD_VIEWS:
         (folder / name).unlink(missing_ok=True)
     (folder / "report.md").write_text(_run_report(folder, record), encoding="utf-8")
