@@ -227,6 +227,19 @@ def test_show_draws_the_circuit_and_its_graph(config_copy):
     assert "analysis {'name': 'postselect'}" in repr(view)
 
 
+def test_show_sizes_the_circuit_drawing_from_its_content(monkeypatch):
+    """A figure of one fixed size, 3.5 inches high, squeezed a larger circuit until its register's name was cut."""
+    from bellbench import workbench as workbench_module
+
+    sizes, real = [], workbench_module.drawn_figure
+    monkeypatch.setattr(workbench_module, "drawn_figure", lambda draw, size: sizes.append(size) or real(draw, size))
+    wb = Workbench()
+    small, large = (wb.show(name)._figures()[0] for name in ("baseline-ibm2016", "move-chain-spare-xx-contemporary"))
+    assert sizes[0] is sizes[2] is run_module.circuit_size  # sized as a run folder's circuit views are
+    height = [int.from_bytes(png[20:24], "big") for png in (small, large)]  # a PNG's height in pixels
+    assert height[0] < 3.5 * 110 < height[1]  # at show's 110 dots per inch
+
+
 def test_check_flags_counts_each_check_per_basis():
     # Port last-first, then check. The flagged and unflagged shots differ in number, so a flag cannot pass as
     # its opposite: 40 shots read a check bit as 1, and 60 read none.

@@ -36,7 +36,6 @@ from pathlib import Path
 
 import pandas as pd
 import yaml
-from matplotlib.figure import Figure
 from qiskit import QuantumCircuit, qasm3
 
 from bellbench import builders, configs
@@ -49,7 +48,9 @@ from bellbench.run import (
     SIMULATIONS,
     CircuitRun,
     Score,
+    circuit_size,
     current_benchmark,
+    drawn_figure,
     load_benchmark,
     read_table,
     self_test_failure,
@@ -328,10 +329,11 @@ class CircuitView:
         written = self.circuit.circuit.copy()
         written.global_phase = 0  # a phase changes no outcome; drawing it would go through pyplot
         images = []
-        for draw, size in ((lambda ax: written.draw("mpl", idle_wires=False, fold=40, ax=ax), (9, 3.5)),
-                           (lambda ax: draw_processor(ax, proc), (4, 4))):
-            fig = Figure(figsize=size)
-            draw(fig.subplots())
+        # The circuit's figure takes the size its drawing needs, as a run folder's circuit views do; a figure of
+        # one fixed size squeezes a larger circuit until its register names are cut.
+        for draw, size in ((lambda ax: written.draw("mpl", idle_wires=False, fold=40, ax=ax), circuit_size),
+                           (lambda ax: draw_processor(ax, proc), lambda ax: (4, 4))):
+            fig = drawn_figure(draw, size)
             buffer = io.BytesIO()
             fig.savefig(buffer, format="png", dpi=110, bbox_inches="tight", facecolor="white")
             images.append(buffer.getvalue())
