@@ -1,0 +1,5 @@
+# notebooks/bp.invoke.tutorial.yaml
+#
+# The tutorial's default: the core benchmark's noise profile.
+
+noise: boston-2026

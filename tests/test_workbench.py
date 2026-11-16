@@ -1,12 +1,14 @@
 # tests/test_workbench.py
-"""The workbench notebook runs as committed, and each committed notebook is what its template renders.
+"""The tutorial and the workbench notebook run as committed, and each is what its template renders.
 
 Covers docs/DESIGN.md, section 1. The workbench notebook's code cells, run in
 order at low shots in a temporary copy of the repo's config and its committed
 move-chain benchmark, build a trial, show it with every debug view, run it,
 compare it with committed runs and keep its run in workspace/; every view a
-cell displays is built. A fresh render from each template, process and invoke
-gives the committed notebook byte for byte.
+cell displays is built. The tutorial's cells run the same way, lessons first,
+then Part 2's two trials. A fresh render from each template, process and
+invoke gives the committed notebook byte for byte, and make workbench renders
+every one of them.
 
 The plain notebook the Workbench first shipped with, kept in tests/fixtures/,
 still runs cell for cell against the package, as a teammate's copy of it does;
@@ -27,14 +29,17 @@ import pytest
 from bellbench import configs
 from bellbench import workbench as workbench_module
 from bellbench.views import base as views_base
+from bellbench.views import lessons
 
 ROOT = Path(__file__).resolve().parents[1]
-NOTEBOOKS = ("workbench",)  # each rendered from notebooks/bp.invoke.<name>.yaml into notebooks/bp.output.<name>.ipynb
+NOTEBOOKS = ("workbench", "tutorial")  # each rendered from notebooks/bp.invoke.<name>.yaml into notebooks/bp.output.<name>.ipynb
 PLAIN = ROOT / "tests" / "fixtures" / "plain-workbench.ipynb"
 BLUEPRINT = ROOT / "scripts" / "blueprint-render"
-MOVE_CHAIN = Path("results") / "runs" / "benchmark" / "move-chain"
+BENCHMARKS = Path("results") / "runs" / "benchmark"
+MOVE_CHAIN = BENCHMARKS / "move-chain"
 PROMOTE = "# wb.promote("
 TRIAL = "try-move-xx"
+TUTORIAL_PARTS = {"html": 14, "latex": 10, "markdown": 16, "png": 4, "stepper": 2}  # how many parts of each kind the tutorial's cells display
 
 
 def _code_cells(notebook=PLAIN):
@@ -75,6 +80,26 @@ def test_the_workbench_notebooks_cells_run_and_every_view_they_display_is_built(
     assert configs.trial_names() == ["my-move-chain"]  # promote stays commented out
 
 
+def test_the_tutorial_notebooks_cells_run_and_every_view_they_display_is_built(config_copy, monkeypatch):
+    for benchmark in ("move-chain", "biased-noise"):
+        shutil.copytree(ROOT / BENCHMARKS / benchmark, config_copy / BENCHMARKS / benchmark)
+    shown = []
+    for module in (workbench_module, views_base, lessons):  # each shows through the emit it imported
+        monkeypatch.setattr(module, "emit", shown.append)
+    cells = _code_cells(ROOT / "notebooks" / "bp.output.tutorial.ipynb")
+    assert len(cells) == 24 and [i for i, c in enumerate(cells) if "from bellbench" in c] == [0]  # one import cell
+    assert "from bellbench.views.lessons import algebra, bloch_steps, journey, ket, matrix_of, state_steps, tex, whole" in cells[0]
+    namespace = {}
+    for source in cells:
+        value = _run_cell(source.replace("shots=500,", "shots=50,"), namespace)
+        if hasattr(value, "_ipython_display_"):
+            value._ipython_display_()
+    assert namespace["wb"].shots == 50 and namespace["my_run"].self_test is None
+    kinds = [part.kind for parts in shown for part in parts]
+    assert {kind: kinds.count(kind) for kind in sorted(set(kinds))} == TUTORIAL_PARTS
+    assert configs.trial_names() == ["my-case-6", "my-xx-check"]  # Part 2 builds two trials and promotes neither
+
+
 @pytest.mark.parametrize("with_promote", [False, True])
 def test_the_code_cells_run_in_order(config_copy, with_promote):
     shutil.copytree(ROOT / MOVE_CHAIN, config_copy / MOVE_CHAIN)
@@ -112,6 +137,14 @@ def test_the_example_in_the_workbench_docstring_runs_as_written(config_copy):
             namespace["wb"].shots = 50
     assert namespace["trial"].self_test is None and namespace["base"].self_test is None
     assert TRIAL not in configs.trial_names()  # the example's last line promoted it
+
+
+def test_make_workbench_renders_every_committed_notebook():
+    names = next(line for line in (ROOT / "Makefile").read_text(encoding="utf-8").splitlines()
+                 if line.startswith("WORKBENCH_NOTEBOOKS ="))
+    assert tuple(names.split("=")[1].split()) == NOTEBOOKS
+    assert sorted(p.name for p in (ROOT / "notebooks").glob("bp.output.*.ipynb")) == sorted(
+        f"bp.output.{name}.ipynb" for name in NOTEBOOKS)
 
 
 @pytest.mark.parametrize("name", NOTEBOOKS)

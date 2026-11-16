@@ -33,7 +33,7 @@ help:
 	@echo "                                     difference or a refusal; the last line make prints names the"
 	@echo "                                     rerun's own code (Error 1 a difference, Error 2 a refusal)"
 	@echo "    make report RUN=<path>           Redraw a run folder's diagrams and report.md"
-	@echo "    make workbench                   Render the workbench notebooks and copy them into workspace/"
+	@echo "    make workbench                   Render the tutorial and the workbench and copy them into workspace/"
 	@echo "    make workbench FORCE=1           The same, replacing existing workspace copies"
 	@echo ""
 	@echo "  Docs figures:"
@@ -96,7 +96,7 @@ report:
 
 # The notebooks make workbench renders: each from notebooks/bp.invoke.<name>.yaml into
 # notebooks/bp.output.<name>.ipynb, then copied to workspace/<name>.ipynb, where a teammate edits and runs it.
-WORKBENCH_NOTEBOOKS = workbench
+WORKBENCH_NOTEBOOKS = workbench tutorial
 
 workbench: $(WORKBENCH_NOTEBOOKS:%=workbench-%)
 
