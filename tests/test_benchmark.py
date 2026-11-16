@@ -182,6 +182,8 @@ def test_the_move_chain_benchmark_runs_end_to_end(tmp_path):
     assert sorted(table["case"].dropna()) == list(range(1, 10))
     ideal = table[table["simulation"] == "ideal"]
     assert (ideal["fidelity"] == 1.0).all() and (ideal["acceptance"] == 1.0).all()
+    runs = [path for path in folder.iterdir() if path.is_dir()]
+    assert len(runs) == 9 and all(PICTURES <= set(_files(run)) for run in runs)  # the pictures a workbench run holds
 
 
 # -- The mid-circuit sweep ----------------------------------------------------------------
