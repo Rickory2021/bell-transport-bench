@@ -155,9 +155,11 @@ def test_shows_debug_views_are_folded_and_the_stepper_script_follows_its_fold():
         "Timelines of the compiled circuits",
     ]
     assert folds[0].index("</details>") < folds[0].index("<script>") and "<script>" not in folds[1]
-    assert folds[1].count("<img") == 3 and folds[2].count("<img") == 3
+    assert folds[1].count("<img") == 3 and folds[2].count("<img") == 6  # per reading: our chart, then qiskit's
+    assert folds[2].count("as Qiskit draws it") == 3 and folds[2].count("<code>timeline/</code>") == 3
     only_zz = show_parts(Compiled.of_run(run), compiled=True, timeline=True)
     assert only_zz[4].content.count("<img") == 1 and "Timeline of the compiled ZZ circuit" in only_zz[5].content
+    assert only_zz[5].content.count("<img") == 2 and "The same ZZ schedule as Qiskit draws it" in only_zz[5].content
     assert "XX: the same" in only_zz[4].content
 
 

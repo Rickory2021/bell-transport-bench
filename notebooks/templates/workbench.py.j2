@@ -97,7 +97,7 @@ trial = wb.build(CIRCUIT_NAME, circuit, processor=PROCESSOR, analysis=ANALYSIS, 
 # **`show` puts the circuit on one screen before you spend a shot on it.**
 #
 # - **Call:** `wb.show(trial)`. It compiles under the session's settings and simulates nothing.
-# - **Options:** three debug views, each folded until you open it. `step=True` steps through the written circuit with no noise. `compiled="all"` draws the three circuits a run compiles from yours, ZZ, XX and YY: ZZ measures the ports as they are, XX and YY first rotate each port so the same measurement reads it along x or y. `compiled=True` draws ZZ alone. `timeline="all"` shows when each qubit is busy in each of the three, and `timeline=True` in ZZ alone.
+# - **Options:** three debug views, each folded until you open it. `step=True` steps through the written circuit with no noise. `compiled="all"` draws the three circuits a run compiles from yours, ZZ, XX and YY: ZZ measures the ports as they are, XX and YY first rotate each port so the same measurement reads it along x or y. `compiled=True` draws ZZ alone. `timeline="all"` shows when each qubit is busy in each of the three, and `timeline=True` in ZZ alone. Under each chart is the same schedule as Qiskit draws it, gate by gate; a run folder keeps that picture in `timeline/`.
 # - **You get:** a header, the processor graph beside the written circuit, one cost line, and the gates by type. A warning appears only when compiling uses a coupler the written circuit does not.
 # - **Look for:** the last step of the step-through ending with the pair on the ports.
 

@@ -27,7 +27,7 @@ from bellbench.circuits import CircuitFile, load_circuit
 from bellbench.figures import COLORS, DEFAULT_COLOR, draw_processor, processor_layout
 from bellbench.noise import NoiseControl
 from bellbench.pipeline import schedule, two_qubit_by_edge
-from bellbench.run import CircuitRun, circuit_size, drawn_figure
+from bellbench.run import CircuitRun, circuit_size, drawn_figure, timeline_figure
 from bellbench.views.base import Part, fold, html, image, img, markdown
 from bellbench.views.stepper import journey_html
 
@@ -188,7 +188,12 @@ BUSY_COLORS = {"two-qubit gate": "#7139cc", "single-qubit gate": "#c4b2ec", "mea
 
 
 def _timeline_html(view: Compiled, basis: Basis = "ZZ") -> str:
-    """When each qubit that acts is busy, in µs: a two-qubit gate, a single-qubit gate, a measurement, or waiting."""
+    """A compiled circuit over time, twice: our chart of when each qubit is busy, then qiskit's own timeline.
+
+    The chart gives time in µs for the qubits that act: a two-qubit gate, a single-qubit gate, a measurement, or
+    waiting. Qiskit's timeline names each gate on every qubit, in the processor's time steps; it is the picture
+    a run folder keeps in timeline/, drawn by the same function.
+    """
     noise = view.noise_control()
     if not noise.has_durations:
         return f"<p>No timeline: {escape(noise.noise_name)} has no durations, so the run is not scheduled.</p>"
@@ -229,7 +234,9 @@ def _timeline_html(view: Compiled, basis: Basis = "ZZ") -> str:
     ax.legend(handles, list(BUSY_COLORS) + ["waiting"], loc="upper center", bbox_to_anchor=(0.5, -0.12 - 0.45 / len(rows)),
               ncol=4, frameon=False, fontsize=8)
     ax.set_title(f"Compiled {basis} circuit over time: {total:.3f} µs", fontsize=10)
-    return img(fig)
+    caption = (f"<p>The same {basis} schedule as Qiskit draws it: every gate by name, on every qubit, in the "
+               "processor's time steps (dt). A run folder keeps this picture in <code>timeline/</code>.</p>")
+    return img(fig) + caption + img(timeline_figure(view.compiled[basis], noise))
 
 
 def show_parts(view: Compiled, *, step: bool = False, compiled: bool | Literal["all"] = False,
