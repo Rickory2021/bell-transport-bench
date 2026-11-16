@@ -1,0 +1,35 @@
+# config/benchmark/bp.data.benchmark.middle-out.yaml
+
+name: middle-out
+label: Middle-out study
+notes: >-
+  An optional study, kept apart from the nine cases (docs/CHALLENGE.md, What is fixed
+  and what we choose): do two variants of the reported strategy do better than it? The
+  first, move_middle_out, makes the pair in the middle of the path and moves both
+  halves outward at once, so it uses the same gates as move_chain in a shorter
+  schedule. The second adds a ZZ check before the XX check on the hyperbolic graph,
+  whose third qubit-disjoint path between the ports holds a second spare bus; the ZZ
+  check catches a bit flip on one port, which the XX check misses, and runs first so
+  that the XX check's parity covers the ZZ check's frame bit. The contemporary graph
+  has only two qubit-disjoint paths, so it has no room for a second spare bus, and on
+  ibm2016 move_middle_out writes the same circuit as move_chain, so neither graph runs
+  that variant. Each new run sits beside the move-chain benchmark's run it varies,
+  rerun here under the same circuit, profile and base seed, so with the same seeds and
+  the same numbers. The ZZ and XX run's XX bus passes through the centre qubit, so its
+  numbers are without the planned degree penalty (docs/DESIGN.md, section 4). Every
+  run takes 20,000 shots per basis, as in the core.
+shots: 20000
+base_seed: 20261116
+runs:
+  # The reference: the move-chain benchmark's runs these vary.
+  - {run: move-contemporary, circuit: move-chain-contemporary, noise: boston-2026}
+  - {run: move-hyperbolic, circuit: move-chain-hyperbolic, noise: boston-2026}
+  - {run: spare-xx-contemporary, circuit: move-chain-spare-xx-contemporary, noise: boston-2026}
+  - {run: spare-xx-hyperbolic, circuit: move-chain-spare-xx-hyperbolic, noise: boston-2026}
+  # Middle-out, without and with the XX check.
+  - {run: middle-out-contemporary, circuit: move-middle-out-contemporary, noise: boston-2026}
+  - {run: middle-out-hyperbolic, circuit: move-middle-out-hyperbolic, noise: boston-2026}
+  - {run: middle-out-xx-contemporary, circuit: move-middle-out-spare-xx-contemporary, noise: boston-2026}
+  - {run: middle-out-xx-hyperbolic, circuit: move-middle-out-spare-xx-hyperbolic, noise: boston-2026}
+  # Middle-out with a ZZ check, then the XX check, on the hyperbolic graph's two spare paths.
+  - {run: middle-out-zz-xx-hyperbolic, circuit: move-middle-out-spare-zz-xx-hyperbolic, noise: boston-2026}
