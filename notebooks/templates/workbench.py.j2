@@ -31,7 +31,7 @@
 # - **You get:** `wb`, the object every step below calls. To try one run under other settings without changing the session, pass them to that run: `wb.run(name, shots=2000)`.
 
 # %%
-from qiskit import QuantumCircuit
+from qiskit import ClassicalRegister, QuantumCircuit
 from bellbench.workbench import Workbench
 
 NOISE = "{{ defaults.noise }}"   # a profile in config/noise/
