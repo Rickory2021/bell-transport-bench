@@ -123,14 +123,30 @@ class Workbench:
                 )
             if analysis is not None:
                 raise TypeError("builder steps write their own analysis; analysis= is for OpenQASM text or a circuit")
+            if ";" in source or "\n" in source:
+                raise TypeError(
+                    "builder steps follow a processor's name, and the second argument reads as OpenQASM text; pass "
+                    "the text with processor=... and no builder steps"
+                )
+            calls = [step if isinstance(step, tuple) else (step, {}) for step in steps]
+            for step, call in zip(steps, calls):
+                if len(call) != 2 or not callable(call[0]) or not isinstance(call[1], Mapping):
+                    raise TypeError(
+                        "a builder step is a function from bellbench.builders, or a (function, keyword arguments) "
+                        f"tuple such as (builders.bus_xx, {{'on': 'spare'}}); got {step!r}"
+                    )
             state = builders.start(source)
-            for step in steps:
-                function, kwargs = step if isinstance(step, tuple) else (step, {})
+            for function, kwargs in calls:
                 state = function(state, **kwargs)
             state.save(name, label or name, overwrite=True, trial=True)
             return name
         if steps:
             raise TypeError("builder steps go with a processor name as the second argument, not with processor=")
+        if not isinstance(source, (str, QuantumCircuit)):
+            raise TypeError(
+                "with processor=..., the second argument is OpenQASM text or a Qiskit circuit; builder steps follow "
+                f"a processor's name instead, as in build(name, processor, *steps); got {source!r}"
+            )
         proc = configs.load_processor(processor)
         if isinstance(source, str):
             circuit, made = circuit_from_qasm(source, len(proc["qubits"]), name, proc["ports"]), "OpenQASM text"

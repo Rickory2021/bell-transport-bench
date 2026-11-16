@@ -250,6 +250,21 @@ def test_build_refuses_a_committed_name_and_mixed_arguments(config_copy):
         wb.build("trial", _qasm(), builders.move_chain, processor="ibm2016")
 
 
+def test_build_answers_three_argument_mistakes_in_its_own_words(config_copy):
+    wb = Workbench()
+    with pytest.raises(TypeError, match=r"with processor=\.\.\., the second argument is OpenQASM text or a Qiskit"):
+        wb.build("trial", builders.move_chain, processor="ibm2016")  # a builder where the circuit goes
+    with pytest.raises(TypeError, match="the second argument reads as OpenQASM text; pass the text with processor="):
+        wb.build("trial", _qasm(), builders.move_chain)  # OpenQASM text where the processor's name goes
+    for step in ([builders.move_chain, {}], (builders.move_chain,), ("move_chain", {}), (builders.move_chain, "on")):
+        with pytest.raises(TypeError, match=r"a builder step is a function .* or a \(function, keyword arguments\)"):
+            wb.build("trial", "ibm2016", step)
+    assert configs.trial_names() == []  # nothing was saved
+    with pytest.raises(FileNotFoundError, match="no processor file named 'ibm2061'"):
+        wb.build("trial", "ibm2061", builders.move_chain)  # a misspelt processor keeps its own message
+    assert wb.build("trial", "ibm2016", builders.move_chain, (builders.bus_xx, {})) == "trial"
+
+
 def test_a_result_whose_ideal_run_fails_the_self_test_says_so(config_copy):
     wb = Workbench(shots=SHOTS)
     wb.build("lossy", _qasm("bit[1] check;\n", "h q[1];\ncheck[0] = measure q[1];\n"), processor="ibm2016",
