@@ -76,6 +76,26 @@ def test_every_setting_given_for_one_run_wins_over_the_sessions(config_copy):
     assert result.record["seeds"] != wb.run("baseline-ibm2016").record["seeds"]
 
 
+def test_a_label_names_each_noise_setting_that_is_not_the_default(config_copy):
+    wb = Workbench(shots=SHOTS)
+    assert wb.run("baseline-ibm2016").label == "baseline-ibm2016 under boston-2026"
+    assert wb.run("baseline-ibm2016", scale=3.0).label == "baseline-ibm2016 under boston-2026, scale 3"
+    result = wb.run("baseline-ibm2016", scale=0.5, overrides=[OVERRIDE], conditional={CHANNEL: 0.02})
+    assert result.label == f"baseline-ibm2016 under boston-2026, scale 0.5, 1 override, {CHANNEL} 0.02"
+    assert repr(result).splitlines()[0] == result.label
+
+
+def test_the_points_of_a_committed_sweep_read_apart():
+    wb = Workbench()
+    points = [wb.fetch("mid-circuit-sweep", f"path-xx-ibm2016-mcm-{error}") for error in ("0", "5e-2")]
+    circuit = "move-chain-path-xx-ibm2016 under boston-2026"
+    assert [p.label for p in points] == [f"{circuit}, {CHANNEL} 0", f"{circuit}, {CHANNEL} 0.05"]
+    (_, compared), = wb.compare(*points).tables
+    assert list(compared["result"]) == [p.label for p in points]
+    view = wb.fetch("mid-circuit-sweep", "path-xx-ibm2016-mcm-5e-2", analysis={"name": "postselect"})
+    assert view.label == f"{circuit}, {CHANNEL} 0.05, view read with postselect"
+
+
 def test_a_result_shows_every_table_as_html_and_text(config_copy):
     wb = Workbench(shots=SHOTS)
     wb.build("trial-xx", "contemporary", builders.move_chain, (builders.bus_xx, {"on": [0, 4, 5, 6, 7]}))

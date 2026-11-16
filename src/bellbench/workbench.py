@@ -238,8 +238,9 @@ class Result:
     @classmethod
     def from_run(cls, run: CircuitRun) -> "Result":
         raw = {name: run.simulations[name].raw for name in SIMULATIONS}
-        return cls(f"{run.circuit.name} under {run.nc.noise_name}", run.export_as_yaml(), raw, run.circuit.analysis,
-                   run=run)
+        record = run.export_as_yaml()
+        label = _label(run.circuit.name, run.nc.noise_name, record["noise_control"])
+        return cls(label, record, raw, run.circuit.analysis, run=run)
 
     @classmethod
     def from_folder(cls, folder: Path, analysis: Mapping | None = None) -> "Result":
@@ -255,7 +256,7 @@ class Result:
         raw = {name: {b: {} for b in BASES} for name in SIMULATIONS}
         for row in read_table(folder / "counts.csv").itertuples(index=False):
             raw[row.simulation][row.basis][row.outcome] = int(row.count)
-        label = f"{circuit.name} under {noise}"
+        label = _label(circuit.name, noise, record["noise_control"])
         if analysis is None:
             return cls(label, record, raw, circuit.analysis)
         return cls(f"{label}, view read with {analysis.get('name')}", record, raw, analysis, view=True)
@@ -329,6 +330,24 @@ class Result:
 
     def __repr__(self) -> str:
         return repr(Table(self.tables(), self._heading()))
+
+
+def _label(circuit: str, noise: str, settings: Mapping) -> str:
+    """A result's label: `<circuit> under <noise>`, then each noise setting that is not the default.
+
+    `settings` is a run record's noise_control. A scale other than 1, the number
+    of overrides and each conditional channel that is set follow the profile's
+    name, so two runs of one circuit that differ in any of them read apart, as
+    the points of a sweep do. A run under the defaults keeps the short label.
+    """
+    parts = [f"{circuit} under {noise}"]
+    if settings["scale"] != 1:
+        parts.append(f"scale {settings['scale']:g}")
+    if settings["overrides"]:
+        count = len(settings["overrides"])
+        parts.append(f"{count} override{'s' if count > 1 else ''}")
+    parts += [f"{channel} {value:g}" for channel, value in settings["conditional"].items() if value is not None]
+    return ", ".join(parts)
 
 
 class CircuitView:
