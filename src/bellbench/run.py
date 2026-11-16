@@ -440,7 +440,7 @@ def write_views(folder: Path) -> list[Path]:
         written.append(folder / name)
 
     used = [tuple(int(q) for q in edge.split("-")) for edge in record["cost"]["two_qubit_gates_by_edge"]["ZZ"]]
-    save(_figure(lambda ax: draw_processor(ax, proc, used_edges=used), lambda ax: (4, 4.3)), "graph.png")
+    save(drawn_figure(lambda ax: draw_processor(ax, proc, used_edges=used), lambda ax: (4, 4.3)), "graph.png")
     drawings = {"circuit-zz.png": record["compiled"]["ZZ"]}
     if record["diagrams"] == "full":
         drawings |= {"written.png": record["written"], "circuit-xx.png": record["compiled"]["XX"],
@@ -450,17 +450,20 @@ def write_views(folder: Path) -> list[Path]:
         # qiskit draws a global phase through pyplot even on a given axis, which would make a window object; the
         # phase changes no measured outcome, so the views leave it out.
         circuit.global_phase = 0
-        save(_figure(lambda ax: circuit.draw("mpl", idle_wires=False, fold=40, ax=ax), _circuit_size), name)
+        save(drawn_figure(lambda ax: circuit.draw("mpl", idle_wires=False, fold=40, ax=ax), circuit_size), name)
     if record["diagrams"] == "full" and record["scheduled_duration"] is not None:
         nc = NoiseControl.from_yaml(record["noise_control"])
         scheduled = schedule(qasm3.loads(record["compiled"]["ZZ"]), nc)
-        save(_figure(lambda ax: timeline_drawer(scheduled, target=nc.target, axis=ax), _timeline_size), "timeline.png")
+        save(
+            drawn_figure(lambda ax: timeline_drawer(scheduled, target=nc.target, axis=ax), _timeline_size),
+            "timeline.png",
+        )
     (folder / "report.md").write_text(_run_report(folder, record), encoding="utf-8")
     written.append(folder / "report.md")
     return written
 
 
-def _figure(draw, size):
+def drawn_figure(draw, size):
     """A matplotlib Figure, made without pyplot, holding what `draw(ax)` puts on an axis.
 
     `size(ax)` gives the figure's size in inches from an axis the drawing was
@@ -477,7 +480,7 @@ def _figure(draw, size):
     return fig
 
 
-def _circuit_size(ax) -> tuple[float, float]:
+def circuit_size(ax) -> tuple[float, float]:
     """The size qiskit's circuit drawer gives a figure of its own: its axis limits times its scale factor."""
     (x0, x1), (y0, y1) = ax.get_xlim(), ax.get_ylim()
     return (x1 - x0) * 0.8361111, (y1 - y0) * 0.8361111
@@ -667,19 +670,37 @@ def run_benchmark(name: str, root: Path | None = None, shots: int | None = None)
     return folder
 
 
+def self_test_failure(pair_on_ports: bool, ideal_fidelity: float, ideal_acceptance: float) -> str | None:
+    """The part of the self-test a run fails, or None when it passes.
+
+    "ports" when the pair ends off its ports, else "fidelity" when the ideal
+    simulation does not give F = 1, else "acceptance" when it does not keep every
+    shot. The test is stated here alone; a benchmark and the Workbench each word
+    its answer for their reader.
+    """
+    if not pair_on_ports:
+        return "ports"
+    if ideal_fidelity != 1.0:
+        return "fidelity"
+    if ideal_acceptance != 1.0:
+        return "acceptance"
+    return None
+
+
 def _self_test(benchmark: str, run_id: str, run: CircuitRun, cases: list[int]) -> None:
-    """Refuse a run whose pair ends off its ports, or whose ideal simulation does not give F = 1 with every shot kept.
+    """Refuse a run that fails the self-test (`self_test_failure`).
 
     The message names the benchmark, the cases the run fills, if any, and the run.
     """
     filled = f"case{'s' if len(cases) > 1 else ''} {', '.join(map(str, cases))}: " if cases else ""
     where = f"benchmark {benchmark!r}: {filled}run {run_id!r}"
-    if not run.cost["pair_on_ports"]:
-        raise ValueError(f"{where} left the pair off its ports")
     ideal = run.scores["ideal"]
-    if ideal.accepted.value != 1.0:
+    failed = self_test_failure(run.cost["pair_on_ports"], ideal.accepted.value, ideal.acceptance)
+    if failed == "ports":
+        raise ValueError(f"{where} left the pair off its ports")
+    if failed == "fidelity":
         raise ValueError(f"{where} has ideal F {ideal.accepted.value}, not 1")
-    if ideal.acceptance != 1.0:
+    if failed == "acceptance":
         raise ValueError(
             f"{where} kept {ideal.acceptance} of its ideal shots, not every one, so a check fires with no noise"
         )

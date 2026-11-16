@@ -12,7 +12,7 @@ import yaml
 from qiskit import ClassicalRegister, QuantumCircuit
 
 from bellbench.circuits import save_circuit, swap_chain
-from bellbench.run import run_benchmark
+from bellbench.run import run_benchmark, self_test_failure
 
 GOOD = {"run": "good", "circuit": "baseline-ibm2016", "noise": "boston-2026"}
 
@@ -45,6 +45,18 @@ def _unpaired():
     unpaired = QuantumCircuit(5)  # a superposition on one port and no entangling gate, so ideal F is about 1/4
     unpaired.h(0)
     return unpaired
+
+
+@pytest.mark.parametrize("on_ports, fidelity, acceptance, failed", [
+    (True, 1.0, 1.0, None),
+    (False, 1.0, 1.0, "ports"),
+    (False, 0.25, 0.5, "ports"),
+    (True, 0.25, 0.5, "fidelity"),
+    (True, float("nan"), 0.0, "fidelity"),  # an ideal run that kept no shot has no F
+    (True, 1.0, 0.5, "acceptance"),
+])
+def test_the_self_test_names_the_first_part_a_run_fails(on_ports, fidelity, acceptance, failed):
+    assert self_test_failure(on_ports, fidelity, acceptance) == failed
 
 
 @pytest.mark.parametrize("build, message", [

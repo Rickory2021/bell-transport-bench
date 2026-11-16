@@ -31,6 +31,7 @@ pandas tables, with a text form outside Jupyter.
 import base64
 import io
 from collections.abc import Callable, Mapping, Sequence
+from html import escape
 from pathlib import Path
 
 import pandas as pd
@@ -43,7 +44,16 @@ from bellbench.analysis import check_flags, read_shots
 from bellbench.circuits import circuit_from_qasm, load_circuit, promote, save_circuit
 from bellbench.fidelity import BASES
 from bellbench.figures import draw_processor
-from bellbench.run import RESULT_FILE, SIMULATIONS, CircuitRun, Score, current_benchmark, load_benchmark, read_table
+from bellbench.run import (
+    RESULT_FILE,
+    SIMULATIONS,
+    CircuitRun,
+    Score,
+    current_benchmark,
+    load_benchmark,
+    read_table,
+    self_test_failure,
+)
 
 DEFAULTS_FROM = "core"  # the benchmark whose noise profile, shots and base seed a session starts from
 
@@ -241,9 +251,10 @@ class Result:
         """None when the pair ends on the ports and the ideal simulation gives F = 1 with every shot kept;
         otherwise what failed."""
         ideal = self.rows["ideal"]
-        if not self.record["cost"]["pair_on_ports"]:
+        failed = self_test_failure(self.record["cost"]["pair_on_ports"], ideal["fidelity"], ideal["acceptance"])
+        if failed == "ports":
             return "the pair ends off its ports"
-        if ideal["fidelity"] != 1.0 or ideal["acceptance"] != 1.0:
+        if failed is not None:
             return f"the ideal run gave F = {ideal['fidelity']:.4f} keeping {ideal['acceptance']:.4f} of its shots"
         return None
 
@@ -335,7 +346,7 @@ class CircuitView:
         images = "".join(
             f'<img src="data:image/png;base64,{base64.b64encode(png).decode()}"/>' for png in self._figures()
         )
-        return "".join(f"<p>{_escape(line)}</p>" for line in self._lines()) + images
+        return "".join(f"<p>{escape(line, quote=False)}</p>" for line in self._lines()) + images
 
     def __repr__(self) -> str:
         return "\n".join(self._lines() + ["", str(self.circuit.circuit.draw("text", idle_wires=False))])
@@ -348,9 +359,9 @@ class Table:
         self.tables, self.heading = tables, list(heading)
 
     def _repr_html_(self) -> str:
-        parts = [f"<p>{_escape(line)}</p>" for line in self.heading]
+        parts = [f"<p>{escape(line, quote=False)}</p>" for line in self.heading]
         for title, frame in self.tables:
-            parts += [f"<p>{_escape(title)}</p>", frame.to_html()]
+            parts += [f"<p>{escape(title, quote=False)}</p>", frame.to_html()]
         return "".join(parts)
 
     def __repr__(self) -> str:
@@ -358,7 +369,3 @@ class Table:
         for title, frame in self.tables:
             parts += ["", title, frame.to_string()]
         return "\n".join(parts)
-
-
-def _escape(text: str) -> str:
-    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")

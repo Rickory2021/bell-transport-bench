@@ -180,8 +180,7 @@ def save_circuit(
     }
     path.parent.mkdir(parents=True, exist_ok=True)
     previous = path.read_text(encoding="utf-8") if path.exists() else None
-    text = f"# {configs.repo_path(path)}\n\n" + yaml.dump(data, Dumper=configs.Dumper, sort_keys=False)
-    path.write_text(text, encoding="utf-8")
+    path.write_text(_file_text(path, data), encoding="utf-8")
     try:
         load_circuit(name)
     except Exception:
@@ -191,6 +190,11 @@ def save_circuit(
             path.write_text(previous, encoding="utf-8")
         raise
     return path
+
+
+def _file_text(path: Path, data: Mapping) -> str:
+    """A circuit file's text: a comment naming its path from the repo's root, then its fields as YAML."""
+    return f"# {configs.repo_path(path)}\n\n" + yaml.dump(data, Dumper=configs.Dumper, sort_keys=False)
 
 
 def promote(name: str, overwrite: bool = False) -> Path:
@@ -218,8 +222,7 @@ def promote(name: str, overwrite: bool = False) -> Path:
         data = yaml.safe_load(trial_text)
     except yaml.YAMLError as e:
         raise ValueError(f"{configs.repo_path(trial_path)}: the trial does not parse as YAML: {e}") from None
-    text = f"# {configs.repo_path(target)}\n\n" + yaml.dump(data, Dumper=configs.Dumper, sort_keys=False)
-    target.write_text(text, encoding="utf-8")
+    target.write_text(_file_text(target, data), encoding="utf-8")
     try:
         load_circuit(name, target)
     except BaseException:  # an interrupt too: an unchecked file must not stay in config/circuit/
