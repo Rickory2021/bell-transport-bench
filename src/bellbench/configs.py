@@ -191,9 +191,13 @@ def repo_path(path: Path) -> str:
     return Path(path).resolve().relative_to(ROOT).as_posix()
 
 
-def load_recorded(kind: str, name: str) -> tuple[dict, dict]:
-    """The `kind` file for `name` as loaded and checked YAML, and its `{path, hash}` record of that same content."""
-    path, data = _read(kind, name)
+def load_recorded(kind: str, name: str, path: Path | None = None) -> tuple[dict, dict]:
+    """The `kind` file for `name` as loaded and checked YAML, and its `{path, hash}` record of that same content.
+
+    `path` reads that file in place of the one the name finds, for a file just
+    written under a name another file still holds, as while a trial is promoted.
+    """
+    path, data = _read(kind, name, path)
     return data, {"path": repo_path(path), "hash": hash_data(data)}
 
 
@@ -310,9 +314,9 @@ def processor_graph(proc: dict) -> nx.Graph:
     return graph
 
 
-def _read(kind: str, name: str) -> tuple[Path, dict]:
-    """The `kind` file for `name`, and its content once `check_config` passes it."""
-    path = config_path(kind, name)
+def _read(kind: str, name: str, path: Path | None = None) -> tuple[Path, dict]:
+    """The `kind` file for `name`, or the file at `path` when given, and its content once `check_config` passes it."""
+    path = config_path(kind, name) if path is None else Path(path)
     with open(path, encoding="utf-8") as f:
         data = yaml.safe_load(f)
     where = repo_path(path)

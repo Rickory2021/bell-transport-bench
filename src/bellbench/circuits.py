@@ -66,9 +66,13 @@ class CircuitFile:
     record: dict
 
 
-def load_circuit(name: str) -> CircuitFile:
-    """The circuit file for `name`, checked; raises a ValueError naming the file and the field."""
-    data, record = configs.load_recorded("circuit", name)
+def load_circuit(name: str, path: Path | None = None) -> CircuitFile:
+    """The circuit file for `name`, checked; raises a ValueError naming the file and the field.
+
+    `path` loads that file in place of the one the name finds: `promote` checks
+    the file it has just written while the trial of the same name still exists.
+    """
+    data, record = configs.load_recorded("circuit", name, path)
     try:
         processor = configs.load_processor(data["processor"])
     except FileNotFoundError as e:
@@ -192,11 +196,13 @@ def save_circuit(
 def promote(name: str, overwrite: bool = False) -> Path:
     """Move the trial circuit `name` from workspace/circuits/ into config/circuit/, to be committed.
 
-    The file is written in config/circuit/ with the same content, the trial is
-    deleted, and the moved file is loaded back; if that fails, both are restored,
-    so a bad trial moves nowhere. A committed circuit of that name is refused
-    unless `overwrite=True`. A run made from the trial keeps its record, which then
-    names a file that no longer exists, so it cannot be rerun.
+    The file is written in config/circuit/ from the trial's parsed content, then
+    loaded back and checked, and only then is the trial deleted. If the written
+    file does not load, or the check is interrupted, config/circuit/ is put back
+    as it was and the trial is left untouched, so a bad trial moves nowhere. A
+    committed circuit of that name is refused unless `overwrite=True`. A run made
+    from the trial keeps its record, which then names a file that no longer
+    exists, so it cannot be rerun.
     """
     trial_path = configs.trial_folder() / configs.file_name("circuit", name)
     target = configs.config_folder("circuit") / configs.file_name("circuit", name)
@@ -208,19 +214,21 @@ def promote(name: str, overwrite: bool = False) -> Path:
         raise FileExistsError(f"{configs.repo_path(target)} exists; pass overwrite=True to replace it")
     trial_text = trial_path.read_text(encoding="utf-8")
     previous = target.read_text(encoding="utf-8") if target.exists() else None
-    data = yaml.safe_load(trial_text)
+    try:
+        data = yaml.safe_load(trial_text)
+    except yaml.YAMLError as e:
+        raise ValueError(f"{configs.repo_path(trial_path)}: the trial does not parse as YAML: {e}") from None
     text = f"# {configs.repo_path(target)}\n\n" + yaml.dump(data, Dumper=configs.Dumper, sort_keys=False)
     target.write_text(text, encoding="utf-8")
-    trial_path.unlink()
     try:
-        load_circuit(name)
-    except Exception:
-        trial_path.write_text(trial_text, encoding="utf-8")
+        load_circuit(name, target)
+    except BaseException:  # an interrupt too: an unchecked file must not stay in config/circuit/
         if previous is None:
             target.unlink()
         else:
             target.write_text(previous, encoding="utf-8")
         raise
+    trial_path.unlink()
     return target
 
 

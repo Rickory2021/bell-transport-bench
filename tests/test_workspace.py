@@ -2,15 +2,17 @@
 """Trial circuits in workspace/circuits/, `promote`, and where a run that used one lands.
 
 A trial circuit loads by its name like a committed one, and one name is never
-both; `promote` moves a trial into config/circuit/; a run of a trial lands in
-workspace/ even from a clean tree; and a benchmark names only committed
-circuits.
+both; `promote` moves a trial into config/circuit/, deleting the trial only
+once the written file has loaded, and puts config/circuit/ back when it does
+not; a run of a trial lands in workspace/ even from a clean tree; and a
+benchmark names only committed circuits.
 """
 
 import pytest
 import yaml
 
 from bellbench import builders, configs
+from bellbench import circuits as circuits_module
 from bellbench import run as run_module
 from bellbench.circuits import load_circuit, promote, save_circuit, swap_chain
 from bellbench.run import RESULT_FILE, CircuitRun, rerun, run_benchmark
@@ -101,6 +103,64 @@ def test_a_bad_trial_moves_nowhere(config_copy):
     path = _save_trial()
     path.write_text(path.read_text(encoding="utf-8").replace("processor: ibm2016", "processor: nowhere"), "utf-8")
     with pytest.raises(ValueError, match=r"\$\.processor"):
+        promote("trial-chain")
+    assert path.exists() and not _committed(config_copy).exists()
+
+
+def _bad_trial_under_a_committed_circuit(root, name="baseline-ibm2016"):
+    """A trial copied by hand under a committed circuit's name, naming a processor that does not exist."""
+    committed = _committed(root, name).read_text(encoding="utf-8")
+    trial = _trial(root, name)
+    trial.parent.mkdir(parents=True)
+    trial.write_text(committed.replace("processor: ibm2016", "processor: nowhere"), encoding="utf-8")
+    return committed, trial.read_text(encoding="utf-8")
+
+
+def test_a_failed_promote_over_a_committed_circuit_restores_it(config_copy):
+    committed, trial = _bad_trial_under_a_committed_circuit(config_copy)
+    with pytest.raises(ValueError, match=r"config/circuit/bp\.data\.circuit\.baseline-ibm2016\.yaml: \$\.processor"):
+        promote("baseline-ibm2016", overwrite=True)
+    assert _committed(config_copy, "baseline-ibm2016").read_text(encoding="utf-8") == committed
+    assert _trial(config_copy, "baseline-ibm2016").read_text(encoding="utf-8") == trial
+
+
+def test_the_trial_stays_until_the_promoted_file_has_loaded(config_copy, monkeypatch):
+    _save_trial()
+    seen = []
+
+    def load_back(name, path=None):
+        seen.append((path, _trial(config_copy).exists()))
+        return load_circuit(name, path)
+
+    monkeypatch.setattr(circuits_module, "load_circuit", load_back)
+    promote("trial-chain")
+    assert seen == [(_committed(config_copy), True)] and not _trial(config_copy).exists()
+
+
+@pytest.mark.parametrize("over_committed", [False, True])
+def test_an_interrupted_promote_moves_nowhere(config_copy, monkeypatch, over_committed):
+    if over_committed:
+        name = "baseline-ibm2016"
+        committed, trial = _bad_trial_under_a_committed_circuit(config_copy)
+    else:
+        name, committed = "trial-chain", None
+        trial = _save_trial().read_text(encoding="utf-8")
+
+    def interrupted(name, path=None):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(circuits_module, "load_circuit", interrupted)
+    with pytest.raises(KeyboardInterrupt):
+        promote(name, overwrite=over_committed)
+    assert _trial(config_copy, name).read_text(encoding="utf-8") == trial
+    target = _committed(config_copy, name)
+    assert target.read_text(encoding="utf-8") == committed if over_committed else not target.exists()
+
+
+def test_a_trial_that_does_not_parse_is_refused_by_its_file(config_copy):
+    path = _save_trial()
+    path.write_text("name: [unclosed", encoding="utf-8")
+    with pytest.raises(ValueError, match=r"workspace/circuits/bp\.data\.circuit\.trial-chain\.yaml: the trial does not"):
         promote("trial-chain")
     assert path.exists() and not _committed(config_copy).exists()
 
