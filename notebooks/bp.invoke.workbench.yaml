@@ -1,7 +1,5 @@
 # notebooks/bp.invoke.workbench.yaml
 #
-# The workbench's defaults: the committed run the trial is compared with, by its
-# run id in the move-chain benchmark, and the core benchmark's noise profile.
+# The workbench's default: the core benchmark's noise profile.
 
-circuit: baseline-contemporary
 noise: boston-2026

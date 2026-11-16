@@ -1,8 +1,7 @@
 # src/bellbench/workbench.py
 """The Workbench: a notebook session's defaults, and results that show themselves.
 
-A teammate's notebook needs one import, which brings the builders with it, and
-the workbench notebook's cells are this example:
+A teammate's notebook needs one import, which brings the builders with it:
 
     from bellbench.workbench import Workbench, builders
     wb = Workbench()  # the core benchmark's noise profile, shots and seed
