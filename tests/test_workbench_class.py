@@ -6,6 +6,7 @@ copy of config/ in a temporary root; tests that fetch read the committed
 move-chain benchmark and write nothing.
 """
 
+import shutil
 from pathlib import Path
 
 import pytest
@@ -15,13 +16,14 @@ from bellbench import builders, configs
 from bellbench import run as run_module
 from bellbench.analysis import check_flags, read_shots
 from bellbench.fidelity import BASES
-from bellbench.run import CircuitRun, current_benchmark, load_benchmark, read_table
+from bellbench.run import CircuitRun, current_benchmark, load_benchmark, read_table, rerun
 from bellbench.workbench import Workbench
 
 SHOTS = 200
 OVERRIDE = {"qubits": [0, 3], "field": "gates.cz.error_probability", "value": 0.05}
 CHANNEL = "mid_circuit_measurement_error"
 PROTECTED = ("move-chain", "spare-xx-contemporary")  # a committed run whose one check discards shots
+COMMITTED = sorted((Path(__file__).resolve().parents[1] / "results/runs/benchmark/move-chain").glob("*"))[-1]
 # A Bell pair on ibm2016's ports 0 and 4 along 0-3-4, with an optional read of the idle qubit 1.
 QASM = """OPENQASM 3.0;
 include "stdgates.inc";
@@ -97,14 +99,56 @@ def test_a_fetched_run_gives_the_recorded_numbers():
 
 
 def test_a_run_whose_circuit_file_changed_is_not_fetched(config_copy):
-    folder = sorted((Path(__file__).resolve().parents[1] / "results/runs/benchmark/move-chain").glob("*"))[-1]
     wb = Workbench()
-    assert wb.fetch(folder / "baseline-ibm2016").self_test is None
+    assert wb.fetch(COMMITTED / "baseline-ibm2016").self_test is None
     path = config_copy / "config" / "circuit" / configs.file_name("circuit", "baseline-ibm2016")
     data = yaml.safe_load(path.read_text(encoding="utf-8"))
     path.write_text(yaml.safe_dump(data | {"label": "Another circuit"}, sort_keys=False), encoding="utf-8")
     with pytest.raises(ValueError, match=r"bp\.data\.circuit\.baseline-ibm2016\.yaml changed since it was recorded"):
-        wb.fetch(folder / "baseline-ibm2016")
+        wb.fetch(COMMITTED / "baseline-ibm2016")
+
+
+def _copied_run(tmp_path, edit=lambda record: None):
+    """A committed run folder copied out of the repo, its record changed by `edit`."""
+    folder = tmp_path / "run"
+    shutil.copytree(COMMITTED / "baseline-ibm2016", folder)
+    record = yaml.safe_load((folder / run_module.RESULT_FILE).read_text(encoding="utf-8"))
+    edit(record)
+    (folder / run_module.RESULT_FILE).write_text(yaml.safe_dump(record, sort_keys=False), encoding="utf-8")
+    return folder
+
+
+@pytest.mark.parametrize("edit, message", [
+    (lambda r: r.update(result_format=1), "the run was recorded in result format 1, and this code reads format 2"),
+    (lambda r: r.pop("seeds"), r"the run record: \$: 'seeds' is a required property"),
+    (lambda r: r.update(stray=1), r"the run record: \$: Additional properties are not allowed"),
+])
+def test_fetch_refuses_a_run_folder_in_the_words_a_rerun_and_a_redraw_use(tmp_path, edit, message):
+    assert Workbench().fetch(_copied_run(tmp_path / "good")).self_test is None
+    folder = _copied_run(tmp_path, edit)
+    with pytest.raises(ValueError, match=message) as refusal:
+        Workbench().fetch(folder)
+    assert rerun(folder) == (run_module.REFUSED, [f"refused: {refusal.value}"])
+    with pytest.raises(ValueError, match=message):
+        run_module.write_views(folder)
+
+
+def test_fetch_says_a_runs_circuit_file_is_gone_as_a_rerun_does(config_copy):
+    (config_copy / "config" / "circuit" / configs.file_name("circuit", "move-chain-ibm2016")).unlink()
+    with pytest.raises(FileNotFoundError, match=r"move-chain-ibm2016\.yaml recorded by the run no longer exists") as gone:
+        Workbench().fetch(COMMITTED / "move-ibm2016")
+    assert rerun(COMMITTED / "move-ibm2016") == (run_module.REFUSED, [f"refused: {gone.value}"])
+
+
+def test_fetch_refuses_an_analysis_given_as_text_and_names_the_runs_of_a_benchmark():
+    wb = Workbench()
+    with pytest.raises(ValueError, match=r"analysis= is a mapping \{name, settings\}.*got 'postselect'"):
+        wb.fetch("move-chain", "baseline-contemporary", analysis="postselect")
+    with pytest.raises(FileNotFoundError, match=r"benchmark 'move-chain' has no run 'move-chain-contemporary' in "
+                                                r"results/runs/benchmark/move-chain/.*run id: .*move-contemporary"):
+        wb.fetch("move-chain", "move-chain-contemporary")
+    with pytest.raises(FileNotFoundError, match=r"bp\.data\.result\.yaml does not exist; give a run folder"):
+        wb.fetch(COMMITTED)
 
 
 def test_a_results_tables_and_compare_hold_its_numbers():

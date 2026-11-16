@@ -45,6 +45,7 @@ from bellbench.fidelity import BASES
 from bellbench.figures import draw_processor
 from bellbench.run import (
     RESULT_FILE,
+    RUN_LIST,
     SIMULATIONS,
     CircuitRun,
     Score,
@@ -52,6 +53,7 @@ from bellbench.run import (
     current_benchmark,
     drawn_figure,
     load_benchmark,
+    load_record,
     read_table,
     self_test_failure,
 )
@@ -178,11 +180,21 @@ class Workbench:
     def fetch(self, where: str | Path, run: str | None = None, analysis: Mapping | None = None) -> "Result":
         """A run that was already made: `fetch(folder)`, or `fetch(benchmark, run_id)` from its current folder.
 
-        With `analysis`, the recorded counts are re-read with that analysis, and the
-        result is labelled a view. The run's circuit file must be unchanged since.
+        With `analysis`, a mapping {name, settings}, the recorded counts are re-read
+        with that analysis, and the result is labelled a view. The folder is checked
+        as a rerun checks it (bellbench.run.load_record): its record fits the result
+        format this code reads, and its circuit file is unchanged since.
         """
-        folder = Path(where) if run is None else current_benchmark(str(where)) / run
-        return Result.from_folder(folder, analysis)
+        if run is None:
+            return Result.from_folder(Path(where), analysis)
+        benchmark = current_benchmark(str(where))
+        if not (benchmark / run).is_dir():
+            runs = yaml.safe_load((benchmark / RUN_LIST).read_text(encoding="utf-8"))["runs"]
+            raise FileNotFoundError(
+                f"benchmark {where!r} has no run {run!r} in {configs.repo_path(benchmark)}; "
+                f"its runs, by run id: {', '.join(runs)}"
+            )
+        return Result.from_folder(benchmark / run, analysis)
 
     def keep(self, result: "Result") -> Path:
         """Write a fresh result's run folder: under results/runs/ only from a clean tree and committed files."""
@@ -231,12 +243,13 @@ class Result:
 
     @classmethod
     def from_folder(cls, folder: Path, analysis: Mapping | None = None) -> "Result":
+        if analysis is not None and not isinstance(analysis, Mapping):
+            raise ValueError(
+                f"analysis= is a mapping {{name, settings}}, such as {{'name': 'postselect'}}; got {analysis!r}"
+            )
         folder = Path(folder)
         folder = folder.parent if folder.name == RESULT_FILE else folder
-        if not (folder / RESULT_FILE).is_file():
-            raise FileNotFoundError(f"{folder / RESULT_FILE} does not exist; give a run folder or its {RESULT_FILE}")
-        record = yaml.safe_load((folder / RESULT_FILE).read_text(encoding="utf-8"))
-        configs.check_file_unchanged(record["circuit"])
+        record = load_record(folder)
         circuit = load_circuit(configs.name_from_record(record["circuit"], "circuit"))
         noise = configs.name_from_record(record["noise_control"]["noise"], "noise")
         raw = {name: {b: {} for b in BASES} for name in SIMULATIONS}

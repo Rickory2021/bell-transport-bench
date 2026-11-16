@@ -361,10 +361,8 @@ def rerun(path: Path) -> tuple[int, list[str]]:
     """
     folder = Path(path)
     folder = folder.parent if folder.name == RESULT_FILE else folder
-    if not (folder / RESULT_FILE).is_file():
-        return REFUSED, [f"refused: {folder / RESULT_FILE} does not exist; give a run folder or its {RESULT_FILE}"]
-    record = yaml.safe_load((folder / RESULT_FILE).read_text(encoding="utf-8"))
     try:
+        record = load_record(folder)
         run = CircuitRun.from_yaml(record)
     except (ValueError, FileNotFoundError) as e:
         return REFUSED, [f"refused: {e}"]
@@ -393,6 +391,30 @@ def rerun(path: Path) -> tuple[int, list[str]]:
     compare("commit", record["provenance"]["commit"], new["provenance"]["commit"], counts=False)
     compare("package versions", record["provenance"]["packages"], new["provenance"]["packages"], counts=False)
     return (DIFFER if differ else MATCH), lines
+
+
+# -- Reading a run folder ----------------------------------------------------------------
+
+
+def load_record(folder: Path) -> dict:
+    """The record of the run folder `folder`, or of its result file, checked before anything is read from it.
+
+    Every reader of a run folder starts here: a rerun, a redraw of its views and
+    the Workbench's fetch, so each refuses the same folders in the same words.
+    Raises a FileNotFoundError when the folder holds no record, or when the
+    record names a circuit, processor or noise file that no longer exists, and a
+    ValueError when the record does not fit its schema, was recorded in another
+    result format, or names a file that changed since the run.
+    """
+    folder = Path(folder)
+    folder = folder.parent if folder.name == RESULT_FILE else folder
+    if not (folder / RESULT_FILE).is_file():
+        raise FileNotFoundError(f"{folder / RESULT_FILE} does not exist; give a run folder or its {RESULT_FILE}")
+    record = yaml.safe_load((folder / RESULT_FILE).read_text(encoding="utf-8"))
+    configs.check_config("result", record, "the run record")
+    _check_result_format(record)
+    _check_recorded_files(record)
+    return record
 
 
 # -- Views ----------------------------------------------------------------------------
@@ -429,9 +451,7 @@ def write_views(folder: Path) -> list[Path]:
     from bellbench.figures import draw_processor
 
     folder = Path(folder)
-    record = yaml.safe_load((folder / RESULT_FILE).read_text(encoding="utf-8"))
-    _check_result_format(record)
-    _check_recorded_files(record)
+    record = load_record(folder)
     proc = yaml.safe_load((configs.ROOT / record["noise_control"]["processor"]["path"]).read_text(encoding="utf-8"))
     written = []
 
