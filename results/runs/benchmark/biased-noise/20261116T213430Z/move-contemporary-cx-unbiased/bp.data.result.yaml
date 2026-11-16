@@ -1,0 +1,147 @@
+result_format: 2
+circuit:
+  path: config/circuit/bp.data.circuit.move-chain-contemporary.yaml
+  hash: sha256:c7cca5ccbad8ff8be8763e020f61a8a3f2aeda78e5d605bd644d6d96e3ef9d99
+noise_control:
+  processor:
+    path: config/processor/bp.data.processor.contemporary.yaml
+    hash: sha256:883633e33c2736881ed711a952bc2fb02205239853c1c8677e6617a4eaed0bf9
+  noise:
+    path: config/noise/bp.data.noise.pauli-cx-unbiased.yaml
+    hash: sha256:e39e41984e17bb66ddc822bc193c162f34584cb6b606ab5a5a9a0321fe82eb0f
+  scale: 1.0
+  overrides: []
+  conditional:
+    reset_error: null
+    mid_circuit_measurement_error: null
+shots: 20000
+base_seed: 20261116
+seeds:
+  transpile: 2168769836
+  ideal: 2173134426
+  noisy: 3471407238
+diagrams: lean
+registers:
+- port
+written: |
+  OPENQASM 3.0;
+  include "stdgates.inc";
+  qubit[9] q;
+  h q[0];
+  cx q[0], q[1];
+  cx q[1], q[2];
+  cx q[2], q[1];
+  cx q[2], q[3];
+  cx q[3], q[2];
+  cx q[3], q[7];
+  cx q[7], q[3];
+compiled:
+  XX: |
+    OPENQASM 3.0;
+    include "stdgates.inc";
+    bit[2] port;
+    qubit[9] q;
+    h q[0];
+    cx q[0], q[1];
+    h q[0];
+    cx q[1], q[2];
+    cx q[2], q[1];
+    cx q[2], q[3];
+    cx q[3], q[2];
+    cx q[3], q[7];
+    cx q[7], q[3];
+    h q[7];
+    port[0] = measure q[0];
+    port[1] = measure q[7];
+  YY: |
+    OPENQASM 3.0;
+    include "stdgates.inc";
+    bit[2] port;
+    qubit[9] q;
+    h q[0];
+    cx q[0], q[1];
+    sdg q[0];
+    h q[0];
+    cx q[1], q[2];
+    cx q[2], q[1];
+    cx q[2], q[3];
+    cx q[3], q[2];
+    cx q[3], q[7];
+    cx q[7], q[3];
+    sdg q[7];
+    h q[7];
+    port[0] = measure q[0];
+    port[1] = measure q[7];
+  ZZ: |
+    OPENQASM 3.0;
+    include "stdgates.inc";
+    bit[2] port;
+    qubit[9] q;
+    h q[0];
+    cx q[0], q[1];
+    cx q[1], q[2];
+    cx q[2], q[1];
+    cx q[2], q[3];
+    cx q[3], q[2];
+    cx q[3], q[7];
+    cx q[7], q[3];
+    port[0] = measure q[0];
+    port[1] = measure q[7];
+cost:
+  swaps: 0
+  router_swaps: 0
+  qubits_used:
+  - 0
+  - 1
+  - 2
+  - 3
+  - 7
+  depth: 8
+  two_qubit_gates: 7
+  two_qubit_gates_by_edge:
+    XX:
+      0-1: 1
+      1-2: 2
+      2-3: 2
+      3-7: 2
+    YY:
+      0-1: 1
+      1-2: 2
+      2-3: 2
+      3-7: 2
+    ZZ:
+      0-1: 1
+      1-2: 2
+      2-3: 2
+      3-7: 2
+  pair_on_ports: true
+scheduled_duration: null
+simulations:
+  ideal:
+    seeds:
+      XX: 2173134426
+      YY: 2173136539
+      ZZ: 2173138652
+    methods:
+      XX: stabilizer
+      YY: stabilizer
+      ZZ: stabilizer
+  noisy:
+    seeds:
+      XX: 3471407238
+      YY: 3471409351
+      ZZ: 3471411464
+    methods:
+      XX: density_matrix
+      YY: density_matrix
+      ZZ: density_matrix
+provenance:
+  commit: 276561cbf5f1a1a629a77539750cfa77e8255ec1
+  uncommitted: false
+  packages:
+    python: 3.12.12
+    qiskit: 2.6.2
+    qiskit-aer: 0.18.2
+    qiskit-ibm-runtime: 0.51.0
+    qiskit-qasm3-import: 0.6.0
+    numpy: 2.5.4
