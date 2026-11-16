@@ -77,7 +77,8 @@ from bellbench.pipeline import (
 RESULT_FORMAT = 2  # 1: OpenQASM 2 and a counts.csv column per role; 2: OpenQASM 3 and the full outcome key
 RESULT_FILE = "bp.data.result.yaml"
 SIMULATIONS = ("ideal", "noisy")
-DIAGRAMS = ("lean", "full")
+DIAGRAMS = ("lean", "full")  # still accepted and recorded; every run draws the same pictures (write_views)
+OLD_VIEWS = ("circuit-zz.png", "circuit-xx.png", "circuit-yy.png", "written.png", "timeline.png")  # the earlier layout
 PACKAGES = ("qiskit", "qiskit-aer", "qiskit-ibm-runtime", "qiskit-qasm3-import", "numpy")
 WILSON_Z = 1.959963984540054  # a 95% interval
 STAMP = "%Y%m%dT%H%M%SZ"  # the UTC time that names run and benchmark folders
@@ -450,15 +451,23 @@ def _check_recorded_files(record: dict) -> None:
 def write_views(folder: Path) -> list[Path]:
     """Draw a run folder's diagrams and report.md from its record and numbers; returns the files written.
 
-    lean: the processor graph with its ports and the couplers the compiled ZZ
-    circuit uses, and the compiled ZZ circuit. full adds the written circuit, the
-    XX and YY circuits and the timeline of the scheduled ZZ circuit
-    (docs/DESIGN.md, section 5). Before drawing anything it refuses a circuit,
-    processor or noise file that changed since the run, so no view is ever drawn
-    from files the run did not use. Each view is drawn on its own matplotlib
-    Figure, never through pyplot, so matplotlib's backend is never switched and no
-    window object is made: a notebook keeps its inline plots, and a GUI backend
-    such as TkAgg has nothing that Aer's worker threads could free.
+    Every run folder holds the same pictures, in the order show displays them
+    (docs/DESIGN.md, section 5): graph.png, the processor graph with its ports
+    and the couplers the compiled ZZ circuit uses, and three folders with one
+    picture per reading, zz.png, xx.png and yy.png. written/ is the circuit as
+    written, with that reading's basis change and port measurement; compiled/ is
+    the same circuit compiled for the processor; timeline/ is the compiled
+    circuit's schedule, and is absent under a noise profile without durations.
+    The record's `diagrams` value no longer chooses a set. A folder drawn before
+    this layout held its pictures beside the record, under the names in
+    OLD_VIEWS; a redraw removes them, so a folder never holds both layouts.
+
+    Before drawing anything it refuses a circuit, processor or noise file that
+    changed since the run, so no view is ever drawn from files the run did not
+    use. Each view is drawn on its own matplotlib Figure, never through pyplot,
+    so matplotlib's backend is never switched and no window object is made: a
+    notebook keeps its inline plots, and a GUI backend such as TkAgg has nothing
+    that Aer's worker threads could free.
     """
     from qiskit.visualization import timeline_drawer
 
@@ -470,28 +479,30 @@ def write_views(folder: Path) -> list[Path]:
     written = []
 
     def save(fig, name):
+        (folder / name).parent.mkdir(exist_ok=True)
         fig.savefig(folder / name, dpi=150, facecolor="white", bbox_inches="tight", metadata={"Software": None})
         written.append(folder / name)
 
     used = [tuple(int(q) for q in edge.split("-")) for edge in record["cost"]["two_qubit_gates_by_edge"]["ZZ"]]
     save(drawn_figure(lambda ax: draw_processor(ax, proc, used_edges=used), lambda ax: (4, 4.3)), "graph.png")
-    drawings = {"circuit-zz.png": record["compiled"]["ZZ"]}
-    if record["diagrams"] == "full":
-        drawings |= {"written.png": record["written"], "circuit-xx.png": record["compiled"]["XX"],
-                     "circuit-yy.png": record["compiled"]["YY"]}
-    for name, text in drawings.items():
-        circuit = qasm3.loads(text)
-        # qiskit draws a global phase through pyplot even on a given axis, which would make a window object; the
-        # phase changes no measured outcome, so the views leave it out.
-        circuit.global_phase = 0
-        save(drawn_figure(lambda ax: circuit.draw("mpl", idle_wires=False, fold=40, ax=ax), circuit_size), name)
-    if record["diagrams"] == "full" and record["scheduled_duration"] is not None:
-        nc = NoiseControl.from_yaml(record["noise_control"])
-        scheduled = schedule(qasm3.loads(record["compiled"]["ZZ"]), nc)
-        save(
-            drawn_figure(lambda ax: timeline_drawer(scheduled, target=nc.target, axis=ax), _timeline_size),
-            "timeline.png",
-        )
+    nc = NoiseControl.from_yaml(record["noise_control"])
+    compiled = {basis: qasm3.loads(record["compiled"][basis]) for basis in BASES}
+    drawings = {"written": basis_circuits(qasm3.loads(record["written"]), nc.ports), "compiled": compiled}
+    for group, circuits in drawings.items():
+        for basis in BASES:
+            circuit = circuits[basis]
+            # qiskit draws a global phase through pyplot even on a given axis, which would make a window object;
+            # the phase changes no measured outcome, so the views leave it out.
+            circuit.global_phase = 0
+            save(drawn_figure(lambda ax: circuit.draw("mpl", idle_wires=False, fold=40, ax=ax), circuit_size),
+                 f"{group}/{basis.lower()}.png")
+    if record["scheduled_duration"] is not None:
+        for basis in BASES:
+            scheduled = schedule(compiled[basis], nc)
+            save(drawn_figure(lambda ax: timeline_drawer(scheduled, target=nc.target, axis=ax), _timeline_size),
+                 f"timeline/{basis.lower()}.png")
+    for name in OLD_VIEWS:
+        (folder / name).unlink(missing_ok=True)
     (folder / "report.md").write_text(_run_report(folder, record), encoding="utf-8")
     written.append(folder / "report.md")
     return written
