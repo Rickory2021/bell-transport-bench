@@ -1,0 +1,23 @@
+# config/circuit/bp.data.circuit.ghz-measure-ibm2016.yaml
+
+name: ghz-measure-ibm2016
+label: ghz_measure, ibm2016
+processor: ibm2016
+analysis:
+  name: parity
+  settings:
+    checks: []
+    frame_z:
+    - frame_z_ghz[0]
+notes: >-
+  Built by src/bellbench/builders.py on ibm2016 along the path [0, 3, 4]: ghz_measure(reset=False).
+circuit: |
+  OPENQASM 3.0;
+  include "stdgates.inc";
+  bit[1] frame_z_ghz;
+  qubit[5] q;
+  h q[3];
+  cx q[3], q[4];
+  cx q[3], q[0];
+  h q[3];
+  frame_z_ghz[0] = measure q[3];

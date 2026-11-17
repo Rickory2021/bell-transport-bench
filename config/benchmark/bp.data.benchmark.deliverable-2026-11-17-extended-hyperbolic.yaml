@@ -1,0 +1,36 @@
+# config/benchmark/bp.data.benchmark.deliverable-2026-11-17-extended-hyperbolic.yaml
+
+name: deliverable-2026-11-17-extended-hyperbolic
+label: Hyperbolic-inspired, the protected case beside its alternatives
+notes: >-
+  An optional study, kept apart from the nine cases (docs/CHALLENGE.md, What is fixed
+  and what we choose): on the hyperbolic-inspired graph, the deliverable's protected
+  case, case 9, beside the circuits that differ from it by one step, so each
+  comparison shows what one change buys. The rungs, each a builder call along the
+  baseline's path [0, 1, 9, 12]: the organisers' baseline; the move chain, which moves
+  the pair with two CX gates a hop instead of a SWAP's three; ghz_measure, the
+  textbook GHZ transport, which reads the interior qubits in X and owes a Z on the
+  first port for each 1; ghz_uncompute, which empties the interior with gates instead;
+  each of the two empty transports followed by a vacancy read at the end, where only
+  ghz_uncompute's last gate makes the read catch a bit flip on the first port; and two
+  XX checks on a spare path that shares no qubit with the pair's: the move-chain
+  benchmark's case 9, the move chain with the check, and ghz_uncompute with its
+  vacancy read followed by the check, which trades discarded shots for F. Every run
+  takes the deliverable's noise profile, shots and base seed, so the runs it shares
+  with the deliverable repeat its numbers exactly; the runs it shares with the
+  move-chain benchmark, which takes 20,000 shots, agree with them within their errors.
+shots: 100000
+base_seed: 20261116
+runs:
+  # The reference: the organisers' baseline.
+  - {run: baseline-hyperbolic, circuit: baseline-hyperbolic, noise: boston-2026}
+  # The transports alone, with no check.
+  - {run: move-hyperbolic, circuit: move-chain-hyperbolic, noise: boston-2026}
+  - {run: ghz-measure-hyperbolic, circuit: ghz-measure-hyperbolic, noise: boston-2026}
+  - {run: ghz-hyperbolic, circuit: ghz-uncompute-hyperbolic, noise: boston-2026}
+  # A vacancy read at the end after each transport that empties the path; the second is the deliverable's protected case.
+  - {run: move-vacancy-hyperbolic, circuit: move-chain-vacancy-hyperbolic, noise: boston-2026}
+  - {run: ghz-vacancy-hyperbolic, circuit: ghz-uncompute-vacancy-hyperbolic, noise: boston-2026}
+  # XX checks on a spare path: the move-chain benchmark's case 9, then the vacancy read followed by the check.
+  - {run: spare-xx-hyperbolic, circuit: move-chain-spare-xx-hyperbolic, noise: boston-2026}
+  - {run: ghz-vacancy-xx-hyperbolic, circuit: ghz-uncompute-vacancy-spare-xx-hyperbolic, noise: boston-2026}

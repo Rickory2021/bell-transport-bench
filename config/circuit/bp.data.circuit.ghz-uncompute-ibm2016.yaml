@@ -1,0 +1,17 @@
+# config/circuit/bp.data.circuit.ghz-uncompute-ibm2016.yaml
+
+name: ghz-uncompute-ibm2016
+label: ghz_uncompute, ibm2016
+processor: ibm2016
+analysis:
+  name: postselect
+notes: >-
+  Built by src/bellbench/builders.py on ibm2016 along the path [0, 3, 4]: ghz_uncompute().
+circuit: |
+  OPENQASM 3.0;
+  include "stdgates.inc";
+  qubit[5] q;
+  h q[0];
+  cx q[0], q[3];
+  cx q[3], q[4];
+  cx q[0], q[3];
