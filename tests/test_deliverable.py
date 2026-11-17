@@ -67,6 +67,19 @@ def test_each_extended_benchmark_sets_the_protected_case_beside_its_alternatives
     assert (data["shots"], data["base_seed"]) == (deliverable["shots"], deliverable["base_seed"])
 
 
+@pytest.mark.parametrize("processor", configs.CORE_PROCESSORS)
+def test_the_readout_off_run_differs_from_ghz_measure_only_in_its_interior_readout(processor):
+    """The one run that changes the profile: ghz_measure's own circuit, with both readout errors at 0 on exactly the
+    interior qubits it reads, so its difference from ghz_measure is readout error alone."""
+    runs = {r["run"]: r for r in load_benchmark(EXTENDED[processor])[0]["runs"]}
+    plain, off = runs[f"ghz-measure-{processor}"], runs[f"ghz-measure-readout-0-{processor}"]
+    assert off["circuit"] == plain["circuit"] and off["noise"] == plain["noise"]
+    fields = {"qubit.readout_error.reads_1_when_0", "qubit.readout_error.reads_0_when_1"}
+    expected = {(q, f, 0.0) for q in builders.start(processor).interior for f in fields}
+    assert {(o["qubits"], o["field"], o["value"]) for o in off["overrides"]} == expected
+    assert [r for r in runs.values() if r.get("overrides")] == [off]
+
+
 @pytest.mark.parametrize("name", sorted(BUILT))
 def test_each_added_circuit_file_is_what_the_builders_make(name):
     processor, steps = BUILT[name]
