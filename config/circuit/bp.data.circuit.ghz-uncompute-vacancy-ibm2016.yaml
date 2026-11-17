@@ -1,0 +1,23 @@
+# config/circuit/bp.data.circuit.ghz-uncompute-vacancy-ibm2016.yaml
+
+name: ghz-uncompute-vacancy-ibm2016
+label: ghz_uncompute then vacancy at the end, ibm2016
+processor: ibm2016
+analysis:
+  name: parity
+  settings:
+    checks:
+    - - check_vac[0]
+notes: >-
+  Built by src/bellbench/builders.py on ibm2016 along the path [0, 3, 4]: ghz_uncompute();
+  then vacancy().
+circuit: |
+  OPENQASM 3.0;
+  include "stdgates.inc";
+  bit[1] check_vac;
+  qubit[5] q;
+  h q[0];
+  cx q[0], q[3];
+  cx q[3], q[4];
+  cx q[0], q[3];
+  check_vac[0] = measure q[3];
