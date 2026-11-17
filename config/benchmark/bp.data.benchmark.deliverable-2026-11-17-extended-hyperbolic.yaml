@@ -27,14 +27,14 @@ runs:
   # The reference: the organisers' baseline.
   - {run: baseline-hyperbolic, circuit: baseline-hyperbolic, noise: boston-2026}
   # The transports alone, with no check.
-  - {run: move-hyperbolic, circuit: move-chain-hyperbolic, noise: boston-2026}
+  - {run: move-chain-hyperbolic, circuit: move-chain-hyperbolic, noise: boston-2026}
   - {run: ghz-measure-hyperbolic, circuit: ghz-measure-hyperbolic, noise: boston-2026}
   # ghz_measure with no readout error on the interior qubits [1, 9], the only run here that changes the profile.
-  - {run: ghz-measure-readout-0-hyperbolic, circuit: ghz-measure-hyperbolic, noise: boston-2026, overrides: [{qubits: 1, field: qubit.readout_error.reads_1_when_0, value: 0.0}, {qubits: 1, field: qubit.readout_error.reads_0_when_1, value: 0.0}, {qubits: 9, field: qubit.readout_error.reads_1_when_0, value: 0.0}, {qubits: 9, field: qubit.readout_error.reads_0_when_1, value: 0.0}]}
-  - {run: ghz-hyperbolic, circuit: ghz-uncompute-hyperbolic, noise: boston-2026}
+  - {run: ghz-measure-hyperbolic-readout-0, circuit: ghz-measure-hyperbolic, noise: boston-2026, overrides: [{qubits: 1, field: qubit.readout_error.reads_1_when_0, value: 0.0}, {qubits: 1, field: qubit.readout_error.reads_0_when_1, value: 0.0}, {qubits: 9, field: qubit.readout_error.reads_1_when_0, value: 0.0}, {qubits: 9, field: qubit.readout_error.reads_0_when_1, value: 0.0}]}
+  - {run: ghz-uncompute-hyperbolic, circuit: ghz-uncompute-hyperbolic, noise: boston-2026}
   # A vacancy read at the end after each transport that empties the path; the second is the deliverable's protected case.
-  - {run: move-vacancy-hyperbolic, circuit: move-chain-vacancy-hyperbolic, noise: boston-2026}
-  - {run: ghz-vacancy-hyperbolic, circuit: ghz-uncompute-vacancy-hyperbolic, noise: boston-2026}
+  - {run: move-chain-vacancy-hyperbolic, circuit: move-chain-vacancy-hyperbolic, noise: boston-2026}
+  - {run: ghz-uncompute-vacancy-hyperbolic, circuit: ghz-uncompute-vacancy-hyperbolic, noise: boston-2026}
   # XX checks on a spare path: the move-chain benchmark's case 9, then the vacancy read followed by the check.
-  - {run: spare-xx-hyperbolic, circuit: move-chain-spare-xx-hyperbolic, noise: boston-2026}
-  - {run: ghz-vacancy-xx-hyperbolic, circuit: ghz-uncompute-vacancy-spare-xx-hyperbolic, noise: boston-2026}
+  - {run: move-chain-spare-xx-hyperbolic, circuit: move-chain-spare-xx-hyperbolic, noise: boston-2026}
+  - {run: ghz-uncompute-vacancy-spare-xx-hyperbolic, circuit: ghz-uncompute-vacancy-spare-xx-hyperbolic, noise: boston-2026}

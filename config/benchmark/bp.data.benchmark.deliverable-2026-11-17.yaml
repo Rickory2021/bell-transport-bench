@@ -14,14 +14,14 @@ notes: >-
   catches a bit flip on the interior qubits and on the first port, the qubit that has
   waited longest, since the last gate copies it onto the path; it cannot see a phase
   flip. No qubit is read mid-circuit, so no case needs the mid-circuit measurement
-  channel. The same transport also runs without the read, filling no case, so the
-  table separates what the transport buys from what the read buys. Each graph's
-  extended benchmark, deliverable-2026-11-17-extended-<processor>, sets these runs
-  beside the alternatives. Every run takes 100,000 shots per basis, five times the
-  core's 20,000, so F's standard error is about 0.0003 and a difference of 0.001
-  between two runs stands at more than two combined standard errors; the baseline
-  cases therefore agree with the core's within their errors rather than repeating its
-  numbers.
+  channel. The file runs only the runs that fill a case. Each graph's extended
+  benchmark, deliverable-2026-11-17-extended-<processor>, runs the same protected case
+  beside the alternatives under the same shots and seed, among them the transport
+  without the read, so the submission separates what the transport buys from what the
+  read buys. Every run takes 100,000 shots per basis, five times the core's 20,000, so
+  F's standard error is about 0.0003 and a difference of 0.001 between two runs stands
+  at more than two combined standard errors; the baseline cases therefore agree with
+  the core's within their errors rather than repeating its numbers.
 shots: 100000
 base_seed: 20261116
 runs:
@@ -29,21 +29,17 @@ runs:
   - {run: baseline-ibm2016, circuit: baseline-ibm2016, noise: boston-2026}
   - {run: baseline-contemporary, circuit: baseline-contemporary, noise: boston-2026}
   - {run: baseline-hyperbolic, circuit: baseline-hyperbolic, noise: boston-2026}
-  # The transport alone, filling no case.
-  - {run: ghz-ibm2016, circuit: ghz-uncompute-ibm2016, noise: boston-2026}
-  - {run: ghz-contemporary, circuit: ghz-uncompute-contemporary, noise: boston-2026}
-  - {run: ghz-hyperbolic, circuit: ghz-uncompute-hyperbolic, noise: boston-2026}
   # The protection: the transport with its vacancy read at the end.
-  - {run: ghz-vacancy-ibm2016, circuit: ghz-uncompute-vacancy-ibm2016, noise: boston-2026}
-  - {run: ghz-vacancy-contemporary, circuit: ghz-uncompute-vacancy-contemporary, noise: boston-2026}
-  - {run: ghz-vacancy-hyperbolic, circuit: ghz-uncompute-vacancy-hyperbolic, noise: boston-2026}
+  - {run: ghz-uncompute-vacancy-ibm2016, circuit: ghz-uncompute-vacancy-ibm2016, noise: boston-2026}
+  - {run: ghz-uncompute-vacancy-contemporary, circuit: ghz-uncompute-vacancy-contemporary, noise: boston-2026}
+  - {run: ghz-uncompute-vacancy-hyperbolic, circuit: ghz-uncompute-vacancy-hyperbolic, noise: boston-2026}
 cases:
   - {case: 1, run: baseline-ibm2016, simulation: ideal}
   - {case: 2, run: baseline-ibm2016, simulation: noisy}
-  - {case: 3, run: ghz-vacancy-ibm2016, simulation: noisy}
+  - {case: 3, run: ghz-uncompute-vacancy-ibm2016, simulation: noisy}
   - {case: 4, run: baseline-contemporary, simulation: ideal}
   - {case: 5, run: baseline-contemporary, simulation: noisy}
-  - {case: 6, run: ghz-vacancy-contemporary, simulation: noisy}
+  - {case: 6, run: ghz-uncompute-vacancy-contemporary, simulation: noisy}
   - {case: 7, run: baseline-hyperbolic, simulation: ideal}
   - {case: 8, run: baseline-hyperbolic, simulation: noisy}
-  - {case: 9, run: ghz-vacancy-hyperbolic, simulation: noisy}
+  - {case: 9, run: ghz-uncompute-vacancy-hyperbolic, simulation: noisy}

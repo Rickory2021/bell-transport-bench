@@ -3,9 +3,8 @@
 
 Covers docs/DESIGN.md, section 6. deliverable-2026-11-17 fills the nine cases
 with the organisers' baseline and one protection strategy, ghz_uncompute then
-vacancy, on every graph, and runs the same transport without the read beside
-them, filling no case, at five times the core's shots under its noise profile and
-seed. Each graph's extended benchmark runs the protected case beside the circuits
+vacancy, on every graph, and runs nothing else, at five times the core's shots
+under its noise profile and seed. Each graph's extended benchmark runs the protected case beside the circuits
 that differ from it by one step, with no case filled, under the deliverable's
 noise profile, shots and seed, so a run they share repeats its numbers exactly.
 Every circuit they add is what the builders make, so "the same builder steps on
@@ -38,8 +37,8 @@ def _core():
 
 
 def test_the_deliverable_fills_the_nine_cases_with_the_baseline_and_the_vacancy_read():
-    """Each row's ideal and noisy cases are the organisers' baseline, its protected case ghz_uncompute with its vacancy
-    read, and the transport alone runs beside them filling no case, all under the core's noise, shots and seed."""
+    """Each row's ideal and noisy cases are the organisers' baseline and its protected case ghz_uncompute with its
+    vacancy read, and every run fills a case, all under the core's noise profile and seed."""
     data, _ = load_benchmark(DELIVERABLE)
     runs = {r["run"]: r for r in data["runs"]}
     expected = {}
@@ -47,8 +46,7 @@ def test_the_deliverable_fills_the_nine_cases_with_the_baseline_and_the_vacancy_
         expected |= {3 * row + 1: f"baseline-{processor}", 3 * row + 2: f"baseline-{processor}",
                      3 * row + 3: f"ghz-uncompute-vacancy-{processor}"}
     assert {c["case"]: runs[c["run"]]["circuit"] for c in data["cases"]} == expected
-    uncased = {runs[i]["circuit"] for i in runs} - {runs[c["run"]]["circuit"] for c in data["cases"]}
-    assert uncased == {f"ghz-uncompute-{p}" for p in configs.CORE_PROCESSORS}
+    assert set(runs) == {c["run"] for c in data["cases"]}  # nothing runs that fills no case
     noise, _, seed = _core()
     assert {r["noise"] for r in data["runs"]} == {noise}
     assert (data["shots"], data["base_seed"]) == (100_000, seed)  # five times the core's shots, its seed
@@ -60,7 +58,7 @@ def test_each_extended_benchmark_sets_the_protected_case_beside_its_alternatives
     data, _ = load_benchmark(EXTENDED[processor])
     circuits = [r["circuit"] for r in data["runs"]]
     assert {load_circuit(c).processor for c in circuits} == {processor}
-    assert {f"baseline-{processor}", f"ghz-uncompute-vacancy-{processor}"} <= set(circuits)
+    assert {f"baseline-{processor}", f"ghz-uncompute-{processor}", f"ghz-uncompute-vacancy-{processor}"} <= set(circuits)
     assert not data.get("cases")
     deliverable, _ = load_benchmark(DELIVERABLE)
     assert {r["noise"] for r in data["runs"]} == {deliverable["runs"][0]["noise"]}
@@ -72,12 +70,23 @@ def test_the_readout_off_run_differs_from_ghz_measure_only_in_its_interior_reado
     """The one run that changes the profile: ghz_measure's own circuit, with both readout errors at 0 on exactly the
     interior qubits it reads, so its difference from ghz_measure is readout error alone."""
     runs = {r["run"]: r for r in load_benchmark(EXTENDED[processor])[0]["runs"]}
-    plain, off = runs[f"ghz-measure-{processor}"], runs[f"ghz-measure-readout-0-{processor}"]
+    plain, off = runs[f"ghz-measure-{processor}"], runs[f"ghz-measure-{processor}-readout-0"]
     assert off["circuit"] == plain["circuit"] and off["noise"] == plain["noise"]
     fields = {"qubit.readout_error.reads_1_when_0", "qubit.readout_error.reads_0_when_1"}
     expected = {(q, f, 0.0) for q in builders.start(processor).interior for f in fields}
     assert {(o["qubits"], o["field"], o["value"]) for o in off["overrides"]} == expected
     assert [r for r in runs.values() if r.get("overrides")] == [off]
+
+
+@pytest.mark.parametrize("benchmark", [DELIVERABLE, *EXTENDED.values()])
+def test_each_run_is_named_for_its_circuit(benchmark):
+    """A run's name is its circuit's name, plus a suffix only where the benchmark runs that circuit again under other
+    settings, so one name means one circuit in the file, the results folder and every table."""
+    runs = load_benchmark(benchmark)[0]["runs"]
+    plain = [r for r in runs if r["run"] == r["circuit"]]
+    assert {r["circuit"] for r in plain} == {r["circuit"] for r in runs}  # every circuit runs once under its own name
+    for r in runs:
+        assert r["run"] == r["circuit"] or (r["run"].startswith(r["circuit"] + "-") and r.get("overrides"))
 
 
 @pytest.mark.parametrize("name", sorted(BUILT))

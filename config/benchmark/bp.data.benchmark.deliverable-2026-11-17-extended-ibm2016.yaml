@@ -28,13 +28,13 @@ runs:
   # The reference: the organisers' baseline.
   - {run: baseline-ibm2016, circuit: baseline-ibm2016, noise: boston-2026}
   # The transports alone, with no check.
-  - {run: move-ibm2016, circuit: move-chain-ibm2016, noise: boston-2026}
+  - {run: move-chain-ibm2016, circuit: move-chain-ibm2016, noise: boston-2026}
   - {run: ghz-measure-ibm2016, circuit: ghz-measure-ibm2016, noise: boston-2026}
   # ghz_measure with no readout error on the interior qubits [3], the only run here that changes the profile.
-  - {run: ghz-measure-readout-0-ibm2016, circuit: ghz-measure-ibm2016, noise: boston-2026, overrides: [{qubits: 3, field: qubit.readout_error.reads_1_when_0, value: 0.0}, {qubits: 3, field: qubit.readout_error.reads_0_when_1, value: 0.0}]}
-  - {run: ghz-ibm2016, circuit: ghz-uncompute-ibm2016, noise: boston-2026}
+  - {run: ghz-measure-ibm2016-readout-0, circuit: ghz-measure-ibm2016, noise: boston-2026, overrides: [{qubits: 3, field: qubit.readout_error.reads_1_when_0, value: 0.0}, {qubits: 3, field: qubit.readout_error.reads_0_when_1, value: 0.0}]}
+  - {run: ghz-uncompute-ibm2016, circuit: ghz-uncompute-ibm2016, noise: boston-2026}
   # A vacancy read at the end after each transport that empties the path; the second is the deliverable's protected case.
-  - {run: move-vacancy-ibm2016, circuit: move-chain-vacancy-ibm2016, noise: boston-2026}
-  - {run: ghz-vacancy-ibm2016, circuit: ghz-uncompute-vacancy-ibm2016, noise: boston-2026}
+  - {run: move-chain-vacancy-ibm2016, circuit: move-chain-vacancy-ibm2016, noise: boston-2026}
+  - {run: ghz-uncompute-vacancy-ibm2016, circuit: ghz-uncompute-vacancy-ibm2016, noise: boston-2026}
   # The move-chain benchmark's case 3: the move chain with its XX check on the path, read mid-circuit.
-  - {run: path-xx-ibm2016, circuit: move-chain-path-xx-ibm2016, noise: boston-2026, conditional: {mid_circuit_measurement_error: 0.01}}
+  - {run: move-chain-path-xx-ibm2016, circuit: move-chain-path-xx-ibm2016, noise: boston-2026, conditional: {mid_circuit_measurement_error: 0.01}}
