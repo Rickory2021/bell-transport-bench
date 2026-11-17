@@ -1,0 +1,12 @@
+benchmark:
+  path: config/benchmark/bp.data.benchmark.vacancy-read.yaml
+  hash: sha256:4ad397e22fb516ff3be0cfc69f805b87ac9931a58f031e4cf99e2378c4529344
+runs:
+- path-xx-ibm2016
+- path-xx-ibm2016-mcm-0
+- spare-xx-contemporary
+- spare-xx-hyperbolic
+- ghz-vacancy-ibm2016
+- ghz-vacancy-xx-contemporary
+- ghz-vacancy-xx-hyperbolic
+cases: []
