@@ -52,7 +52,8 @@ def test_every_committed_comparison_table_reads():
     """Committed folders are never edited, so each keeps the header it was written with."""
     tables = sorted(COMMITTED.glob("*/*/comparison.csv"))
     assert {p.parts[-3] for p in tables} == {
-        "core", "move-chain", "biased-noise", "mid-circuit-sweep", "starting-excitation", "middle-out"
+        "core", "move-chain", "biased-noise", "mid-circuit-sweep", "starting-excitation", "middle-out",
+        "vacancy-read",
     }
     for path in tables:
         table = read_table(path)

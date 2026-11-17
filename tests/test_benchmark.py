@@ -130,7 +130,9 @@ def test_the_study_runs_each_circuit_and_baseline_under_each_profile():
     assert (data["shots"], data["base_seed"]) == (20_000, 20261116)
 
 
-@pytest.mark.parametrize("benchmark", ["biased-noise", "move-chain", "mid-circuit-sweep", "starting-excitation", "middle-out"])
+@pytest.mark.parametrize(
+    "benchmark", ["biased-noise", "move-chain", "mid-circuit-sweep", "starting-excitation", "middle-out", "vacancy-read"]
+)
 def test_the_mid_circuit_channel_is_set_only_where_a_circuit_reads_a_qubit_then_reuses_it(benchmark):
     """The spare-path checks read only at the end and need no channel; the check on ibm2016's path does."""
     data, _ = load_benchmark(benchmark)
