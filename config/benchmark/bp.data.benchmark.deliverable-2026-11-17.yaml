@@ -11,10 +11,9 @@ notes: >-
   along the pair's path, then disentangles the path's interior qubits with gates
   controlled from the first port, leaving them in |0>; vacancy then reads them at the
   end of the circuit, and postselection discards each shot where any reads 1. The read
-  catches a bit flip on the interior qubits and on the first port, the qubit that has
-  waited longest, since the last gate copies it onto the path; it cannot see a phase
-  flip. No qubit is read mid-circuit, so no case needs the mid-circuit measurement
-  channel. The file runs only the runs that fill a case. Each graph's extended
+  catches a bit flip on the interior qubits, and on the first port before the last
+  gate, which copies it onto an interior qubit; it cannot see a phase flip. No qubit
+  is read mid-circuit, so no case needs the mid-circuit measurement channel. The file runs only the runs that fill a case. Each graph's extended
   benchmark, deliverable-2026-11-17-extended-<processor>, runs the same protected case
   beside the alternatives under the same shots and seed, among them the transport
   without the read, so the submission separates what the transport buys from what the

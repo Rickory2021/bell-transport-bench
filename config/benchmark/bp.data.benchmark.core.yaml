@@ -6,8 +6,8 @@ notes: >-
   The challenge's nine cases (docs/CHALLENGE.md, The nine core cases): the three
   processor models under one noise profile, boston-2026, so the comparison shows
   connectivity alone. Each run is the organisers' baseline transport on its graph.
-  Cases 3, 6 and 9, the protected runs, stay open until a protected strategy is
-  chosen for the core; the move-chain benchmark fills them with one candidate.
+  Cases 3, 6 and 9, the protected runs, are not run here; the deliverable benchmark,
+  deliverable-2026-11-17, fills them with the strategy the submission reports.
   20,000 shots per basis gives F a standard error of about 0.001.
 shots: 20000
 base_seed: 20261116

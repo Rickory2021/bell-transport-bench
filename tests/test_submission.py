@@ -208,6 +208,15 @@ def test_the_abstract_quotes_the_records():
     assert f"{_shots():,} shots per basis" in abstract
 
 
+def test_section_5_quotes_the_fidelity_the_transport_recovers():
+    """GHZ disentangling's share of what the baseline lost, against F = 1, in the order the text names the graphs."""
+    cases = _cases(INVOKE["reported"])
+    share = [(_extended(p)[f"ghz-uncompute-{p}"].fidelity - cases[base].fidelity) / (1 - cases[base].fidelity)
+             for p, base in (("ibm2016", 2), ("hyperbolic", 8), ("contemporary", 5))]
+    assert f"recover {100 * share[0]:.0f}%, {100 * share[1]:.0f}% and {100 * share[2]:.0f}% of the fidelity the " \
+        "baseline lost, measured against F = 1" in _markdown()
+
+
 def _shots():
     return yaml.safe_load((ROOT / "config" / "benchmark" / f"bp.data.benchmark.{INVOKE['reported'].split('/')[0]}.yaml")
                           .read_text(encoding="utf-8"))["shots"]

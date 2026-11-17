@@ -4,8 +4,8 @@ name: middle-out
 label: Middle-out study
 notes: >-
   An optional study, kept apart from the nine cases (docs/CHALLENGE.md, What is fixed
-  and what we choose): do two variants of the reported strategy do better than it? The
-  first, move_middle_out, makes the pair in the middle of the path and moves both
+  and what we choose): do two variants of the strategy the submission reported then,
+  the move chain with an XX check, do better than it? The first, move_middle_out, makes the pair in the middle of the path and moves both
   halves outward at once, so it uses the same gates as move_chain in a shorter
   schedule. The second adds a ZZ check before the XX check on the hyperbolic graph,
   whose third qubit-disjoint path between the ports holds a second spare bus; the ZZ
