@@ -5,6 +5,10 @@ A benchmark for creating a Bell pair between two distant qubits and protecting i
 
 **The question:** given a coupling graph, two fixed ports and a noise model, how well can we create |Φ+⟩ between the ports, what does error detection buy, and what does it cost in gates, ancillas and discarded shots?
 
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Rickory2021/bell-transport-bench/blob/submission/notebooks/bp.output.submission.ipynb)
+
+**The submission notebook opens in Colab with the badge above, at the `submission` tag.** It needs Python 3.12 or later, installs the pinned packages in its first cell, and carries the code and recorded runs it needs, so it runs with no copy of the repo.
+
 The full task is in [`docs/CHALLENGE.md`](docs/CHALLENGE.md): three processor models, nine core cases, and what to report. The design decisions and their reasons are in [`docs/DESIGN.md`](docs/DESIGN.md), and every source we rely on is in [`docs/bp.data.references.yaml`](docs/bp.data.references.yaml).
 
 ## Quick start
@@ -20,13 +24,18 @@ make refs-fetch  # optional: local copies of each reference that has a download 
 ## Running the benchmark
 
 ```bash
-make workbench                  # your own copy of the workbench notebook, in workspace/
-make benchmark                  # the core benchmark
-make benchmark NAME=move-chain  # the nine cases the submission reports
-make benchmark NAME=<study>     # an optional study: biased-noise, mid-circuit-sweep or starting-excitation
-make run RUN=<run folder>       # rebuild a run from its record and report any difference
-make report RUN=<run folder>    # redraw a run folder's diagrams and report.md
-make submission                 # render the submission notebook from the snapshots its invoke names
+make workbench                              # your own copy of the workbench notebook, in workspace/
+make benchmark                              # the core benchmark
+make benchmark NAME=deliverable-2026-11-17  # the nine cases the submission reports
+make benchmark NAME=deliverable-2026-11-17-extended-<processor>
+                                            # one graph's protected case beside the circuits one step from it:
+                                            # ibm2016, contemporary or hyperbolic
+make benchmark NAME=move-chain              # the nine cases the submission reported before
+make benchmark NAME=<study>                 # an optional study: biased-noise, mid-circuit-sweep,
+                                            # starting-excitation, middle-out or vacancy-read
+make run RUN=<run folder>                   # rebuild a run from its record and report any difference
+make report RUN=<run folder>                # redraw a run folder's diagrams and report.md
+make submission                             # render the submission notebook from the snapshots its invoke names
 ```
 
 **A run or benchmark made from committed code lands in `results/runs/`.** One made while `src/` or `config/` has uncommitted changes lands in `workspace/runs/`, which is never committed, and so does a run of a trial circuit in `workspace/circuits/`; a benchmark that names a trial is refused. To keep a result, commit the change, or promote the trial and commit it, and make it again. What each benchmark answers, and where its folders land, is in [DESIGN.md, section 6](docs/DESIGN.md#6-benchmarks-and-results). `make help` lists every target.
@@ -82,4 +91,4 @@ Branch and commit rules are in [`CONTRIBUTING.md`](CONTRIBUTING.md). Read them b
 
 ## AI use
 
-We used AI assistants, including Claude, for research summaries, design discussion, and drafting code and documentation. The team reviewed and ran everything in this repo and can explain it.
+We used AI assistants, including Claude, for research summaries, design discussion, and drafting code and documentation. We also used them in a search over candidate circuits; the team chose the reported circuit and checked it with the benchmark. The team reviewed and ran everything in this repo and can explain it.
