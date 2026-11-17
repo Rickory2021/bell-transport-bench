@@ -1,0 +1,14 @@
+benchmark:
+  path: config/benchmark/bp.data.benchmark.deliverable-2026-11-17-extended-hyperbolic.yaml
+  hash: sha256:77aac8218222d742353de18b63bbb4f14a8b8bc77c46008215e2aaabb5c12dc5
+runs:
+- baseline-hyperbolic
+- move-chain-hyperbolic
+- ghz-measure-hyperbolic
+- ghz-measure-hyperbolic-readout-0
+- ghz-uncompute-hyperbolic
+- move-chain-vacancy-hyperbolic
+- ghz-uncompute-vacancy-hyperbolic
+- move-chain-spare-xx-hyperbolic
+- ghz-uncompute-vacancy-spare-xx-hyperbolic
+cases: []
