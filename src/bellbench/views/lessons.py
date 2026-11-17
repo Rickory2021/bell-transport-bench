@@ -125,4 +125,3 @@ def algebra(*lines: str) -> None:
 def whole(value: float) -> str:
     """An expectation value that is a whole number, written with a true minus sign: +1, 0 or −1."""
     return f"{round(value):+d}".replace("+0", "0").replace("-0", "0").replace("-", "−")
-
