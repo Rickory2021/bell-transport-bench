@@ -1,0 +1,13 @@
+benchmark:
+  path: config/benchmark/bp.data.benchmark.deliverable-2026-11-17-extended-contemporary.yaml
+  hash: sha256:91fe7cc133c1d0cb375810fa02d1cf74d26cc12f2381932995dc5bd703fdaf46
+runs:
+- baseline-contemporary
+- move-contemporary
+- ghz-measure-contemporary
+- ghz-contemporary
+- move-vacancy-contemporary
+- ghz-vacancy-contemporary
+- spare-xx-contemporary
+- ghz-vacancy-xx-contemporary
+cases: []
