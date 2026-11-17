@@ -53,7 +53,8 @@ def test_every_committed_comparison_table_reads():
     tables = sorted(COMMITTED.glob("*/*/comparison.csv"))
     assert {p.parts[-3] for p in tables} == {
         "core", "move-chain", "biased-noise", "mid-circuit-sweep", "starting-excitation", "middle-out",
-        "vacancy-read",
+        "vacancy-read", "deliverable-2026-11-17", "deliverable-2026-11-17-extended-ibm2016",
+        "deliverable-2026-11-17-extended-contemporary", "deliverable-2026-11-17-extended-hyperbolic",
     }
     for path in tables:
         table = read_table(path)
