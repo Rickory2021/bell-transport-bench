@@ -3,12 +3,14 @@
 
 Covers docs/DESIGN.md, section 1. notebooks/bp.output.submission.ipynb is rendered
 by make submission from notebooks/bp.invoke.submission.yaml. These tests check that
-the committed notebook is what the template renders now; that its code payload is
-src/bellbench/ one to one and its results payload the invoked snapshots and nothing
-else; that each config file is written out once, exactly as the repository holds
-it; that the numbers in its text are the run records'; and that every claim the
-text makes still holds for the snapshots the invoke names, so changing a snapshot
-cannot leave the text saying something the records no longer show.
+the committed notebook is what the template renders now; that its payloads are
+src/bellbench/ one to one, the invoked snapshots and nothing else, and the schemas
+with the core benchmark file; that every other config file is written out once,
+exactly as the repository holds it; that its first cell installs what
+pyproject.toml pins, on the Python it requires; that every link in its text lands
+on a heading; that the numbers in its text are the run records'; and that every
+claim the text makes still holds for the snapshots the invoke names, so changing a
+snapshot cannot leave the text saying something the records no longer show.
 """
 
 import base64
@@ -16,8 +18,10 @@ import io
 import json
 import math
 import re
+import shlex
 import shutil
 import subprocess
+import tomllib
 import zipfile
 from pathlib import Path
 
@@ -31,7 +35,11 @@ BLUEPRINT = ROOT / "scripts" / "blueprint-render"
 NOTEBOOK = ROOT / "notebooks" / "bp.output.submission.ipynb"
 INVOKE = yaml.safe_load((ROOT / "notebooks" / "bp.invoke.submission.yaml").read_text(encoding="utf-8"))
 BENCHMARKS = ROOT / "results" / "runs" / "benchmark"
-STUDY_FILES = ("comparison.csv", "report.md", "bp.data.runs.yaml")
+PAYLOADS = ("CODE", "RESULTS", "STUDIES", "SCHEMAS")
+GRAPHS = ("ibm2016", "contemporary", "hyperbolic")
+CASES = {"ibm2016": (1, 2, 3), "contemporary": (4, 5, 6), "hyperbolic": (7, 8, 9)}  # ideal, noisy baseline, protected
+EARLIER = {"ibm2016": "move-chain-path-xx-ibm2016", "contemporary": "move-chain-spare-xx-contemporary",
+           "hyperbolic": "move-chain-spare-xx-hyperbolic"}  # the earlier protected case on each graph
 
 
 def _cells(path=NOTEBOOK):
@@ -60,8 +68,9 @@ def _cases(snapshot):
     return {int(r.case): r for r in table.dropna(subset=["case"]).itertuples(index=False)}
 
 
-def _study(name):
-    return next(s for s in INVOKE["studies"] if s.split("/")[0] == name)
+def _extended(processor):
+    """The noisy runs of the processor's extended benchmark, the study snapshot the invoke names for it."""
+    return _noisy(next(s for s in INVOKE["studies"] if s.split("/")[0].endswith(f"-extended-{processor}")))
 
 
 def _F(r):
@@ -73,12 +82,25 @@ def _apart(a, b):
     return (a.fidelity - b.fidelity) / math.hypot(a.fidelity_se, b.fidelity_se)
 
 
+def _snapshot_files(snapshot):
+    """The files a snapshot payload holds: its YAML, CSV and Markdown files, in its folder and in each run's."""
+    folder = BENCHMARKS / snapshot
+    return {p for depth in ("*", "*/*") for p in folder.glob(depth)
+            if p.is_file() and p.suffix in (".yaml", ".csv", ".md")}
+
+
+def _packed_as(name, files):
+    packed = _payload(name)
+    assert set(packed) == {p.relative_to(ROOT).as_posix() for p in files}
+    assert all(packed[n] == (ROOT / n).read_bytes() for n in packed)
+
+
 # -- The render ------------------------------------------------------------------------
 
 
 @pytest.mark.slow
 def test_the_committed_notebook_is_a_fresh_render(tmp_path):
-    """Every cell as the template renders it now; the two payloads compared by what they unpack to, since deflate's
+    """Every cell as the template renders it now; the payloads compared by what they unpack to, since deflate's
     bytes can differ between zlib builds."""
     if shutil.which("uv") is None:
         pytest.skip("uv runs blueprint-render in its own environment")
@@ -94,13 +116,33 @@ def test_the_committed_notebook_is_a_fresh_render(tmp_path):
         cwd=BLUEPRINT, check=True, capture_output=True,
     )
     fresh = tmp_path / "notebooks" / "bp.output.submission.ipynb"
-    payloads = ("CODE", "RESULTS")
-    strip = lambda cells: [c for c in cells if not any(c[1].startswith(f'{p} = "') for p in payloads)]  # noqa: E731
+    strip = lambda cells: [c for c in cells if not any(c[1].startswith(f'{p} = "') for p in PAYLOADS)]  # noqa: E731
     assert strip(_cells(fresh)) == strip(_cells()), "run make submission and commit the rendered notebook"
-    for name in payloads:
+    for name in PAYLOADS:
         assert _payload(name, fresh) == _payload(name), f"the {name} payload differs: run make submission"
-    text = NOTEBOOK.read_text(encoding="utf-8")
-    assert '"outputs": []' in text and '"execution_count": null' in text and "image/png" not in text  # no outputs
+    code = [c for c in json.loads(NOTEBOOK.read_text(encoding="utf-8"))["cells"] if c["cell_type"] == "code"]
+    assert all(c["outputs"] == [] and c["execution_count"] is None for c in code)  # committed without outputs
+
+
+# -- The setup ---------------------------------------------------------------------------
+
+
+def test_the_first_cell_installs_what_pyproject_pins_on_the_python_it_requires():
+    project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]
+    first = next(s for kind, s in _cells() if kind == "code")
+    install = next(line for line in first.splitlines() if line.startswith("%pip install"))
+    assert shlex.split(install)[3:] == project["dependencies"]  # after "%pip install -q", in pyproject's order
+    guard = re.search(r"sys\.version_info < \((\d+), (\d+)\)", first)
+    assert project["requires-python"] == f">={guard[1]}.{guard[2]}"
+
+
+def test_every_link_lands_on_a_heading():
+    """A link to a section targets its heading the way Jupyter and VS Code name it: spaces become hyphens."""
+    text = _markdown()
+    headings = {h.strip().replace(" ", "-") for h in re.findall(r"^#{1,6} (.+)$", text, re.M)}
+    links = re.findall(r"\]\(#([^)]+)\)", text)
+    assert links and not [link for link in links if link not in headings]
+    assert "<a id=" not in text
 
 
 # -- The payloads ----------------------------------------------------------------------
@@ -111,16 +153,16 @@ def test_the_code_payload_is_src_one_to_one():
     assert _payload("CODE") == expected
 
 
-def test_the_results_payload_is_the_invoked_snapshots_and_nothing_else():
-    reported = BENCHMARKS / INVOKE["reported"]
-    expected = {p for p in reported.rglob("*") if p.is_file() and p.suffix != ".png"}
-    expected |= {BENCHMARKS / s / name for s in INVOKE["studies"] for name in STUDY_FILES}
-    packed = _payload("RESULTS")
-    assert set(packed) == {p.relative_to(ROOT).as_posix() for p in expected}
-    assert all(packed[name] == (ROOT / name).read_bytes() for name in packed)
+def test_the_results_payloads_are_the_invoked_snapshots_and_nothing_else():
+    _packed_as("RESULTS", _snapshot_files(INVOKE["reported"]))
+    _packed_as("STUDIES", set().union(*(_snapshot_files(s) for s in INVOKE["studies"])))
 
 
-def test_every_config_file_is_written_once_exactly_as_the_repository_holds_it():
+def test_the_schemas_payload_is_the_schemas_and_the_core_benchmark_file():
+    _packed_as("SCHEMAS", {*(ROOT / "config").glob("bp.schema.*.yaml"), ROOT / "config/benchmark/bp.data.benchmark.core.yaml"})
+
+
+def test_every_other_config_file_is_written_once_exactly_as_the_repository_holds_it():
     written = {}
     for kind, source in _cells():
         if kind == "code" and source.startswith("%%repo_file "):
@@ -128,14 +170,17 @@ def test_every_config_file_is_written_once_exactly_as_the_repository_holds_it():
             path = line[len("%%repo_file "):]
             assert path not in written, f"{path} is written twice"
             written[path] = body + "\n"  # a cell drops its file's final newline
+    packed = set(_payload("SCHEMAS"))
     expected = {p.relative_to(ROOT).as_posix(): p.read_text(encoding="utf-8") for p in (ROOT / "config").rglob("*.yaml")}
-    assert written == expected
+    assert not packed & set(written)
+    assert written == {path: text for path, text in expected.items() if path not in packed}
 
 
 def test_the_payloads_say_where_they_come_from():
     text = _markdown()
     assert f"[`{INVOKE['repo']}`](https://github.com/{INVOKE['repo']}/tree/{INVOKE['tag']}) at tag `{INVOKE['tag']}`" in text
-    assert f"({len(_payload('CODE'))} files)" in text and f"({len(_payload('RESULTS'))} files)" in text
+    for name in PAYLOADS:
+        assert f"({len(_payload(name))} files)" in text
 
 
 # -- The numbers in the text ------------------------------------------------------------
@@ -143,20 +188,38 @@ def test_the_payloads_say_where_they_come_from():
 
 def test_the_case_table_in_the_text_is_the_records():
     cases, text = _cases(INVOKE["reported"]), _markdown()
-    for graph, (base, protected) in {"2016-inspired": (2, 3), "Contemporary": (5, 6), "Hyperbolic-inspired": (8, 9)}.items():
-        row = f"| {graph} | 1 (case {base - 1}) | {_F(cases[base])} (case {base}) | " \
+    for graph, (ideal, base, protected) in zip(("2016-inspired", "Contemporary", "Hyperbolic-inspired"), CASES.values()):
+        row = f"| {graph} | 1 (case {ideal}) | {_F(cases[base])} (case {base}) | " \
               f"{_F(cases[protected])}, {cases[protected].acceptance:.3f} (case {protected}) |"
         assert row in text
 
 
 def test_the_abstract_quotes_the_records():
-    cases, moves = _cases(INVOKE["reported"]), _noisy(INVOKE["reported"])
+    cases = _cases(INVOKE["reported"])
     abstract = _markdown().split("**Abstract.**")[1].split("**To run it:**")[0]
-    for base, processor in ((2, "ibm2016"), (5, "contemporary"), (8, "hyperbolic")):
-        assert f"from {cases[base].fidelity:.4f} to {moves[f'move-{processor}'].fidelity:.4f}" in abstract \
-            or f"{cases[base].fidelity:.4f} to {moves[f'move-{processor}'].fidelity:.4f}" in abstract
-    for protected in (3, 6, 9):
-        assert f"{_F(cases[protected])} keeping {100 * cases[protected].acceptance:.1f}%" in abstract
+    for processor, (_, base, protected) in CASES.items():
+        assert f"from {_F(cases[base])} to {_F(cases[protected])} keeping {100 * cases[protected].acceptance:.1f}%" \
+            in abstract
+    gates = lambda case_of: ", ".join(str(cases[c].two_qubit_gates) for c in case_of[:-1]) + \
+        f" and {cases[case_of[-1]].two_qubit_gates}"  # noqa: E731
+    assert f"with {gates((3, 6, 9))} two-qubit gates against the baseline's {gates((2, 5, 8))}" in abstract
+    read = [_extended(p)[f"ghz-uncompute-vacancy-{p}"].fidelity - _extended(p)[f"ghz-uncompute-{p}"].fidelity for p in GRAPHS]
+    assert "The read alone added " + ", ".join(f"{d:+.4f}" for d in read[:-1]) + f" and {read[-1]:+.4f}" in abstract
+    assert f"{_shots():,} shots per basis" in abstract
+
+
+def test_section_5_quotes_the_fidelity_the_transport_recovers():
+    """GHZ disentangling's share of what the baseline lost, against F = 1, in the order the text names the graphs."""
+    cases = _cases(INVOKE["reported"])
+    share = [(_extended(p)[f"ghz-uncompute-{p}"].fidelity - cases[base].fidelity) / (1 - cases[base].fidelity)
+             for p, base in (("ibm2016", 2), ("hyperbolic", 8), ("contemporary", 5))]
+    assert f"recover {100 * share[0]:.0f}%, {100 * share[1]:.0f}% and {100 * share[2]:.0f}% of the fidelity the " \
+        "baseline lost, measured against F = 1" in _markdown()
+
+
+def _shots():
+    return yaml.safe_load((ROOT / "config" / "benchmark" / f"bp.data.benchmark.{INVOKE['reported'].split('/')[0]}.yaml")
+                          .read_text(encoding="utf-8"))["shots"]
 
 
 def test_draft_marks_follow_the_invoke():
@@ -167,46 +230,61 @@ def test_draft_marks_follow_the_invoke():
 
 
 def test_the_claims_about_the_nine_cases_hold():
-    cases, runs = _cases(INVOKE["reported"]), _noisy(INVOKE["reported"])
-    move = {p: runs[f"move-{p}"] for p in ("ibm2016", "contemporary", "hyperbolic")}
-    # The move chain beats the baseline on every graph.
-    assert all(move[p].fidelity > cases[b].fidelity for p, b in (("ibm2016", 2), ("contemporary", 5), ("hyperbolic", 8)))
-    # The check does not pay on ibm2016, and pays by more than two combined standard errors on the other two.
-    assert cases[3].fidelity < move["ibm2016"].fidelity
-    assert _apart(cases[6], move["contemporary"]) > 2 and _apart(cases[9], move["hyperbolic"]) > 2
-    # Unprotected, F ranks the graphs by hops; protected, the hyperbolic graph leads and the other two are within one SE.
-    for rows in ((cases[2], cases[8], cases[5]), (move["ibm2016"], move["hyperbolic"], move["contemporary"])):
-        assert rows[0].fidelity > rows[1].fidelity > rows[2].fidelity
-    assert cases[9].fidelity > max(cases[3].fidelity, cases[6].fidelity)
-    assert abs(_apart(cases[6], cases[3])) < 1
+    cases = _cases(INVOKE["reported"])
     # Every ideal case gives F = 1 with every shot kept.
-    assert all(cases[i].fidelity == 1 and cases[i].acceptance == 1 for i in (1, 4, 7))
+    assert all(cases[ideal].fidelity == 1 and cases[ideal].acceptance == 1 for ideal, _, _ in CASES.values())
+    for processor, (_, base, protected) in CASES.items():
+        # The protected case beats the noisy baseline with fewer two-qubit gates, no SWAP and no extra qubit.
+        assert _apart(cases[protected], cases[base]) > 2
+        assert cases[protected].two_qubit_gates < cases[base].two_qubit_gates and cases[protected].swaps == 0
+        assert cases[protected].qubits_used <= cases[base].qubits_used
+    # F ranks the graphs by hops, 2, then 3, then 4: baseline, transport alone and protected case alike.
+    alone = {p: _extended(p)[f"ghz-uncompute-{p}"] for p in GRAPHS}
+    for rows in ((cases[2], cases[8], cases[5]), (alone["ibm2016"], alone["hyperbolic"], alone["contemporary"]),
+                 (cases[3], cases[9], cases[6])):
+        assert rows[0].fidelity > rows[1].fidelity > rows[2].fidelity
 
 
-def test_the_claims_about_the_studies_hold():
-    moves = _noisy(INVOKE["reported"])
-    sweep = _noisy(_study("mid-circuit-sweep"))
-    at = {float(re.search(r"mcm-([0-9e-]+)$", run).group(1)): r for run, r in sweep.items() if "-mcm-" in run}
-    assert at[0.0].fidelity < moves["move-ibm2016"].fidelity  # below the move chain with no mid-circuit error
-    assert all(_apart(r, moves["move-ibm2016"]) < 1 for r in at.values())  # never above it by a standard error
-    errors = sorted(at)
-    assert all(at[a].acceptance > at[b].acceptance for a, b in zip(errors, errors[1:]))  # more errors, fewer shots kept
-    assert _apart(at[errors[-1]], at[0.0]) > -1  # without lowering F
+def test_the_nine_cases_avoid_the_contemporary_graph_s_five_edge_qubit():
+    graph = yaml.safe_load((ROOT / "config/processor/bp.data.processor.contemporary.yaml").read_text(encoding="utf-8"))
+    degree = {q["id"]: sum(q["id"] in e for e in graph["edges"]) for q in graph["qubits"]}
+    busiest = max(degree, key=degree.get)
+    for run in ("baseline-contemporary", "ghz-uncompute-vacancy-contemporary"):
+        record = yaml.safe_load((BENCHMARKS / INVOKE["reported"] / run / "bp.data.result.yaml").read_text(encoding="utf-8"))
+        assert busiest not in record["cost"]["qubits_used"]
 
-    excitation = _noisy(_study("starting-excitation"))
-    assert excitation["move-contemporary-exc-5e-3"].fidelity < excitation["baseline-contemporary-exc-5e-3"].fidelity
-    assert excitation["move-contemporary-exc-2e-2"].fidelity < excitation["baseline-contemporary-exc-2e-2"].fidelity
-    loss = {run[: -len("-exc-0")]: r.fidelity - excitation[run.replace("-exc-0", "-exc-2e-2")].fidelity
-            for run, r in excitation.items() if run.endswith("-exc-0")}
-    assert min(loss, key=loss.get) == "path-xx-ibm2016"  # case 3's check loses least
 
-    middle = _noisy(_study("middle-out"))
-    assert abs(_apart(middle["middle-out-xx-contemporary"], middle["spare-xx-contemporary"])) < 1
-    assert abs(_apart(middle["middle-out-xx-hyperbolic"], middle["spare-xx-hyperbolic"])) < 1
-    zz, xx = middle["middle-out-zz-xx-hyperbolic"], middle["middle-out-xx-hyperbolic"]
-    assert zz.acceptance < xx.acceptance and zz.fidelity <= xx.fidelity
+def test_the_claims_about_the_extended_benchmarks_hold():
+    loss = {}
+    for processor in GRAPHS:
+        runs = _extended(processor)
+        read, alone = runs[f"ghz-uncompute-vacancy-{processor}"], runs[f"ghz-uncompute-{processor}"]
+        # The read raises F above the same transport by more than two combined standard errors, at no gate's cost,
+        # and gains more after GHZ disentangling than after the move chain.
+        assert _apart(read, alone) > 2 and read.two_qubit_gates == alone.two_qubit_gates
+        move_gain = runs[f"move-chain-vacancy-{processor}"].fidelity - runs[f"move-chain-{processor}"].fidelity
+        assert read.fidelity - alone.fidelity > move_gain
+        assert read.fidelity > runs[f"move-chain-vacancy-{processor}"].fidelity
+        # Among the runs that keep at least as many shots as the earlier protected case, the read gives the highest F.
+        floor = runs[EARLIER[processor]].acceptance
+        assert max((r for r in runs.values() if r.acceptance >= floor), key=lambda r: r.fidelity) is read
+        # The textbook GHZ transport loses to GHZ disentangling, and wins with no readout error on the qubits it reads.
+        measure = runs[f"ghz-measure-{processor}"]
+        assert measure.fidelity < alone.fidelity < runs[f"ghz-measure-{processor}-readout-0"].fidelity
+        loss[processor] = alone.fidelity - measure.fidelity
+    # Its loss grows with the qubits it reads: one, two, then three.
+    assert loss["ibm2016"] < loss["hyperbolic"] < loss["contemporary"]
 
-    vacancy = _noisy(_study("vacancy-read"))
-    ghz, case3 = vacancy["ghz-vacancy-ibm2016"], vacancy["path-xx-ibm2016"]
-    assert ghz.fidelity > case3.fidelity and ghz.acceptance > case3.acceptance
-    assert ghz.two_qubit_gates < case3.two_qubit_gates and ghz.scheduled_duration < case3.scheduled_duration
+
+def test_the_claims_about_a_spare_path_hold():
+    for processor in ("hyperbolic", "contemporary"):
+        runs = _extended(processor)
+        read, alone = runs[f"ghz-uncompute-vacancy-{processor}"], runs[f"ghz-uncompute-{processor}"]
+        spare = runs[f"ghz-uncompute-vacancy-spare-xx-{processor}"]
+        # An XX check on a spare path raises F a little further only by discarding more shots, with more gates and
+        # qubits, and it gains less F per extra discarded shot than the read gains per discarded shot.
+        assert spare.fidelity > read.fidelity and spare.acceptance < read.acceptance
+        assert spare.two_qubit_gates > read.two_qubit_gates and spare.qubits_used > read.qubits_used
+        per_check = (spare.fidelity - read.fidelity) / (read.acceptance - spare.acceptance)
+        assert per_check < (read.fidelity - alone.fidelity) / (1 - read.acceptance)
+    assert "ghz-uncompute-vacancy-spare-xx-ibm2016" not in _extended("ibm2016")  # the 2016-inspired graph has no spare path

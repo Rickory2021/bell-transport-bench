@@ -24,7 +24,7 @@ from bellbench.views import base, lessons
 from bellbench.views.base import View, emit, fold, markdown
 from bellbench.views.compare import benchmark_line_parts, benchmark_parts, compare_parts
 from bellbench.views.result import result_parts, result_view
-from bellbench.views.show import Compiled, show_parts
+from bellbench.views.show import Compiled, basis_html, show_parts
 from bellbench.workbench import Workbench
 
 SOURCE = Path(__file__).resolve().parents[1] / "src" / "bellbench"
@@ -161,6 +161,14 @@ def test_shows_debug_views_are_folded_and_the_stepper_script_follows_its_fold():
     assert only_zz[4].content.count("<img") == 1 and "Timeline of the compiled ZZ circuit" in only_zz[5].content
     assert only_zz[5].content.count("<img") == 2 and "The same ZZ schedule as Qiskit draws it" in only_zz[5].content
     assert "XX: the same" in only_zz[4].content
+
+
+def test_basis_html_draws_one_basis_with_its_timelines_and_how_it_differs_from_zz():
+    view = Compiled.of_run(CircuitRun("move-chain-ibm2016", "boston-2026", shots=50, base_seed=7).compile())
+    zz, xx = basis_html(view, "ZZ"), basis_html(view, "XX")
+    assert zz.count("<img") == 3 and "Compiled ZZ circuit" not in zz.split("<img")[0]  # drawing, our chart, qiskit's
+    assert xx.startswith("<p>XX: the same") and xx.count("<img") == 3
+    assert "The same XX schedule as Qiskit draws it" in xx
 
 
 def test_show_of_a_result_reads_its_record_and_a_profile_without_durations_has_no_timeline():

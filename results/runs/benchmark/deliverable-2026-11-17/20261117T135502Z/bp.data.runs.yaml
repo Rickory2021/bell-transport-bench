@@ -1,0 +1,41 @@
+benchmark:
+  path: config/benchmark/bp.data.benchmark.deliverable-2026-11-17.yaml
+  hash: sha256:202d91fdd60385e92e568da95a2aecff3376c73db96b75545d569509acc5e25d
+runs:
+- baseline-ibm2016
+- baseline-contemporary
+- baseline-hyperbolic
+- ghz-ibm2016
+- ghz-contemporary
+- ghz-hyperbolic
+- ghz-vacancy-ibm2016
+- ghz-vacancy-contemporary
+- ghz-vacancy-hyperbolic
+cases:
+- case: 1
+  run: baseline-ibm2016
+  simulation: ideal
+- case: 2
+  run: baseline-ibm2016
+  simulation: noisy
+- case: 3
+  run: ghz-vacancy-ibm2016
+  simulation: noisy
+- case: 4
+  run: baseline-contemporary
+  simulation: ideal
+- case: 5
+  run: baseline-contemporary
+  simulation: noisy
+- case: 6
+  run: ghz-vacancy-contemporary
+  simulation: noisy
+- case: 7
+  run: baseline-hyperbolic
+  simulation: ideal
+- case: 8
+  run: baseline-hyperbolic
+  simulation: noisy
+- case: 9
+  run: ghz-vacancy-hyperbolic
+  simulation: noisy

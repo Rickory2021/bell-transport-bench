@@ -1,0 +1,27 @@
+# config/circuit/bp.data.circuit.ghz-uncompute-vacancy-hyperbolic.yaml
+
+name: ghz-uncompute-vacancy-hyperbolic
+label: ghz_uncompute then vacancy at the end, hyperbolic
+processor: hyperbolic
+analysis:
+  name: parity
+  settings:
+    checks:
+    - - check_vac[0]
+    - - check_vac[1]
+notes: >-
+  Built by src/bellbench/builders.py on hyperbolic along the path [0, 1, 9, 12]: ghz_uncompute();
+  then vacancy().
+circuit: |
+  OPENQASM 3.0;
+  include "stdgates.inc";
+  bit[2] check_vac;
+  qubit[13] q;
+  h q[0];
+  cx q[0], q[1];
+  cx q[1], q[9];
+  cx q[9], q[12];
+  cx q[1], q[9];
+  cx q[0], q[1];
+  check_vac[0] = measure q[1];
+  check_vac[1] = measure q[9];

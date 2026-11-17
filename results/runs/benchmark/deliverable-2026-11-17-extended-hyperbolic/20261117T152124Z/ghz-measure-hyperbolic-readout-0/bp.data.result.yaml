@@ -1,0 +1,224 @@
+result_format: 2
+circuit:
+  path: config/circuit/bp.data.circuit.ghz-measure-hyperbolic.yaml
+  hash: sha256:45476f9cc4073678d87432a6fc63b0594bb71a60f4db12ecd2c24411db283bc2
+noise_control:
+  processor:
+    path: config/processor/bp.data.processor.hyperbolic.yaml
+    hash: sha256:9fddc378e0f9ef4ab1447abb0c7af725668999db732f043e3cd4512316b04fcb
+  noise:
+    path: config/noise/bp.data.noise.boston-2026.yaml
+    hash: sha256:f18a5808abd6af0b557b86d0fcb235a3327981122e51acefa3e135e31fcc47d8
+  scale: 1.0
+  overrides:
+  - qubits:
+    - 1
+    field: qubit.readout_error.reads_1_when_0
+    value: 0.0
+  - qubits:
+    - 1
+    field: qubit.readout_error.reads_0_when_1
+    value: 0.0
+  - qubits:
+    - 9
+    field: qubit.readout_error.reads_1_when_0
+    value: 0.0
+  - qubits:
+    - 9
+    field: qubit.readout_error.reads_0_when_1
+    value: 0.0
+  conditional:
+    reset_error: null
+    mid_circuit_measurement_error: null
+shots: 100000
+base_seed: 20261116
+seeds:
+  transpile: 1630476294
+  ideal: 4287909052
+  noisy: 18331803
+diagrams: lean
+registers:
+- frame_z_ghz
+- port
+written: |
+  OPENQASM 3.0;
+  include "stdgates.inc";
+  bit[2] frame_z_ghz;
+  qubit[13] q;
+  h q[1];
+  cx q[1], q[9];
+  cx q[9], q[12];
+  cx q[1], q[0];
+  h q[1];
+  frame_z_ghz[0] = measure q[1];
+  h q[9];
+  frame_z_ghz[1] = measure q[9];
+compiled:
+  XX: |
+    OPENQASM 3.0;
+    include "stdgates.inc";
+    bit[2] frame_z_ghz;
+    bit[2] port;
+    qubit[13] q;
+    rz(pi/2) q[0];
+    sx q[0];
+    rz(pi/2) q[0];
+    rz(pi/2) q[1];
+    sx q[1];
+    rz(pi/2) q[1];
+    rz(pi/2) q[9];
+    sx q[9];
+    rz(pi/2) q[9];
+    cz q[1], q[9];
+    cz q[1], q[0];
+    rz(pi/2) q[1];
+    sx q[1];
+    rz(pi/2) q[1];
+    rz(pi/2) q[9];
+    sx q[9];
+    rz(pi/2) q[9];
+    rz(pi/2) q[12];
+    sx q[12];
+    rz(pi/2) q[12];
+    cz q[9], q[12];
+    rz(pi/2) q[9];
+    sx q[9];
+    rz(pi/2) q[9];
+    frame_z_ghz[0] = measure q[1];
+    frame_z_ghz[1] = measure q[9];
+    port[0] = measure q[0];
+    port[1] = measure q[12];
+  YY: |
+    OPENQASM 3.0;
+    include "stdgates.inc";
+    bit[2] frame_z_ghz;
+    bit[2] port;
+    qubit[13] q;
+    rz(pi/2) q[0];
+    sx q[0];
+    rz(pi/2) q[0];
+    rz(pi/2) q[1];
+    sx q[1];
+    rz(pi/2) q[1];
+    rz(pi/2) q[9];
+    sx q[9];
+    rz(pi/2) q[9];
+    cz q[1], q[9];
+    cz q[1], q[0];
+    rz(-pi) q[0];
+    sx q[0];
+    rz(-pi) q[0];
+    rz(pi/2) q[1];
+    sx q[1];
+    rz(pi/2) q[1];
+    rz(pi/2) q[9];
+    sx q[9];
+    rz(pi/2) q[9];
+    rz(pi/2) q[12];
+    sx q[12];
+    rz(pi/2) q[12];
+    cz q[9], q[12];
+    rz(pi/2) q[9];
+    sx q[9];
+    rz(pi/2) q[9];
+    rz(-pi) q[12];
+    sx q[12];
+    rz(-pi) q[12];
+    frame_z_ghz[0] = measure q[1];
+    frame_z_ghz[1] = measure q[9];
+    port[0] = measure q[0];
+    port[1] = measure q[12];
+  ZZ: |
+    OPENQASM 3.0;
+    include "stdgates.inc";
+    bit[2] frame_z_ghz;
+    bit[2] port;
+    qubit[13] q;
+    rz(pi/2) q[0];
+    sx q[0];
+    rz(pi/2) q[0];
+    rz(pi/2) q[1];
+    sx q[1];
+    rz(pi/2) q[1];
+    rz(pi/2) q[9];
+    sx q[9];
+    rz(pi/2) q[9];
+    cz q[1], q[9];
+    cz q[1], q[0];
+    rz(pi/2) q[0];
+    sx q[0];
+    rz(pi/2) q[0];
+    rz(pi/2) q[1];
+    sx q[1];
+    rz(pi/2) q[1];
+    rz(pi/2) q[9];
+    sx q[9];
+    rz(pi/2) q[9];
+    rz(pi/2) q[12];
+    sx q[12];
+    rz(pi/2) q[12];
+    cz q[9], q[12];
+    rz(pi/2) q[9];
+    sx q[9];
+    rz(pi/2) q[9];
+    rz(pi/2) q[12];
+    sx q[12];
+    rz(pi/2) q[12];
+    frame_z_ghz[0] = measure q[1];
+    frame_z_ghz[1] = measure q[9];
+    port[0] = measure q[0];
+    port[1] = measure q[12];
+cost:
+  swaps: 0
+  router_swaps: 0
+  qubits_used:
+  - 0
+  - 1
+  - 9
+  - 12
+  depth: 11
+  two_qubit_gates: 3
+  two_qubit_gates_by_edge:
+    XX:
+      0-1: 1
+      1-9: 1
+      9-12: 1
+    YY:
+      0-1: 1
+      1-9: 1
+      9-12: 1
+    ZZ:
+      0-1: 1
+      1-9: 1
+      9-12: 1
+  pair_on_ports: true
+scheduled_duration: 2.432e-06
+simulations:
+  ideal:
+    seeds:
+      XX: 4287909052
+      YY: 4287911165
+      ZZ: 4287913278
+    methods:
+      XX: stabilizer
+      YY: stabilizer
+      ZZ: stabilizer
+  noisy:
+    seeds:
+      XX: 18331803
+      YY: 18333916
+      ZZ: 18336029
+    methods:
+      XX: density_matrix
+      YY: density_matrix
+      ZZ: density_matrix
+provenance:
+  commit: fdc6caf822ae65dd815aff4ee2f32b8280462421
+  uncommitted: false
+  packages:
+    python: 3.12.12
+    qiskit: 2.6.2
+    qiskit-aer: 0.18.2
+    qiskit-ibm-runtime: 0.51.0
+    qiskit-qasm3-import: 0.6.0
+    numpy: 2.5.4

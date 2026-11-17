@@ -1,0 +1,13 @@
+benchmark:
+  path: config/benchmark/bp.data.benchmark.deliverable-2026-11-17-extended-ibm2016.yaml
+  hash: sha256:a76f0d8e2580bd658d1d48146e7060e8397566ff48c19cd8d407caa12375faec
+runs:
+- baseline-ibm2016
+- move-ibm2016
+- ghz-measure-ibm2016
+- ghz-measure-readout-0-ibm2016
+- ghz-ibm2016
+- move-vacancy-ibm2016
+- ghz-vacancy-ibm2016
+- path-xx-ibm2016
+cases: []

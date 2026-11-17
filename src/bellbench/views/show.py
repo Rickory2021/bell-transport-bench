@@ -161,27 +161,41 @@ def _single_qubit_gates(circuit: QuantumCircuit, qubit: int) -> list[str]:
 
 def _compiled_html(view: Compiled, draw_all: bool) -> str:
     """The compiled ZZ circuit in short rows, and one computed line on how XX and YY differ from it."""
-    def draw(basis: Basis) -> str:
-        circuit = view.compiled[basis].copy()
-        circuit.global_phase = 0  # changes no outcome; the drawer would print it on every circuit
-        fig = drawn_figure(lambda ax: circuit.draw("mpl", idle_wires=False, fold=12, ax=ax), circuit_size)
-        fig.suptitle(f"Compiled {basis} circuit", fontsize=11)
-        return img(fig)
+    parts = [_drawn_compiled(view, "ZZ")]
+    for basis in ("XX", "YY"):
+        parts.append(_differs_from_zz(view, basis))
+        if draw_all:
+            parts.append(_drawn_compiled(view, basis))
+    return "".join(parts)
 
-    parts = [draw("ZZ")]
-    zz = view.compiled["ZZ"]
-    two_qubit = lambda c: [(i.operation.name, tuple(c.find_bit(q).index for q in i.qubits))
+
+def basis_html(view: Compiled, basis: Basis) -> str:
+    """One basis circuit, compiled, as HTML for a fold of its own: for XX and YY, the line on how it differs from
+    ZZ; then its drawing; then its timelines, our chart in µs and Qiskit's own."""
+    differs = "" if basis == "ZZ" else _differs_from_zz(view, basis)
+    return differs + _drawn_compiled(view, basis) + _timeline_html(view, basis)
+
+
+def _drawn_compiled(view: Compiled, basis: Basis) -> str:
+    """One compiled basis circuit, drawn in short rows."""
+    circuit = view.compiled[basis].copy()
+    circuit.global_phase = 0  # changes no outcome; the drawer would print it on every circuit
+    fig = drawn_figure(lambda ax: circuit.draw("mpl", idle_wires=False, fold=12, ax=ax), circuit_size)
+    fig.suptitle(f"Compiled {basis} circuit", fontsize=11)
+    return img(fig)
+
+
+def _differs_from_zz(view: Compiled, basis: Basis) -> str:
+    """One computed line: whether the basis circuit has ZZ's two-qubit gates in ZZ's order, and on which qubits its
+    single-qubit gates differ."""
+    zz, other = view.compiled["ZZ"], view.compiled[basis]
+    two_qubit = lambda c: [(i.operation.name, tuple(c.find_bit(q).index for q in i.qubits))  # noqa: E731
                            for i in c.data if len(i.qubits) == 2 and i.operation.name != "barrier"]
     qubits = sorted({zz.find_bit(q).index for i in zz.data for q in i.qubits})
-    for basis in ("XX", "YY"):
-        other = view.compiled[basis]
-        same = "the same" if two_qubit(other) == two_qubit(zz) else "<b>different</b>"
-        differ = [q for q in qubits if _single_qubit_gates(other, q) != _single_qubit_gates(zz, q)]
-        parts.append(f"<p>{basis}: {same} {len(two_qubit(zz))} two-qubit gates in the same order; single-qubit "
-                     f"gates differ on qubit{'s' if len(differ) != 1 else ''} {', '.join(map(str, differ)) or 'none'}</p>")
-        if draw_all:
-            parts.append(draw(basis))
-    return "".join(parts)
+    same = "the same" if two_qubit(other) == two_qubit(zz) else "<b>different</b>"
+    differ = [q for q in qubits if _single_qubit_gates(other, q) != _single_qubit_gates(zz, q)]
+    return (f"<p>{basis}: {same} {len(two_qubit(zz))} two-qubit gates in the same order; single-qubit "
+            f"gates differ on qubit{'s' if len(differ) != 1 else ''} {', '.join(map(str, differ)) or 'none'}</p>")
 
 
 BUSY_COLORS = {"two-qubit gate": "#7139cc", "single-qubit gate": "#c4b2ec", "measurement": "#4a5568"}

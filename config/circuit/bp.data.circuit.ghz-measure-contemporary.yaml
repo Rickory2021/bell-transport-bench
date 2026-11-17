@@ -1,0 +1,32 @@
+# config/circuit/bp.data.circuit.ghz-measure-contemporary.yaml
+
+name: ghz-measure-contemporary
+label: ghz_measure, contemporary
+processor: contemporary
+analysis:
+  name: parity
+  settings:
+    checks: []
+    frame_z:
+    - frame_z_ghz[0]
+    - frame_z_ghz[1]
+    - frame_z_ghz[2]
+notes: >-
+  Built by src/bellbench/builders.py on contemporary along the path [0, 1, 2, 3, 7]:
+  ghz_measure(reset=False).
+circuit: |
+  OPENQASM 3.0;
+  include "stdgates.inc";
+  bit[3] frame_z_ghz;
+  qubit[9] q;
+  h q[2];
+  cx q[2], q[3];
+  cx q[3], q[7];
+  cx q[2], q[1];
+  cx q[1], q[0];
+  h q[1];
+  frame_z_ghz[0] = measure q[1];
+  h q[2];
+  frame_z_ghz[1] = measure q[2];
+  h q[3];
+  frame_z_ghz[2] = measure q[3];

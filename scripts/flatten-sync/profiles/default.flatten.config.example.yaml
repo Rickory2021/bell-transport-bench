@@ -8,7 +8,7 @@ root:
   __path: .
   __modifier:
     exclude:
-      - [dev-env, generated-files, build-output, active-configs, secrets, script-data, binary-assets, workspace-scratch, result-images, first-results]
+      - [dev-env, generated-files, build-output, active-configs, secrets, script-data, binary-assets, workspace-scratch, result-images, first-results, rendered-submission, run-folders]
   __note: "Repo root (README, CONTRIBUTING, Makefile, pyproject)"
   src:
     __path: src

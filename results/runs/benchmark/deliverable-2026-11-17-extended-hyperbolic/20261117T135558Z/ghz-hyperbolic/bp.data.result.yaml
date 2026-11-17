@@ -1,0 +1,227 @@
+result_format: 2
+circuit:
+  path: config/circuit/bp.data.circuit.ghz-uncompute-hyperbolic.yaml
+  hash: sha256:0a8e104cbe0bf8c6e89f700e260b54c05ab4b569bcf360b2813e45a9faf1be78
+noise_control:
+  processor:
+    path: config/processor/bp.data.processor.hyperbolic.yaml
+    hash: sha256:9fddc378e0f9ef4ab1447abb0c7af725668999db732f043e3cd4512316b04fcb
+  noise:
+    path: config/noise/bp.data.noise.boston-2026.yaml
+    hash: sha256:f18a5808abd6af0b557b86d0fcb235a3327981122e51acefa3e135e31fcc47d8
+  scale: 1.0
+  overrides: []
+  conditional:
+    reset_error: null
+    mid_circuit_measurement_error: null
+shots: 100000
+base_seed: 20261116
+seeds:
+  transpile: 110174184
+  ideal: 4135650126
+  noisy: 365529329
+diagrams: lean
+registers:
+- port
+written: |
+  OPENQASM 3.0;
+  include "stdgates.inc";
+  qubit[13] q;
+  h q[0];
+  cx q[0], q[1];
+  cx q[1], q[9];
+  cx q[9], q[12];
+  cx q[1], q[9];
+  cx q[0], q[1];
+compiled:
+  XX: |
+    OPENQASM 3.0;
+    include "stdgates.inc";
+    bit[2] port;
+    qubit[13] q;
+    rz(pi/2) q[0];
+    sx q[0];
+    rz(pi/2) q[0];
+    rz(pi/2) q[1];
+    sx q[1];
+    rz(pi/2) q[1];
+    cz q[0], q[1];
+    rz(pi/2) q[1];
+    sx q[1];
+    rz(pi/2) q[1];
+    rz(pi/2) q[9];
+    sx q[9];
+    rz(pi/2) q[9];
+    cz q[1], q[9];
+    rz(pi/2) q[9];
+    sx q[9];
+    rz(pi/2) q[9];
+    rz(pi/2) q[12];
+    sx q[12];
+    rz(pi/2) q[12];
+    cz q[9], q[12];
+    rz(pi/2) q[9];
+    sx q[9];
+    rz(pi/2) q[9];
+    cz q[1], q[9];
+    rz(pi/2) q[1];
+    sx q[1];
+    rz(pi/2) q[1];
+    cz q[0], q[1];
+    rz(pi/2) q[0];
+    sx q[0];
+    rz(pi/2) q[0];
+    rz(pi/2) q[1];
+    sx q[1];
+    rz(pi/2) q[1];
+    rz(pi/2) q[9];
+    sx q[9];
+    rz(pi/2) q[9];
+    port[0] = measure q[0];
+    port[1] = measure q[12];
+  YY: |
+    OPENQASM 3.0;
+    include "stdgates.inc";
+    bit[2] port;
+    qubit[13] q;
+    rz(pi/2) q[0];
+    sx q[0];
+    rz(pi/2) q[0];
+    rz(pi/2) q[1];
+    sx q[1];
+    rz(pi/2) q[1];
+    cz q[0], q[1];
+    rz(pi/2) q[1];
+    sx q[1];
+    rz(pi/2) q[1];
+    rz(pi/2) q[9];
+    sx q[9];
+    rz(pi/2) q[9];
+    cz q[1], q[9];
+    rz(pi/2) q[9];
+    sx q[9];
+    rz(pi/2) q[9];
+    rz(pi/2) q[12];
+    sx q[12];
+    rz(pi/2) q[12];
+    cz q[9], q[12];
+    rz(pi/2) q[9];
+    sx q[9];
+    rz(pi/2) q[9];
+    cz q[1], q[9];
+    rz(pi/2) q[1];
+    sx q[1];
+    rz(pi/2) q[1];
+    cz q[0], q[1];
+    sx q[0];
+    rz(pi/2) q[0];
+    rz(pi/2) q[1];
+    sx q[1];
+    rz(pi/2) q[1];
+    rz(pi/2) q[9];
+    sx q[9];
+    rz(pi/2) q[9];
+    rz(-pi) q[12];
+    sx q[12];
+    rz(-pi) q[12];
+    port[0] = measure q[0];
+    port[1] = measure q[12];
+  ZZ: |
+    OPENQASM 3.0;
+    include "stdgates.inc";
+    bit[2] port;
+    qubit[13] q;
+    rz(pi/2) q[0];
+    sx q[0];
+    rz(pi/2) q[0];
+    rz(pi/2) q[1];
+    sx q[1];
+    rz(pi/2) q[1];
+    cz q[0], q[1];
+    rz(pi/2) q[1];
+    sx q[1];
+    rz(pi/2) q[1];
+    rz(pi/2) q[9];
+    sx q[9];
+    rz(pi/2) q[9];
+    cz q[1], q[9];
+    rz(pi/2) q[9];
+    sx q[9];
+    rz(pi/2) q[9];
+    rz(pi/2) q[12];
+    sx q[12];
+    rz(pi/2) q[12];
+    cz q[9], q[12];
+    rz(pi/2) q[9];
+    sx q[9];
+    rz(pi/2) q[9];
+    cz q[1], q[9];
+    rz(pi/2) q[1];
+    sx q[1];
+    rz(pi/2) q[1];
+    cz q[0], q[1];
+    rz(pi/2) q[1];
+    sx q[1];
+    rz(pi/2) q[1];
+    rz(pi/2) q[9];
+    sx q[9];
+    rz(pi/2) q[9];
+    rz(pi/2) q[12];
+    sx q[12];
+    rz(pi/2) q[12];
+    port[0] = measure q[0];
+    port[1] = measure q[12];
+cost:
+  swaps: 0
+  router_swaps: 0
+  qubits_used:
+  - 0
+  - 1
+  - 9
+  - 12
+  depth: 23
+  two_qubit_gates: 5
+  two_qubit_gates_by_edge:
+    XX:
+      0-1: 2
+      1-9: 2
+      9-12: 1
+    YY:
+      0-1: 2
+      1-9: 2
+      9-12: 1
+    ZZ:
+      0-1: 2
+      1-9: 2
+      9-12: 1
+  pair_on_ports: true
+scheduled_duration: 2.7000000000000004e-06
+simulations:
+  ideal:
+    seeds:
+      XX: 4135650126
+      YY: 4135652239
+      ZZ: 4135654352
+    methods:
+      XX: stabilizer
+      YY: stabilizer
+      ZZ: stabilizer
+  noisy:
+    seeds:
+      XX: 365529329
+      YY: 365531442
+      ZZ: 365533555
+    methods:
+      XX: density_matrix
+      YY: density_matrix
+      ZZ: density_matrix
+provenance:
+  commit: b026fc902f6bed953022a2c0a5d424b0ef70c693
+  uncommitted: false
+  packages:
+    python: 3.12.12
+    qiskit: 2.6.2
+    qiskit-aer: 0.18.2
+    qiskit-ibm-runtime: 0.51.0
+    qiskit-qasm3-import: 0.6.0
+    numpy: 2.5.4

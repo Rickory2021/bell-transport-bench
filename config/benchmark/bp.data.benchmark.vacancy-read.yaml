@@ -5,12 +5,13 @@ label: Vacancy-read study
 notes: >-
   An optional study, kept apart from the nine cases (docs/CHALLENGE.md, What is fixed
   and what we choose): does a GHZ-and-uncompute transport, followed by a vacancy read
-  of the emptied path at the end, do better than the reported strategy? ghz_uncompute
-  makes a GHZ state along the path, then empties the interior with gates controlled
-  from the first port, so the vacancy read at the end catches a bit flip on that port,
-  the qubit that has waited longest. On ibm2016 the vacancy read replaces case 3's XX
-  check on the path, which reads a qubit mid-circuit and reuses it; on the
-  contemporary and hyperbolic graphs the reported XX check on a spare path follows it.
+  of the emptied path at the end, do better than the strategy the submission reported
+  then, the move chain with an XX check? ghz_uncompute makes a GHZ state along the path, then empties the interior with
+  gates controlled from the first port, so the vacancy read at the end also catches a
+  bit flip on that port before the last gate. On ibm2016 the vacancy read replaces case
+  3's XX check on the path, which reads a qubit mid-circuit and reuses it; on the
+  contemporary and hyperbolic graphs the XX check on a spare path that the submission
+  reported then follows it.
   Each new run sits beside the move-chain benchmark's protected run on its graph,
   rerun here under the same circuit, profile and base seed, so with the same seeds and
   the same numbers. Case 3's run appears twice: at the mid-circuit measurement error
