@@ -4,10 +4,11 @@
 # template (docs/DESIGN.md, section 1). The invoke names the benchmark snapshot that
 # fills the nine cases, the study snapshots the appendix reports, and where the code
 # is published. At render time this process packs src/bellbench/ as the code
-# payload, packs the chosen snapshots as the results payload, reads every config
-# file's text so the notebook writes each one out where it explains it, and reads
-# each snapshot's comparison table so every number in the notebook's text comes from
-# the run records.
+# payload, the reported snapshot as the results payload, the study snapshots as the
+# studies payload, each snapshot whole so the notebook can show every run's circuits,
+# and the schemas with the core benchmark file as the schemas payload, shown folded; reads every
+# config file's text so the notebook writes each other one out where it explains it; and reads each snapshot's comparison table so every number in the
+# notebook's text comes from the run records.
 
 vars:
   $schema: "https://json-schema.org/draft/2020-12/schema"
@@ -20,12 +21,11 @@ vars:
         The benchmark snapshot that fills the nine cases, as <benchmark>/<stamp>, a folder
         under results/runs/benchmark/. Every file in it is packed.
       type: string
-      pattern: '^move-chain/[0-9]{8}T[0-9]{6}Z$'
+      pattern: '^[a-z0-9][a-z0-9-]*/[0-9]{8}T[0-9]{6}Z$'
     studies:
       description: >-
-        The optional studies' snapshots, as <benchmark>/<stamp>; the appendix explains
-        mid-circuit-sweep, starting-excitation, middle-out and vacancy-read. Their tables,
-        reports and run lists are packed.
+        The optional studies' snapshots, as <benchmark>/<stamp>: one extended benchmark per
+        processor model, which the appendix explains. Every file in each is packed.
       type: array
       items: {type: string, pattern: '^[a-z0-9][a-z0-9-]*/[0-9]{8}T[0-9]{6}Z$'}
     repo:
@@ -71,8 +71,23 @@ map:
           - "results/runs/benchmark/*/*/*/*.md"
       under: {literal: "results/runs/benchmark/"}
       whole: {var: reported}
-      partial: {var: studies}
-      names: {literal: [comparison.csv, report.md, bp.data.runs.yaml]}
+  studies_payload:
+    fn: scripts/blueprint-render/fn/collect/archive
+    params:
+      files:
+        text:
+          - "results/runs/benchmark/*/*/*.yaml"
+          - "results/runs/benchmark/*/*/*.csv"
+          - "results/runs/benchmark/*/*/*.md"
+          - "results/runs/benchmark/*/*/*/*.yaml"
+          - "results/runs/benchmark/*/*/*/*.csv"
+          - "results/runs/benchmark/*/*/*/*.md"
+      under: {literal: "results/runs/benchmark/"}
+      whole: {var: studies}
+  schemas:
+    fn: scripts/blueprint-render/fn/collect/archive
+    params:
+      files: {text: ["config/bp.schema.*.yaml", "config/benchmark/bp.data.benchmark.core.yaml"]}
   cfg:
     fn: scripts/blueprint-render/fn/collect/texts
     params:

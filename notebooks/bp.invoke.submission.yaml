@@ -4,25 +4,28 @@
 # the notebook shows, so reread its text after any change; make test checks that
 # the claims the text states still hold for the snapshots named here.
 
-reported: move-chain/20261116T213408Z
+reported: deliverable-2026-11-17/20261117T152026Z
 studies:
-  - mid-circuit-sweep/20261116T213455Z
-  - starting-excitation/20261116T213520Z
-  - middle-out/20261116T230005Z
-  - vacancy-read/20261117T022051Z
+  - deliverable-2026-11-17-extended-ibm2016/20261117T152041Z
+  - deliverable-2026-11-17-extended-contemporary/20261117T152057Z
+  - deliverable-2026-11-17-extended-hyperbolic/20261117T152124Z
 repo: Rickory2021/bell-transport-bench
 tag: submission
 draft: true
 recommendation:
   statement: >-
-    Give a future cloud processor at least two qubit-disjoint paths between qubits that
-    must share entanglement, so a parity check can run on a spare path and read at the
-    end of the circuit.
+    Move a pair with a transport whose last gates are controlled from the port that has
+    waited longest, and read the qubits it emptied at the end of the circuit: the read
+    then checks that port at no cost in two-qubit gates or qubits.
   reasoning: >-
-    On the two graphs with spare paths, the XX check raised F above the move chain alone
-    (section 4.2); on the graph with one path, the check had to read a qubit mid-circuit
-    and did not pay, even with no mid-circuit measurement error (appendix A.1). The
-    vacancy-read study points the same way: a check that reads at the end, even on the
-    pair's own path, beat case 3 on every measure (appendix A.4). The recommendation is
-    conditional on our Boston-based model, and qubits that start a shot excited weaken it
-    (appendix A.2).
+    On every graph the read raised F above the same transport without it by more than two
+    combined standard errors (section 4.2), and among the circuits we tested that kept at
+    least as many shots as the earlier XX check, it gave the highest F on every graph
+    (appendix A). The same read after the move chain gained less, since only the GHZ
+    transport's last gate copies a bit flip on the first port onto the path. An XX check on a
+    spare path raised F a little further only by discarding more shots, so for this strategy
+    port distance, not the number of disjoint paths, ordered the protected results (section
+    4.3). For hardware, readout quality decides between our transport and the textbook GHZ
+    transport that reads the path in X (appendix A.4). The recommendation is conditional on
+    our Boston-based model, and we have not tested this strategy against qubits that start a
+    shot excited.
