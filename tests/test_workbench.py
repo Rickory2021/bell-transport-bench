@@ -143,8 +143,9 @@ def test_make_workbench_renders_every_committed_notebook():
     names = next(line for line in (ROOT / "Makefile").read_text(encoding="utf-8").splitlines()
                  if line.startswith("WORKBENCH_NOTEBOOKS ="))
     assert tuple(names.split("=")[1].split()) == NOTEBOOKS
+    others = ["bp.output.submission.ipynb"]  # make submission renders the submission notebook (tests/test_submission.py)
     assert sorted(p.name for p in (ROOT / "notebooks").glob("bp.output.*.ipynb")) == sorted(
-        f"bp.output.{name}.ipynb" for name in NOTEBOOKS)
+        [f"bp.output.{name}.ipynb" for name in NOTEBOOKS] + others)
 
 
 @pytest.mark.parametrize("name", NOTEBOOKS)

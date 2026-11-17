@@ -1,0 +1,28 @@
+# notebooks/bp.invoke.submission.yaml
+#
+# The submission notebook's choices. Changing a snapshot here changes every number
+# the notebook shows, so reread its text after any change; make test checks that
+# the claims the text states still hold for the snapshots named here.
+
+reported: move-chain/20261116T213408Z
+studies:
+  - mid-circuit-sweep/20261116T213455Z
+  - starting-excitation/20261116T213520Z
+  - middle-out/20261116T230005Z
+  - vacancy-read/20261117T022051Z
+repo: Rickory2021/bell-transport-bench
+tag: submission
+draft: true
+recommendation:
+  statement: >-
+    Give a future cloud processor at least two qubit-disjoint paths between qubits that
+    must share entanglement, so a parity check can run on a spare path and read at the
+    end of the circuit.
+  reasoning: >-
+    On the two graphs with spare paths, the XX check raised F above the move chain alone
+    (section 4.2); on the graph with one path, the check had to read a qubit mid-circuit
+    and did not pay, even with no mid-circuit measurement error (appendix A.1). The
+    vacancy-read study points the same way: a check that reads at the end, even on the
+    pair's own path, beat case 3 on every measure (appendix A.4). The recommendation is
+    conditional on our Boston-based model, and qubits that start a shot excited weaken it
+    (appendix A.2).

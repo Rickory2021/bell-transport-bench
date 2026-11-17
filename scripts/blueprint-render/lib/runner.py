@@ -266,6 +266,30 @@ def _load_data_with_paths(path_spec, root):
     return result
 
 
+def _load_text(path_spec, root):
+    """Load a {text: glob} or {text: [glob, ...]} param value: each matched file's raw text.
+
+    Returns [{_source: rel, _text: str}], one per file, sorted by path with no
+    file twice. Unlike {data: ...}, nothing is parsed, so comments and bytes
+    survive and any text file (YAML, CSV, Python) loads. A file that is not
+    UTF-8 text, such as an image a glob caught, raises naming it.
+    """
+    patterns = [path_spec] if isinstance(path_spec, str) else path_spec
+    if not isinstance(patterns, list) or not all(isinstance(p, str) for p in patterns):
+        raise RunError(f"{{text: ...}} takes a glob or a list of globs, got {path_spec!r}")
+    paths = sorted({p for pattern in patterns for p in glob_mod.glob(str(root / pattern), recursive=True)
+                    if Path(p).is_file()})
+    result = []
+    for p in paths:
+        rel = Path(p).relative_to(root).as_posix()
+        try:
+            text = Path(p).read_bytes().decode("utf-8")
+        except UnicodeDecodeError:
+            raise RunError(f"{{text: ...}} matched {rel}, which is not UTF-8 text") from None
+        result.append({"_source": rel, "_text": text})
+    return result
+
+
 def _load_enum_keys(rel_path, root):
     """Load a bp.enum file and return its values keys as a list.
 
@@ -304,6 +328,7 @@ def _resolve_params(params, resolved_vars, root):
           omits the var. optional defaults to false.
       {data: path} -> load bp.data file(s)
       {data_with_paths: path} -> load files with source path metadata
+      {text: glob or [globs]} -> load files' raw text with source paths
       {enum_keys: path} -> load bp.enum file, return values keys as list
       {literal: value} -> inline value from the process file
 
@@ -320,7 +345,7 @@ def _resolve_params(params, resolved_vars, root):
             raise RunError(
                 f"Param '{param_name}' must be a resolution tag "
                 f"({{var: ...}}, {{data: ...}}, {{data_with_paths: ...}}, "
-                f"{{enum_keys: ...}}, or {{literal: ...}}), "
+                f"{{text: ...}}, {{enum_keys: ...}}, or {{literal: ...}}), "
                 f"got {type(tag).__name__}"
             )
         if "var" in tag:
@@ -346,6 +371,8 @@ def _resolve_params(params, resolved_vars, root):
             data_params[param_name] = _load_data_with_paths(
                 tag["data_with_paths"], root
             )
+        elif "text" in tag:
+            data_params[param_name] = _load_text(tag["text"], root)
         elif "enum_keys" in tag:
             var_params[param_name] = _load_enum_keys(
                 tag["enum_keys"], root

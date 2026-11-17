@@ -26,6 +26,7 @@ make benchmark NAME=move-chain  # the nine cases the submission reports
 make benchmark NAME=<study>     # an optional study: biased-noise, mid-circuit-sweep or starting-excitation
 make run RUN=<run folder>       # rebuild a run from its record and report any difference
 make report RUN=<run folder>    # redraw a run folder's diagrams and report.md
+make submission                 # render the submission notebook from the snapshots its invoke names
 ```
 
 **A run or benchmark made from committed code lands in `results/runs/`.** One made while `src/` or `config/` has uncommitted changes lands in `workspace/runs/`, which is never committed, and so does a run of a trial circuit in `workspace/circuits/`; a benchmark that names a trial is refused. To keep a result, commit the change, or promote the trial and commit it, and make it again. What each benchmark answers, and where its folders land, is in [DESIGN.md, section 6](docs/DESIGN.md#6-benchmarks-and-results). `make help` lists every target.
@@ -38,14 +39,14 @@ make report RUN=<run folder>    # redraw a run folder's diagrams and report.md
 | `config/` | Typed configs: processor files, noise profiles, circuit files and benchmark files |
 | `results/` | Runs and benchmarks made from committed code, each in a folder never edited afterwards |
 | `workspace/` | Your workbench copy, trial circuits, and anything made with uncommitted changes or from a trial; only its README is committed |
-| `notebooks/` | The workbench notebook, generated from its template; narrative and plots only |
+| `notebooks/` | The workbench and submission notebooks, generated from their templates; narrative and plots only |
 | `docs/` | `CHALLENGE.md` (the task), `DESIGN.md` (decisions and reasons), and the references data |
 | `scripts/` | blueprint-render (validates and renders typed YAML) and flatten-sync (exports the repo for Claude Projects) |
 | `tests/` | pytest suite |
 
 ## How the repo works
 
-**Logic lives in Python, narrative lives in notebooks.** Every function the benchmark runs sits in `src/bellbench/`. Notebooks import it and add explanation and plots, never logic. Notebooks are generated from their templates in `notebooks/` by blueprint-render, the workbench now and the submission notebook once it is built; never edit a generated notebook by hand.
+**Logic lives in Python, narrative lives in notebooks.** Every function the benchmark runs sits in `src/bellbench/`. Notebooks import it and add explanation and plots, never logic. Notebooks are generated from their templates in `notebooks/` by blueprint-render, the workbench and the submission notebook; never edit a generated notebook by hand.
 
 **Configs are typed data.** Processor files, noise profiles, circuit files and benchmark files are YAML files validated by schemas, so every assumption is a reviewable file with its source, and every result traces to a config, a seed and pinned package versions.
 
