@@ -90,8 +90,8 @@ def test_a_second_transport_is_refused():
 
 def test_a_built_circuit_saves_with_its_analysis_and_how_it_was_built(config_copy):
     state = builders.ghz_measure(builders.start("contemporary"))
-    state.save("ghz-measure-contemporary", "GHZ measure, contemporary")
-    loaded = load_circuit("ghz-measure-contemporary")
+    state.save("saved-ghz-measure-contemporary", "GHZ measure, contemporary")  # a name no committed file holds
+    loaded = load_circuit("saved-ghz-measure-contemporary")
     assert loaded.analysis == state.analysis()
     assert loaded.circuit == state.circuit
     assert "ghz_measure(reset=False)" in loaded.notes and str(state.path) in loaded.notes
