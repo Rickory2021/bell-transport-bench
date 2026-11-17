@@ -169,6 +169,13 @@ def _compiled_html(view: Compiled, draw_all: bool) -> str:
     return "".join(parts)
 
 
+def basis_html(view: Compiled, basis: Basis) -> str:
+    """One basis circuit, compiled, as HTML for a fold of its own: for XX and YY, the line on how it differs from
+    ZZ; then its drawing; then its timelines, our chart in µs and Qiskit's own."""
+    differs = "" if basis == "ZZ" else _differs_from_zz(view, basis)
+    return differs + _drawn_compiled(view, basis) + _timeline_html(view, basis)
+
+
 def _drawn_compiled(view: Compiled, basis: Basis) -> str:
     """One compiled basis circuit, drawn in short rows."""
     circuit = view.compiled[basis].copy()
