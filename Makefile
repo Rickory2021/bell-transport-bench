@@ -35,6 +35,7 @@ help:
 	@echo "    make report RUN=<path>           Redraw a run folder's diagrams and report.md"
 	@echo "    make workbench                   Render the tutorial and the workbench and copy them into workspace/"
 	@echo "    make workbench FORCE=1           The same, replacing existing workspace copies"
+	@echo "    make submission                  Render the submission notebook, notebooks/bp.output.submission.ipynb"
 	@echo ""
 	@echo "  Docs figures:"
 	@echo "    make figures                     Draw docs/assets/processor-models.png from the processor files"
@@ -68,7 +69,7 @@ bp-setup:
 
 # -- Benchmark -----------------------------------------------------------
 
-.PHONY: test test-fast test-serial benchmark run report workbench
+.PHONY: test test-fast test-serial benchmark run report workbench submission
 
 NAME = core
 
@@ -108,6 +109,11 @@ workbench-%:
 	else \
 		cp notebooks/bp.output.$*.ipynb workspace/$*.ipynb && echo "wrote workspace/$*.ipynb"; \
 	fi
+
+# The submission notebook: rendered from notebooks/bp.invoke.submission.yaml into notebooks/bp.output.submission.ipynb,
+# with the code and the chosen snapshots packed into it, and committed. It is never copied into workspace/.
+submission:
+	$(MAKE) -C $(BLUEPRINT_DIR) invoke PROJECT_ROOT=$(CURDIR) FILE=notebooks/bp.invoke.submission.yaml FORCE=true OUTPUT=adjacent
 
 # -- Docs figures --------------------------------------------------------
 # make figures needs only the Python env. make diagram needs Node, because the

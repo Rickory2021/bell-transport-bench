@@ -1,0 +1,688 @@
+# notebooks/templates/submission.py.j2
+# The submission notebook's template, in the percent format. blueprint-render fills it from
+# notebooks/bp.invoke.submission.yaml through notebooks/bp.process.submission.yaml and writes
+# notebooks/bp.output.submission.ipynb; make submission runs it. Edit this file, never the output.
+# Every number in the notebook's text comes from the reported snapshots' comparison tables at render time.
+
+{#- The reported benchmark, its nine cases by number, and the move chain alone on each graph. -#}
+{%- set M = tables[reported] %}
+{%- set REPORTED = reported.split("/")[0] %}
+{%- set c = {} %}
+{%- for run, sims in M.items() %}{% for sim, r in sims.items() %}{% if r.case is not none %}{% set _ = c.update({r.case: r}) %}{% endif %}{% endfor %}{% endfor %}
+{%- set mv = {"ibm2016": M["move-ibm2016"]["noisy"], "contemporary": M["move-contemporary"]["noisy"], "hyperbolic": M["move-hyperbolic"]["noisy"]} %}
+{%- set B = bench[REPORTED] %}
+{%- set mcm = (B.runs | selectattr("run", "equalto", c[3].run) | first).conditional.mid_circuit_measurement_error %}
+{%- set read_us = noise["boston-2026"].measure * 1e6 %}
+{#- The studies, by benchmark name. -#}
+{%- set S = {} %}
+{%- for s in studies %}{% set _ = S.update({s.split("/")[0]: tables[s]}) %}{% endfor %}
+{#- Which config file the notebook writes where; appendix C takes every other one, so each appears once. -#}
+{%- set case_circuits = B.runs | map(attribute="circuit") | unique | list %}
+{%- set study_benchmarks = [] %}
+{%- for s in studies %}{% set _ = study_benchmarks.append(s.split("/")[0]) %}{% endfor %}
+{%- set study_circuits = [] %}
+{%- for name in study_benchmarks %}{% for r in bench[name].runs %}{% if r.circuit not in case_circuits and r.circuit not in study_circuits %}{% set _ = study_circuits.append(r.circuit) %}{% endif %}{% endfor %}{% endfor %}
+{%- set shown = [] %}
+{%- for p in cfg if "/bp.schema." in p %}{% set _ = shown.append(p) %}{% endfor %}
+{%- for name in ["ibm2016", "contemporary", "hyperbolic"] %}{% set _ = shown.append("config/processor/bp.data.processor." ~ name ~ ".yaml") %}{% endfor %}
+{%- set _ = shown.append("config/noise/bp.data.noise.boston-2026.yaml") %}
+{%- for name in case_circuits %}{% set _ = shown.append("config/circuit/bp.data.circuit." ~ name ~ ".yaml") %}{% endfor %}
+{%- for name in ["core", REPORTED] %}{% set _ = shown.append("config/benchmark/bp.data.benchmark." ~ name ~ ".yaml") %}{% endfor %}
+{%- for name in study_benchmarks %}{% set _ = shown.append("config/benchmark/bp.data.benchmark." ~ name ~ ".yaml") %}{% endfor %}
+{%- for name in study_circuits %}{% set _ = shown.append("config/circuit/bp.data.circuit." ~ name ~ ".yaml") %}{% endfor %}
+{#- Formats. -#}
+{%- macro F(r) %}{{ "%.4f ± %.4f"|format(r.fidelity, r.fidelity_se) }}{% endmacro %}
+{%- macro f4(x) %}{{ "%.4f"|format(x) }}{% endmacro %}
+{%- macro a3(x) %}{{ "%.3f"|format(x) }}{% endmacro %}
+{%- macro pct(x) %}{{ "%.1f"|format(100 * x) }}%{% endmacro %}
+{%- macro us(r) %}{{ "%.2f"|format(r.scheduled_duration * 1e6) }}{% endmacro %}
+{%- macro chk() %}{% if draft %} [check]{% endif %}{% endmacro %}
+{%- macro link(path) %}https://github.com/{{ repo }}/blob/{{ tag }}/{{ path }}{% endmacro %}
+{%- macro repo_file(path) %}
+
+# %%
+%%repo_file {{ path }}
+{{ cfg[path] }}
+{%- endmacro %}
+
+# %% [markdown]
+# <a id="top"></a>
+#
+# # Moving a Bell pair across three processor graphs, and what error detection buys
+#
+# **bell-transport-bench · UCF IBM Qiskit Fall Fest 2026 · quanTA challenge**
+#
+# **Abstract.** We built a benchmark that creates the Bell state |Φ+⟩ between two fixed qubits, the ports, on three processor graphs, under one noise model built from IBM's Boston calibration, and measures what parity checks with postselection buy and cost. Moving the pair with a chain of two-CX moves instead of the organisers' SWAPs out and back raised the fidelity F on all three graphs, from {{ f4(c[2].fidelity) }} to {{ f4(mv.ibm2016.fidelity) }} on the 2016-inspired graph, {{ f4(c[5].fidelity) }} to {{ f4(mv.contemporary.fidelity) }} on the contemporary graph and {{ f4(c[8].fidelity) }} to {{ f4(mv.hyperbolic.fidelity) }} on the hyperbolic-inspired graph (each ± {{ f4([c[2], c[5], c[8], mv.ibm2016, mv.contemporary, mv.hyperbolic] | map(attribute="fidelity_se") | min) }} to {{ f4([c[2], c[5], c[8], mv.ibm2016, mv.contemporary, mv.hyperbolic] | map(attribute="fidelity_se") | max) }}, one standard error). An XX parity check read at the end of the circuit on a spare path raised F further on the contemporary graph, to {{ F(c[6]) }} keeping {{ pct(c[6].acceptance) }} of shots, and on the hyperbolic-inspired graph, to {{ F(c[9]) }} keeping {{ pct(c[9].acceptance) }}. The 2016-inspired graph has no spare path, so its check reads a qubit mid-circuit, and it did not beat the move chain alone: {{ F(c[3]) }} keeping {{ pct(c[3].acceptance) }}, against {{ F(mv.ibm2016) }}. Every result holds for this one noise model; appendix A shows how far it holds when the model changes.{{ chk() }}
+#
+# **To run it:** open it in Colab or Jupyter and run all cells. It needs no download beyond the pinned Python packages: the code and the recorded runs come as two payloads from the repository at its tag, and every config file is written out where the notebook explains it.
+#
+# | § | Section | Challenge material |
+# |---|---|---|
+# | [1](#s1) | Setup | 01 Reproducible notebook |
+# | [2](#s2) | The task | 01 (assumptions) |
+# | [3](#s3) | Methods: [graphs](#s3-1), [noise](#s3-2), [circuits](#s3-3), [benchmark files](#s3-4), [transpiled circuits](#s3-5), [metrics](#s3-6), [the transpiler](#s3-7) | 02 Graphs and circuits; 01 (assumptions) |
+# | [4](#s4) | Results: [nine cases](#s4-1), [protection](#s4-2), [architecture](#s4-3), [rerun a case](#s4-4) | 03 Quantitative comparison |
+# | [5](#s5) | Interpretation | 04 Scientific interpretation |
+# | [6](#s6) | Limitations | 04 (limitations) |
+{%- if recommendation %}
+# | [7](#s7) | Recommendation | 05 Hardware or software recommendation |
+{%- endif %}
+# | [A](#sA) | Appendix A. Optional studies: [mid-circuit error](#sA-1), [starting excitation](#sA-2), [middle out](#sA-3), [vacancy read](#sA-4) | 04 (how far the results hold) |
+# | [B](#sB) | Appendix B. The studies' files | 01 |
+# | [C](#sC) | Appendix C. Config files beyond the Boston runs | 01 |
+# | [D](#sD) | Appendix D. Sources and AI use | 01 |
+
+# %% [markdown]
+# <a id="s1"></a>
+#
+# ## 1. Setup
+#
+# **Run the cells of this section first.** The first two cells are payloads, each one line, from the repository [`{{ repo }}`](https://github.com/{{ repo }}/tree/{{ tag }}) at tag `{{ tag }}`:
+#
+# - **The code:** the `bellbench` package, `src/bellbench/`, exactly as the repository holds it ({{ code.count }} files).
+# - **The recorded runs:** from `results/runs/benchmark/`, every file of the snapshot behind the nine cases, `{{ reported }}`, and each study's table, report and run list ({{ results.count }} files).
+#
+# The third cell installs the pinned packages where they are missing, unpacks both payloads into a temporary folder, and lists every file with its SHA-256, so each one can be checked against the same file at that tag. Nothing is written outside that folder.
+#
+# **Every config file is written out where this notebook explains it,** not packed: each `%%repo_file` cell writes one file into the same folder, and the code reads it from there. The schemas come first, since every config file and run record is checked against them when it loads.
+
+# %%
+CODE = "{{ code.payload }}"
+
+# %%
+RESULTS = "{{ results.payload }}"
+
+# %%
+import base64, hashlib, html, io, subprocess, sys, tempfile, zipfile
+from importlib.metadata import PackageNotFoundError, version
+from pathlib import Path
+
+from IPython.core.magic import register_cell_magic
+from IPython.display import HTML, display
+
+PINNED = ["qiskit==2.6.2", "qiskit-aer==0.18.2", "qiskit-ibm-runtime==0.51.0", "qiskit-qasm3-import==0.6.0",
+          "openqasm3[parser]==1.0.1", "networkx==3.7", "pylatexenc==2.10", "jsonschema", "pyyaml", "pandas",
+          "matplotlib"]
+
+
+def _present(requirement):
+    name, _, wanted = requirement.partition("==")
+    try:
+        found = version(name.split("[")[0])
+    except PackageNotFoundError:
+        return False
+    return not wanted or found == wanted
+
+
+missing = [r for r in PINNED if not _present(r)]
+if missing:
+    subprocess.run([sys.executable, "-m", "pip", "install", "-q", *missing], check=True)
+
+WORK = Path(tempfile.mkdtemp(prefix="bellbench-"))
+manifests = []
+for title, payload in (("The code payload", CODE), ("The recorded-runs payload", RESULTS)):
+    with zipfile.ZipFile(io.BytesIO(base64.b64decode(payload))) as archive:
+        archive.extractall(WORK)
+        rows = "".join(f"<tr><td><code>{html.escape(n)}</code></td>"
+                       f"<td><code>{hashlib.sha256(archive.read(n)).hexdigest()}</code></td></tr>"
+                       for n in archive.namelist())
+        manifests.append(f"<details><summary><b>{title}: {len(archive.namelist())} files, each with its SHA-256</b>"
+                         f"</summary><table><tr><th>file</th><th>SHA-256</th></tr>{rows}</table></details>")
+sys.path.insert(0, str(WORK / "src"))
+from bellbench import configs  # reads every config file from WORK
+
+
+@register_cell_magic
+def repo_file(line, cell):
+    """Write the cell's text to the repository path on the magic's line, inside WORK, and show its content hash."""
+    path = WORK / line.strip()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(cell, encoding="utf-8")
+    print(f"wrote {line.strip()} · content hash {configs.content_hash(path)[:19]}…")
+
+
+display(HTML("".join(manifests)))
+print(f"installed {len(missing)} packages; unpacked both payloads into {WORK}")
+
+# %% [markdown]
+# **The schemas:** what a valid processor file, noise profile, circuit file, benchmark file, run list and run record must hold.
+{%- for p in cfg if "/bp.schema." in p %}
+{{ repo_file(p) }}
+{%- endfor %}
+
+# %% [markdown]
+# <a id="s2"></a>
+#
+# ## 2. The task
+#
+# **On each of three processor graphs, create the Bell pair |Φ+⟩ = (|00⟩ + |11⟩)/√2 between two fixed qubits, measure how close it comes, and test one strategy that protects it.** Two qubits share a unit vector in ℂ⁴, and |Φ+⟩ is the vector (1, 0, 0, 1)/√2. A two-qubit gate acts only between neighbours on the graph, so a pair made at one port must be moved, or routed, to the other, and each added gate adds noise.
+#
+# We verify the pair by measuring the two ports in three bases and combining the three correlators into the fidelity:
+#
+# $$F = \frac{1 + \langle XX\rangle - \langle YY\rangle + \langle ZZ\rangle}{4}$$
+#
+# F = 1 is the target exactly; F above 1/2 shows entanglement. The challenge fixes nine cases, each graph under three conditions:
+#
+# | Graph | Ideal | Noisy | Noisy, protected |
+# |---|---|---|---|
+# | 2016-inspired | Case 1 | Case 2 | Case 3 |
+# | Contemporary | Case 4 | Case 5 | Case 6 |
+# | Hyperbolic-inspired | Case 7 | Case 8 | Case 9 |
+#
+# <details><summary><b>The linear algebra behind the formula</b></summary>
+#
+# - A correlator ⟨BB⟩ is the expectation value of B ⊗ B in the pair's state ρ, Tr(ρ (B ⊗ B)), for B one of the Pauli matrices X = [[0, 1], [1, 0]], Y = [[0, −i], [i, 0]] and Z = [[1, 0], [0, −1]]. From shots it is P(00) + P(11) − P(01) − P(10).
+# - |Φ+⟩⟨Φ+| = (I⊗I + X⊗X − Y⊗Y + Z⊗Z)/4, so F = ⟨Φ+|ρ|Φ+⟩, the overlap of the prepared state with the target.
+# - ZZ sees a bit flip, XX a phase flip, and YY either; all three together tell |Φ+⟩ from the other three Bell states.
+# - A state that is not entangled cannot have F above 1/2, so 1/2 is the line a classical correlation cannot cross.
+#
+# The full statement of the task, with its sources, is [CHALLENGE.md]({{ link("docs/CHALLENGE.md") }}).
+#
+# </details>
+
+# %% [markdown]
+# <a id="s3"></a>
+#
+# ## 3. Methods
+#
+# <a id="s3-1"></a>
+#
+# ### 3.1 The three processor graphs
+#
+# **We use the organisers' three coupling graphs exactly, with the ports they fix, and explain results by three features of each graph:** the hops between the ports, the paths between the ports that share no qubit (disjoint paths), and the most edges at any qubit. The three processor files come first; the figure and the table are drawn from them.
+{% for name in ["ibm2016", "contemporary", "hyperbolic"] %}
+{{ repo_file("config/processor/bp.data.processor." ~ name ~ ".yaml") }}
+{%- endfor %}
+
+# %%
+import matplotlib.pyplot as plt
+import pandas as pd
+from bellbench.figures import processor_figure
+from bellbench.paths import graph_metrics
+
+fig = processor_figure()
+display(fig)
+plt.close(fig)
+pd.DataFrame(
+    {p: {k: graph_metrics(p)[k] for k in ("port_distance", "disjoint_paths", "max_degree", "path")}
+     for p in configs.CORE_PROCESSORS}
+).T.rename(columns={"port_distance": "hops between ports", "disjoint_paths": "disjoint paths",
+                   "max_degree": "most edges at a qubit", "path": "pair's path"})
+
+# %% [markdown]
+# <a id="s3-2"></a>
+#
+# ### 3.2 The noise model
+#
+# **Our noise model uses the calibration values of IBM's Boston processor, taken from the FakeBoston snapshot recorded on 2026-04-17, and reproduces Aer's own Boston noise channels exactly when given the same values.** Each value is the median over the snapshot's qubits and couplers, and every qubit and coupler of all three graphs takes it, so the graphs differ in connectivity alone. Nothing here ran on hardware.
+#
+# - **Modelled:** gate errors, decay (T1 and T2) during gates and while idle, and readout errors that differ in the two directions. Circuits are scheduled before noise is applied, so a qubit waiting for a {{ "%.1f"|format(read_us) }} µs measurement decays while it waits.
+# - **Set per run:** a mid-circuit measurement error, which case 3 needs because its check reads a qubit and reuses it; the {{ REPORTED }} benchmark sets it to {{ "%g"|format(mcm) }}.
+{{ repo_file("config/noise/bp.data.noise.boston-2026.yaml") }}
+
+# %%
+profile = configs.load_noise("boston-2026")
+q, g = profile["qubit"], profile["gates"]
+pd.DataFrame(
+    [("T1", q["t1_relaxation_time"] * 1e6, "µs"), ("T2", q["t2_dephasing_time"] * 1e6, "µs"),
+     ("reads 1 when 0", q["readout_error"]["reads_1_when_0"], ""), ("reads 0 when 1", q["readout_error"]["reads_0_when_1"], ""),
+     ("CZ error", g["cz"]["error_probability"], ""), ("CZ duration", g["cz"]["duration"] * 1e9, "ns"),
+     ("√X error", g["sx"]["error_probability"], ""), ("measurement", profile["measure"]["duration"] * 1e6, "µs")],
+    columns=["quantity", "value", "unit"],
+).set_index("quantity")
+
+# %% [markdown]
+# <details><summary><b>What the model leaves out</b></summary>
+#
+# Measurement-induced dephasing, always-on ZZ coupling, spectator errors, coherent over- and under-rotations, drift, feedforward latency, cosmic-ray bursts, leakage, frequency crowding, and qubits that start a shot excited (appendix A.2 tests that one). Why each choice was made is [DESIGN.md, section 4]({{ link("docs/DESIGN.md") }}#4-noise-model).
+#
+# </details>
+
+# %% [markdown]
+# <a id="s3-3"></a>
+#
+# ### 3.3 The circuits
+#
+# **Each run is one circuit file: an OpenQASM 3 circuit on the graph's physical qubits, and how its measured bits are read.** Three transports and one check fill the nine cases:
+#
+# - **Baseline (cases 1, 2, 4, 5, 7, 8):** the organisers' recipe, H and CX at one port, SWAPs out to the other port and back, each SWAP three CX gates.
+# - **Move chain:** H and CX at the first port, then each hop moves the far half of the pair with two CX gates, a SWAP without its third CX, which is exact when the qubit it moves onto starts in |0⟩.
+# - **XX check (cases 3, 6, 9):** after the move chain, extra qubits measure the ports' X ⊗ X parity; a shot whose parity is odd is discarded. It catches a phase flip on one port and misses a bit flip. On the contemporary and hyperbolic-inspired graphs it runs on a spare path, sharing no qubit with the pair's, and reads only at the end; on the 2016-inspired graph it must reuse a qubit of the pair's path, so it reads that qubit mid-circuit first.
+#
+# The {{ case_circuits | length }} circuit files the {{ REPORTED }} benchmark runs, each written as the repository holds it: the circuit in OpenQASM 3, and the `analysis` that says how its check bits are read.
+{% for name in case_circuits %}
+{{ repo_file("config/circuit/bp.data.circuit." ~ name ~ ".yaml") }}
+{%- endfor %}
+
+# %% [markdown]
+# <a id="s3-4"></a>
+#
+# ### 3.4 The benchmark files
+#
+# **A benchmark file names its runs, each a circuit file under a noise profile with its settings, the shots and the base seed, and which run fills each case.** The core benchmark holds the organisers' baseline on each graph; the {{ REPORTED }} benchmark holds all nine cases, and this notebook reports it.
+{{ repo_file("config/benchmark/bp.data.benchmark.core.yaml") }}
+{{ repo_file("config/benchmark/bp.data.benchmark." ~ REPORTED ~ ".yaml") }}
+
+# %% [markdown]
+# **Every file the nine cases used is now on disk, so the session can start; the check below compares each case run's recorded hashes with the files above.** A run records the content hash of each file it read, so a match shows that these are the files behind the recorded numbers.
+
+# %%
+import yaml
+from bellbench.run import current_benchmark, read_table
+from bellbench.workbench import Workbench
+
+REPORTED = "{{ REPORTED }}"
+wb = Workbench()
+folder = current_benchmark(REPORTED)
+checks = []
+for run in yaml.safe_load((folder / "bp.data.runs.yaml").read_text())["runs"]:
+    record = yaml.safe_load((folder / run / "bp.data.result.yaml").read_text())
+    refs = [record["circuit"], record["noise_control"]["processor"], record["noise_control"]["noise"]]
+    checks.append({"run": run, "files": len(refs),
+                   "every hash matches": all(configs.content_hash(WORK / r["path"]) == r["hash"] for r in refs)})
+pd.DataFrame(checks).set_index("run")
+
+# %% [markdown]
+# <a id="s3-5"></a>
+#
+# ### 3.5 The transpiled circuits
+#
+# **Each run compiles its circuit once, at optimisation level 1, into Boston's native gates (CZ, √X, X and Rz); these are the transpiled circuits of the nine cases (challenge material 02), as their run records hold them.** For each graph, the workbench shows the baseline (the ideal and noisy cases) and the protected case: the graph with the couplers the circuit uses, the written circuit and its cost, then dropdowns: a timeline of when each qubit is busy in the compiled ZZ circuit (the XX and YY circuits add only their final rotations), a step-through of the written circuit with no noise (the baseline's shows the SWAPs out and back that the move chain avoids), the compiled ZZ circuit drawn, and every compiled circuit as OpenQASM 3. A step-through stops at a measurement made before the end of the circuit, so case 3's stops where its check reads a qubit mid-circuit.
+
+# %%
+from html import escape
+
+from qiskit import qasm3
+from bellbench.views.base import emit, fold, img
+
+CASES = {"ibm2016": ("{{ c[2].run }}", "{{ c[3].run }}", "cases 1 and 2", "case 3"),
+         "contemporary": ("{{ c[5].run }}", "{{ c[6].run }}", "cases 4 and 5", "case 6"),
+         "hyperbolic": ("{{ c[8].run }}", "{{ c[9].run }}", "cases 7 and 8", "case 9")}
+
+
+def transpiled(processor):
+    """The workbench's view of a graph's baseline and protected runs, with their compiled circuits in dropdowns."""
+    *runs, base_cases, protected_case = CASES[processor]
+    for run, cases in zip(runs, (base_cases, protected_case)):
+        result = wb.fetch(REPORTED, run)
+        display(wb.show(result, step=True, timeline=True))
+        fig = qasm3.loads(result.record["compiled"]["ZZ"]).draw("mpl", idle_wires=False, fold=40, scale=0.55)
+        drawing = img(fig)
+        plt.close(fig)
+        emit([fold(f"{cases}: {run}, the compiled ZZ circuit, drawn", drawing)]
+             + [fold(f"{cases}: {run}, the compiled {basis} circuit as OpenQASM 3", f"<pre>{escape(text)}</pre>")
+                for basis, text in result.record["compiled"].items()])
+
+# %% [markdown]
+# #### The 2016-inspired graph: cases 1 to 3
+
+# %%
+transpiled("ibm2016")
+
+# %% [markdown]
+# #### The contemporary graph: cases 4 to 6
+
+# %%
+transpiled("contemporary")
+
+# %% [markdown]
+# #### The hyperbolic-inspired graph: cases 7 to 9
+
+# %%
+transpiled("hyperbolic")
+
+# %% [markdown]
+# <a id="s3-6"></a>
+#
+# ### 3.6 What each run reports
+#
+# **Each case reports F with its standard error, the acceptance (the fraction of shots kept), and the circuit's cost,** as the challenge's five measures require. Each run takes {{ "{:,}".format(B.shots) }} shots per basis, simulated ideal and noisy with seeds derived from one base seed, {{ B.base_seed }}, so every run repeats exactly.
+#
+# - **F after postselection** is F of the kept shots; **F raw** is F of every shot. A protected result is never shown without its acceptance.
+# - **Standard error:** a correlator c from N shots has variance (1 − c²)/N; the three bases are separate shots, so SE(F) = √(Σ var)/4, with N the kept shots.
+# - **Cost:** two-qubit gates, depth, SWAPs and qubits used, from the compiled circuit before scheduling, and the scheduled duration.
+# - **Two-qubit gates per accepted pair:** the gates divided by the acceptance, what each kept pair costs.
+# - **Infidelity removed per rejection:** (F − F raw)/(1 − p), how much a check lowers 1 − F for each unit of shots it discards.
+
+# %% [markdown]
+# <a id="s3-7"></a>
+#
+# ### 3.7 Why we wrote the transports, rather than leave routing to the transpiler
+#
+# **Qiskit's transpiler solves a different problem: it routes a circuit and tracks where its qubits end up, rather than bringing the pair back to the ports.** The cell gives the bare task, H on the first port then CX between the ports, to `generate_preset_pass_manager` at levels 1 to 3 with the graph's coupling map, CX as the two-qubit gate and the identity layout, over 20 seeds each, and counts the CX gates and how often the pair ends on the ports.{{ chk() }}
+
+# %%
+from qiskit import QuantumCircuit
+from qiskit.transpiler import CouplingMap
+from qiskit.transpiler.preset_passmanagers import generate_preset_pass_manager
+
+rows = []
+for processor in configs.CORE_PROCESSORS:
+    proc = configs.load_processor(processor)
+    edges = list(configs.processor_graph(proc).edges)
+    coupling = CouplingMap([list(e) for e in edges] + [[b, a] for a, b in edges])
+    a, b = proc["ports"]
+    task = QuantumCircuit(len(proc["qubits"]))
+    task.h(a)
+    task.cx(a, b)
+    for level in (1, 2, 3):
+        cx, on_ports = set(), 0
+        for seed in range(20):
+            pm = generate_preset_pass_manager(level, coupling_map=coupling, basis_gates=["cx", "h", "rz", "sx", "x"],
+                                              initial_layout=list(range(task.num_qubits)), seed_transpiler=seed)
+            out = pm.run(task)
+            cx.add(out.count_ops().get("cx", 0))
+            final = out.layout.final_index_layout()
+            on_ports += final[a] == a and final[b] == b
+        rows.append({"graph": processor, "level": level, "CX gates": sorted(cx), "pair on the ports": f"{on_ports} of 20"})
+moves = {p: wb.fetch(REPORTED, f"move-{p}").record["cost"]["two_qubit_gates"] for p in configs.CORE_PROCESSORS}
+display(pd.DataFrame(rows).set_index(["graph", "level"]))
+print("move chain, pair on the ports every time:", moves)
+
+# %% [markdown]
+# <a id="s4"></a>
+#
+# ## 4. Results: the nine cases
+#
+# <a id="s4-1"></a>
+#
+# ### 4.1 The nine cases
+#
+# **Every ideal case gives F = 1 with every shot kept, and the protected cases keep {{ pct([c[3], c[6], c[9]] | map(attribute="acceptance") | min) }} to {{ pct([c[3], c[6], c[9]] | map(attribute="acceptance") | max) }} of their shots.** One noise profile, one base seed, {{ "{:,}".format(B.shots) }} shots per basis; each ± is one standard error.
+#
+# | Graph | Ideal | Noisy baseline | Protected: F after postselection, acceptance |
+# |---|---|---|---|
+# | 2016-inspired | {{ "%g"|format(c[1].fidelity) }} (case 1) | {{ F(c[2]) }} (case 2) | {{ F(c[3]) }}, {{ a3(c[3].acceptance) }} (case 3) |
+# | Contemporary | {{ "%g"|format(c[4].fidelity) }} (case 4) | {{ F(c[5]) }} (case 5) | {{ F(c[6]) }}, {{ a3(c[6].acceptance) }} (case 6) |
+# | Hyperbolic-inspired | {{ "%g"|format(c[7].fidelity) }} (case 7) | {{ F(c[8]) }} (case 8) | {{ F(c[9]) }}, {{ a3(c[9].acceptance) }} (case 9) |
+#
+# The table below gives every case the five measures the challenge asks every result to report, from the run records of the {{ REPORTED }} benchmark, the benchmark that fills the nine cases.
+
+# %%
+import numpy as np
+
+BASES = ("XX", "YY", "ZZ")
+cases = read_table(current_benchmark(REPORTED) / "comparison.csv").dropna(subset=["case"]).sort_values("case")
+raw = sum(cases[f"shots_raw_{b}"] for b in BASES)
+kept = sum(cases[f"shots_accepted_{b}"] for b in BASES)
+CONDITION = {1: "ideal", 2: "noisy baseline", 0: "noisy, protected"}
+table = pd.DataFrame({
+    "case": cases.case.astype(int),
+    "graph": cases.processor,
+    "condition": [CONDITION[int(c) % 3] for c in cases.case],
+    "F ± SE": [f"{f:.4f} ± {e:.4f}" for f, e in zip(cases.fidelity, cases.fidelity_se)],
+    "F raw": cases.fidelity_raw.round(4),
+    "acceptance (95% interval)": [f"{a:.3f} ({lo:.3f} to {hi:.3f})"
+                                  for a, lo, hi in zip(cases.acceptance, cases.acceptance_low, cases.acceptance_high)],
+    "discarded shots": (raw - kept).astype(int),
+    "two-qubit gates": cases.two_qubit_gates,
+    "depth": cases.depth,
+    "SWAPs": cases.swaps,
+    "qubits used": cases.qubits_used,
+    "schedule (µs)": (cases.scheduled_duration * 1e6).round(2),
+}).set_index("case")
+display(table)
+
+noisy = cases[cases.simulation == "noisy"]
+fig, axes = plt.subplots(1, 3, figsize=(9, 3.4), sharey=True)
+for ax, processor in zip(axes, configs.CORE_PROCESSORS):
+    rows = noisy[noisy.processor == processor]
+    labels = [f"case {int(c)}\n{'baseline' if int(c) % 3 == 2 else 'protected'}" for c in rows.case]
+    colours = ["#9aa5b8" if int(c) % 3 == 2 else "#7139cc" for c in rows.case]
+    ax.bar(labels, rows.fidelity, yerr=rows.fidelity_se, color=colours, capsize=4)
+    for x, (f, a) in enumerate(zip(rows.fidelity, rows.acceptance)):
+        ax.annotate(f"{f:.4f}" + ("" if a == 1 else f"\nkept {a:.3f}"), (x, f), textcoords="offset points",
+                    xytext=(0, 6), ha="center", fontsize=8)
+    ax.set_title(processor)
+low = float(np.floor((noisy.fidelity - noisy.fidelity_se).min() / 0.005) * 0.005) - 0.005
+high = float((noisy.fidelity + noisy.fidelity_se).max()) + 0.007  # room for the labels above the bars
+axes[0].set_ylim(low, high)
+axes[0].set_ylabel(f"F, noisy (± 1 SE)\naxis starts at {low:.3f}, not 0")
+fig.suptitle("The six noisy cases; the ideal cases 1, 4 and 7 give F = 1 exactly", fontsize=10)
+fig.tight_layout()
+display(fig)
+plt.close(fig)
+
+# %% [markdown]
+# <a id="s4-2"></a>
+#
+# ### 4.2 What protection buys, and what it costs
+#
+# **Most of the gain over the baseline comes from the transport, and the check adds to it only where it reads a spare path at the end of the circuit.** For each graph, the workbench sets the baseline, the move chain alone and the move chain with its XX check side by side: a table, then a bar per run of its F, and a second bar for a run's kept shots, with its acceptance. Their circuits are in section 3.5.
+#
+# | Graph | Baseline | Move chain | Move chain + XX check | The check's cost |
+# |---|---|---|---|---|
+# | 2016-inspired | {{ F(c[2]) }}, {{ c[2].two_qubit_gates }} gates | {{ F(mv.ibm2016) }}, {{ mv.ibm2016.two_qubit_gates }} gates | {{ F(c[3]) }} at {{ a3(c[3].acceptance) }}, {{ c[3].two_qubit_gates }} gates | a {{ "%.1f"|format(read_us) }} µs mid-circuit read; schedule {{ us(mv.ibm2016) }} → {{ us(c[3]) }} µs |
+# | Contemporary | {{ F(c[5]) }}, {{ c[5].two_qubit_gates }} gates | {{ F(mv.contemporary) }}, {{ mv.contemporary.two_qubit_gates }} gates | {{ F(c[6]) }} at {{ a3(c[6].acceptance) }}, {{ c[6].two_qubit_gates }} gates | {{ c[6].two_qubit_gates - mv.contemporary.two_qubit_gates }} more gates, {{ c[6].qubits_used - mv.contemporary.qubits_used }} more qubits |
+# | Hyperbolic-inspired | {{ F(c[8]) }}, {{ c[8].two_qubit_gates }} gates | {{ F(mv.hyperbolic) }}, {{ mv.hyperbolic.two_qubit_gates }} gates | {{ F(c[9]) }} at {{ a3(c[9].acceptance) }}, {{ c[9].two_qubit_gates }} gates | {{ c[9].two_qubit_gates - mv.hyperbolic.two_qubit_gates }} more gates, {{ c[9].qubits_used - mv.hyperbolic.qubits_used }} more qubits |
+
+# %%
+def side_by_side(processor):
+    """The baseline, the move chain and the protected run on one graph, as the workbench compares them."""
+    baseline, protected, *_ = CASES[processor]
+    return wb.compare(*(wb.fetch(REPORTED, run) for run in (baseline, f"move-{processor}", protected)))
+
+# %% [markdown]
+# #### The 2016-inspired graph: the check does not pay
+#
+# **Its mid-circuit read holds the pair idle for {{ "%.1f"|format(read_us) }} µs, and F after postselection, {{ F(c[3]) }}, stays below the move chain alone, {{ F(mv.ibm2016) }}.** The graph has one path between its ports, so the check must reuse a qubit of the pair's path and read it mid-circuit first; appendix A.1 shows this holds even with no mid-circuit measurement error.{{ chk() }}
+
+# %%
+side_by_side("ibm2016")
+
+# %% [markdown]
+# #### The contemporary graph: the check pays
+#
+# **The check, on a spare path read at the end, adds {{ f4(c[6].fidelity - mv.contemporary.fidelity) }} to the move chain's F, more than twice the combined standard error, keeping {{ pct(c[6].acceptance) }} of shots.** The move chain alone already recovers most of the baseline's loss, from {{ c[5].two_qubit_gates }} two-qubit gates to {{ mv.contemporary.two_qubit_gates }}.{{ chk() }}
+
+# %%
+side_by_side("contemporary")
+
+# %% [markdown]
+# #### The hyperbolic-inspired graph: the check pays
+#
+# **The check adds {{ f4(c[9].fidelity - mv.hyperbolic.fidelity) }} to the move chain's F, more than twice the combined standard error, keeping {{ pct(c[9].acceptance) }} of shots, with {{ c[9].two_qubit_gates - mv.hyperbolic.two_qubit_gates }} more two-qubit gates and {{ c[9].qubits_used - mv.hyperbolic.qubits_used }} more qubits.**{{ chk() }}
+
+# %%
+side_by_side("hyperbolic")
+
+# %% [markdown]
+# **Across the three graphs,** F of the kept shots against what each kept pair costs in two-qubit gates:
+
+# %%
+noisy = read_table(current_benchmark(REPORTED) / "comparison.csv").query("simulation == 'noisy'")
+COLOURS = dict(zip(configs.CORE_PROCESSORS, ("#2151c7", "#137665", "#c62639")))
+MARKERS = {"baseline": "o", "move": "s", "path": "^", "spare": "^"}
+fig, ax = plt.subplots(figsize=(7, 4))
+for _, r in noisy.iterrows():
+    ax.errorbar(r.two_qubit_gates_per_accepted_pair, r.fidelity, yerr=r.fidelity_se, fmt=MARKERS[r.run.split("-")[0]],
+                color=COLOURS[r.processor], capsize=3, markersize=7)
+handles = [plt.Line2D([], [], color=c, marker="o", ls="", label=p) for p, c in COLOURS.items()]
+handles += [plt.Line2D([], [], color="0.4", marker=m, ls="", label=l)
+            for m, l in (("o", "baseline"), ("s", "move chain"), ("^", "move chain + XX check"))]
+ax.legend(handles=handles, fontsize=8, ncol=2)
+ax.set(xlabel="two-qubit gates per accepted pair", ylabel="F of the kept shots (± 1 SE)",
+       title=f"Quality against cost, noisy runs of the {REPORTED} benchmark")
+display(fig)
+plt.close(fig)
+
+# %% [markdown]
+# <a id="s4-3"></a>
+#
+# ### 4.3 What the graphs explain
+#
+# **All three graphs share one noise model, so their differences come from connectivity alone. Port distance sets the cost of moving the pair, and the number of disjoint paths sets whether a check can read at the end.**{{ chk() }}
+#
+# | Graph | Hops between ports | Disjoint paths | Baseline gates, F | Move chain gates, F | Protected F, acceptance |
+# |---|---|---|---|---|---|
+# | 2016-inspired | 2 | 1 | {{ c[2].two_qubit_gates }}, {{ f4(c[2].fidelity) }} | {{ mv.ibm2016.two_qubit_gates }}, {{ f4(mv.ibm2016.fidelity) }} | {{ f4(c[3].fidelity) }}, {{ a3(c[3].acceptance) }} |
+# | Hyperbolic-inspired | 3 | 3 | {{ c[8].two_qubit_gates }}, {{ f4(c[8].fidelity) }} | {{ mv.hyperbolic.two_qubit_gates }}, {{ f4(mv.hyperbolic.fidelity) }} | {{ f4(c[9].fidelity) }}, {{ a3(c[9].acceptance) }} |
+# | Contemporary | 4 | 2 | {{ c[5].two_qubit_gates }}, {{ f4(c[5].fidelity) }} | {{ mv.contemporary.two_qubit_gates }}, {{ f4(mv.contemporary.fidelity) }} | {{ f4(c[6].fidelity) }}, {{ a3(c[6].acceptance) }} |
+#
+# - **Unprotected, F falls as the ports grow apart:** the baseline and the move chain both rank the graphs by hops, 2, then 3, then 4.
+# - **Protected, the ranking changes:** the hyperbolic-inspired graph, with three disjoint paths, gives the highest F; the 2016-inspired graph, with one, falls from first to last, though its protected F and the contemporary graph's differ by less than one combined standard error.
+# - **The hyperbolic-inspired graph is a schematic,** a 13-qubit graph of short distances and high degree, not a patch of a hyperbolic lattice; we claim no advantage from its geometry beyond these three features.
+
+# %% [markdown]
+# <a id="s4-4"></a>
+#
+# ### 4.4 Rerun a case
+#
+# **Any run can be made again from its record; at the recorded shots and seeds it repeats every number exactly.** The cell reruns case 3, compiling and simulating it again, and compares every circuit, count and number with its record. Outside the team's git repository the commit cannot match, and on another machine the package versions may differ; the numbers are what this checks.
+
+# %%
+from bellbench.run import rerun
+
+code, lines = rerun(current_benchmark(REPORTED) / CASES["ibm2016"][1])
+print("\n".join(lines))
+
+# %% [markdown]
+# <a id="s5"></a>
+#
+# ## 5. Interpretation
+#
+# **What the results show, against the three things the challenge asks a comparison to explain:**{{ chk() }}
+#
+# - **Fidelity against the operations compilation added.** Under one noise model, F tracks the two-qubit gates and the idle time the circuit adds. The baseline's SWAPs out and back cost {{ c[2].two_qubit_gates }}, {{ c[8].two_qubit_gates }} and {{ c[5].two_qubit_gates }} two-qubit gates; the move chain's {{ mv.ibm2016.two_qubit_gates }}, {{ mv.hyperbolic.two_qubit_gates }} and {{ mv.contemporary.two_qubit_gates }} recover most of the lost fidelity on every graph.
+# - **Whether protection pays.** A check pays when it reads at the end of the circuit, on qubits the pair never used: on the contemporary and hyperbolic-inspired graphs it raises F by more than twice its standard error while discarding {{ pct(1 - c[9].acceptance) }} to {{ pct(1 - c[6].acceptance) }} of shots. A check that must read mid-circuit, on the 2016-inspired graph, holds the pair idle while it reads and does not raise F beyond its standard error at any measurement error we set.
+# - **Connectivity against noise.** Every graph runs under the same profile, so the differences are connectivity's: hops between the ports set the unprotected cost, and disjoint paths decide whether a check can avoid a mid-circuit read.
+
+# %% [markdown]
+# <a id="s6"></a>
+#
+# ## 6. Limitations
+#
+# **These results describe circuits under one assumed noise model, simulated; they are not a measurement of any device.**{{ chk() }}
+#
+# - **One noise model:** Boston's calibration medians. Its readout pair puts every absolute F about 0.002 high, equally on all three graphs, so comparisons between graphs stand. What it leaves out, and why, is in [DESIGN.md, section 4]({{ link("docs/DESIGN.md") }}#4-noise-model).
+# - **How far the results hold:** four optional studies each vary one assumption under the same profile ([appendix A](#sA)). case 3's check does not beat the move chain alone even with no mid-circuit measurement error; the move chain's lead over the baseline on the contemporary graph is gone by a starting excitation of 0.005; moving the pair out from the middle gives no gain we claim; and a check that reads the emptied path at the end beats case 3 on every measure.
+# - **One seed per run:** a difference smaller than about 0.001 needs more seeds before it means anything.
+# - **Detection, not correction:** a check discards shots and corrects nothing, and no fault injector has tested the checks fault by fault.
+# - **Idle qubits start in |0⟩:** the move chain and the spare-path checks rely on it; appendix A.2 shows how fast the lead shrinks when they do not.
+# - **No degree penalty:** case 6's check passes through the contemporary graph's five-edge qubit with no extra error.
+# - **The graphs:** the contemporary graph is the organisers' 9-node graph, not a real IBM layout, and the hyperbolic-inspired graph is a schematic.
+{%- if recommendation %}
+
+# %% [markdown]
+# <a id="s7"></a>
+#
+# ## 7. Recommendation
+#
+# **{{ recommendation.statement | trim }}**{{ chk() }}
+#
+# {{ recommendation.reasoning | trim }}
+{%- endif %}
+{%- set mc0 = S["mid-circuit-sweep"]["path-xx-ibm2016-mcm-0"]["noisy"] %}
+{%- set mc5 = S["mid-circuit-sweep"]["path-xx-ibm2016-mcm-5e-2"]["noisy"] %}
+{%- set ex_move = S["starting-excitation"]["move-contemporary-exc-2e-2"]["noisy"] %}
+{%- set ex_base = S["starting-excitation"]["baseline-contemporary-exc-2e-2"]["noisy"] %}
+{%- set mo_zz = S["middle-out"]["middle-out-zz-xx-hyperbolic"]["noisy"] %}
+{%- set mo_xx = S["middle-out"]["middle-out-xx-hyperbolic"]["noisy"] %}
+{%- set mo_plain = S["middle-out"]["middle-out-contemporary"]["noisy"] %}
+{%- set vr = S["vacancy-read"]["ghz-vacancy-ibm2016"]["noisy"] %}
+
+# %% [markdown]
+# <a id="sA"></a>
+#
+# ## Appendix A. Optional studies
+#
+# **Four studies each vary one assumption behind the nine cases; none fills a case.** All four run under the Boston profile, and each point rests on one seed, so a difference smaller than about 0.001 needs more seeds before it means anything. Each study's benchmark and circuit files are in [appendix B](#sB).
+
+# %%
+def study_table(name):
+    """Every noisy run of a study, its numbers, in a dropdown."""
+    t = read_table(current_benchmark(name) / "comparison.csv").query("simulation == 'noisy'")
+    cols = ["run", "fidelity", "fidelity_se", "fidelity_raw", "acceptance", "two_qubit_gates", "scheduled_duration"]
+    emit([fold(f"Every run of {name}, noisy simulations", t[cols].round(4).to_html(index=False))])
+
+
+def sweep(name, label, groups):
+    """F of the kept shots against a swept value, one line per circuit."""
+    t = read_table(current_benchmark(name) / "comparison.csv").query("simulation == 'noisy'").copy()
+    t["value"] = t.run.str.extract(r"-(?:exc|mcm)-([0-9e-]+)$")[0].astype(float)
+    fig, ax = plt.subplots(figsize=(7, 3.6))
+    for prefix, colour in groups:
+        rows = t[t.run.str.startswith(prefix + "-")].sort_values("value")
+        ax.errorbar(rows.value, rows.fidelity, yerr=rows.fidelity_se, fmt="o-", capsize=3, color=colour, label=prefix)
+    ax.set(xlabel=label, ylabel="F of the kept shots (± 1 SE)")
+    ax.legend(fontsize=8, ncol=2)
+    display(fig)
+    plt.close(fig)
+
+# %% [markdown]
+# <a id="sA-1"></a>
+#
+# ### A.1 Mid-circuit measurement error
+#
+# **Case 3's check never beats the move chain alone by more than its standard error, at any mid-circuit measurement error we set, 0 included: the {{ "%.1f"|format(read_us) }} µs wait, not the error, is its cost.** At 0, case 3 gives {{ F(mc0) }} keeping {{ pct(mc0.acceptance) }}, against the move chain's {{ F(mv.ibm2016) }}; higher errors discard more shots, {{ pct(1 - mc5.acceptance) }} at 0.05, without lowering F.{{ chk() }}
+
+# %%
+sweep("mid-circuit-sweep", "mid-circuit measurement error", [("path-xx-ibm2016-mcm", "#e07b00")])
+study_table("mid-circuit-sweep")
+
+# %% [markdown]
+# <a id="sA-2"></a>
+#
+# ### A.2 Starting excitation
+#
+# **The move chain and the spare-path checks assume idle qubits start in |0⟩, so their lead shrinks fastest when a qubit may start a shot in |1⟩; our results hold only while that chance stays well below 0.005.** At 0.02 the move chain on the contemporary graph falls to {{ F(ex_move) }}, below the baseline's {{ F(ex_base) }}. Case 3's check, which reads each qubit as vacant before reusing it, loses least.{{ chk() }}
+
+# %%
+sweep("starting-excitation", "starting excitation",
+      [("baseline-contemporary", "#9aa5b8"), ("move-contemporary", "#137665"), ("spare-xx-contemporary", "#7139cc"),
+       ("baseline-ibm2016", "#c9b0a0"), ("move-ibm2016", "#c62639"), ("path-xx-ibm2016", "#e07b00")])
+study_table("starting-excitation")
+
+# %% [markdown]
+# <a id="sA-3"></a>
+#
+# ### A.3 Middle out
+#
+# **Making the pair mid-path and moving both halves out at once gave no gain we claim.** With the check, F moved by less than its standard error on both graphs. Without it, the contemporary graph's F rose from {{ F(mv.contemporary) }} to {{ F(mo_plain) }}, a difference that rests on one seed and does not appear with the check on. A ZZ check before the XX check on the hyperbolic-inspired graph's third path cost acceptance, {{ a3(mo_zz.acceptance) }} against {{ a3(mo_xx.acceptance) }}, without raising F.{{ chk() }}
+
+# %%
+wb.benchmark("middle-out")
+
+# %% [markdown]
+# <a id="sA-4"></a>
+#
+# ### A.4 Vacancy read
+#
+# **A transport that empties the path with gates from the first port, then reads the emptied qubits at the end, beat case 3 on every measure on the 2016-inspired graph: {{ F(vr) }} keeping {{ pct(vr.acceptance) }}, with {{ vr.two_qubit_gates }} two-qubit gates, a {{ us(vr) }} µs schedule and no mid-circuit read.** On the other two graphs, followed by the XX check, it raised F at a cost in acceptance. The nine cases still report the move chain with its XX check.{{ chk() }}
+
+# %%
+wb.benchmark("vacancy-read")
+
+# %% [markdown]
+# <a id="sB"></a>
+#
+# ## Appendix B. The studies' files
+#
+# **Each study's benchmark file, and the circuits it adds beyond the nine cases' own,** written as the repository holds them. The tables in appendix A come from the runs these files define.
+{%- for name in study_benchmarks %}
+{{ repo_file("config/benchmark/bp.data.benchmark." ~ name ~ ".yaml") }}
+{%- endfor %}
+{%- for name in study_circuits %}
+{{ repo_file("config/circuit/bp.data.circuit." ~ name ~ ".yaml") }}
+{%- endfor %}
+
+# %% [markdown]
+# <a id="sC"></a>
+#
+# ## Appendix C. Config files beyond the Boston runs
+#
+# **Every config file nothing above writes: the other noise profiles, which only the optional biased-noise study and other cross-checks use, and the benchmarks this notebook does not report.** They complete the repository's config, so every assumption the benchmark holds is in this notebook.
+{%- for p in cfg if p not in shown %}
+{{ repo_file(p) }}
+{%- endfor %}
+
+# %% [markdown]
+# <a id="sD"></a>
+#
+# ## Appendix D. Sources and AI use
+#
+# **Sources.** Every source we rely on is an entry in [`docs/bp.data.references.yaml`]({{ link("docs/bp.data.references.yaml") }}), with its link and what we take from it. The repository holds the full benchmark: [{{ repo }}](https://github.com/{{ repo }}/tree/{{ tag }}).
+#
+# **AI use.** We used AI assistants, including Claude, for research summaries, design discussion, and drafting code and documentation. The team reviewed and ran everything in this notebook and can explain it.
+#
+# [Back to the top](#top)

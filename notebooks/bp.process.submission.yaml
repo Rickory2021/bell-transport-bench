@@ -1,0 +1,110 @@
+# notebooks/bp.process.submission.yaml
+#
+# Renders the submission notebook, the challenge's reproducible notebook, from its
+# template (docs/DESIGN.md, section 1). The invoke names the benchmark snapshot that
+# fills the nine cases, the study snapshots the appendix reports, and where the code
+# is published. At render time this process packs src/bellbench/ as the code
+# payload, packs the chosen snapshots as the results payload, reads every config
+# file's text so the notebook writes each one out where it explains it, and reads
+# each snapshot's comparison table so every number in the notebook's text comes from
+# the run records.
+
+vars:
+  $schema: "https://json-schema.org/draft/2020-12/schema"
+  type: object
+  additionalProperties: false
+  required: [reported, studies, repo, tag]
+  properties:
+    reported:
+      description: >-
+        The benchmark snapshot that fills the nine cases, as <benchmark>/<stamp>, a folder
+        under results/runs/benchmark/. Every file in it is packed.
+      type: string
+      pattern: '^move-chain/[0-9]{8}T[0-9]{6}Z$'
+    studies:
+      description: >-
+        The optional studies' snapshots, as <benchmark>/<stamp>; the appendix explains
+        mid-circuit-sweep, starting-excitation, middle-out and vacancy-read. Their tables,
+        reports and run lists are packed.
+      type: array
+      items: {type: string, pattern: '^[a-z0-9][a-z0-9-]*/[0-9]{8}T[0-9]{6}Z$'}
+    repo:
+      description: The GitHub repository the payload comes from, as owner/name.
+      type: string
+      pattern: '^[A-Za-z0-9-]+/[A-Za-z0-9._-]+$'
+    tag:
+      description: The git tag of the commit the notebook is rendered from.
+      type: string
+      pattern: '^[A-Za-z0-9._/-]+$'
+    draft:
+      description: >-
+        When true, every claim the team still has to check carries a [check] mark.
+        Set false for the submitted render.
+      type: boolean
+    recommendation:
+      description: >-
+        The future-system recommendation, challenge material 05, in words only: every
+        number the notebook shows comes from the run records. Leave it out and the
+        notebook has no recommendation section.
+      type: object
+      additionalProperties: false
+      required: [statement, reasoning]
+      properties:
+        statement: {type: string}
+        reasoning: {type: string}
+
+map:
+  code:
+    fn: scripts/blueprint-render/fn/collect/archive
+    params:
+      files: {text: "src/bellbench/**/*.py"}
+  results:
+    fn: scripts/blueprint-render/fn/collect/archive
+    params:
+      files:
+        text:
+          - "results/runs/benchmark/*/*/*.yaml"
+          - "results/runs/benchmark/*/*/*.csv"
+          - "results/runs/benchmark/*/*/*.md"
+          - "results/runs/benchmark/*/*/*/*.yaml"
+          - "results/runs/benchmark/*/*/*/*.csv"
+          - "results/runs/benchmark/*/*/*/*.md"
+      under: {literal: "results/runs/benchmark/"}
+      whole: {var: reported}
+      partial: {var: studies}
+      names: {literal: [comparison.csv, report.md, bp.data.runs.yaml]}
+  cfg:
+    fn: scripts/blueprint-render/fn/collect/texts
+    params:
+      files: {text: "config/**/*.yaml"}
+  tables:
+    fn: scripts/blueprint-render/fn/collect/csv_rows
+    params:
+      files: {text: "results/runs/benchmark/*/*/comparison.csv"}
+      under: {literal: "results/runs/benchmark/"}
+      nest_by: {literal: [run, simulation]}
+  bench:
+    fn: scripts/blueprint-render/fn/collect/extract_fields
+    params:
+      sources: {data_with_paths: "config/benchmark/bp.data.benchmark.*.yaml"}
+      fields: {literal: [{path: shots}, {path: base_seed}, {path: runs}]}
+      key_pattern: {literal: '^bp\.data\.benchmark\.(.+)\.yaml$'}
+  noise:
+    fn: scripts/blueprint-render/fn/collect/extract_fields
+    params:
+      sources: {data_with_paths: "config/noise/bp.data.noise.boston-2026.yaml"}
+      fields: {literal: [{path: measure.duration, as: measure}]}
+      key_pattern: {literal: '^bp\.data\.noise\.(.+)\.yaml$'}
+  reported: {var: reported}
+  studies: {var: studies}
+  repo: {var: repo}
+  tag: {var: tag}
+  draft: {var: draft}
+  recommendation: {var: recommendation}
+
+emit:
+  ipynb:
+    render: scripts/blueprint-render/renderers/ipynb.py
+    template: notebooks/templates/submission.py.j2
+
+output: adjacent
