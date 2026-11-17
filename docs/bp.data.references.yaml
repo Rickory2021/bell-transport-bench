@@ -267,16 +267,16 @@ references:
     download: https://arxiv.org/pdf/2411.14638
     snapshot: null
     redistribution: link-only
-    checked: false
+    checked: true
     summary: >-
       Builds long-range entanglement unitarily and uses the disentangled qubits as error flags
       for postselection, on ibm_fez. PRX Quantum 6, 020331 (2025).
     takeaways:
-      - claim: "Reading the vacated qubits as flags (any non-zero readout signals an error) is the published form of our vacancy check, and costs no extra gates."
-        locator: "Protocol section"
+      - claim: "Reading the vacated qubits as flags (any non-zero readout signals an error) is the published form of our vacancy check; the protocol uses the same number of CNOT gates with and without the detection, 2n - 2 on a path of length n, and only its measurements grow."
+        locator: "Sections II.A and II.B; Table I in section IV"
         used_in: [docs/DESIGN.md]
-      - claim: "Z-basis flag checks catch bit flips but barely improve coherence, because they cannot see Z errors."
-        locator: "Results discussion"
+      - claim: "Z-basis parity checks during GHZ state preparation catch X- and Y-type errors and not Z-type errors, and the paper finds Z errors dominate the infidelity that remains."
+        locator: "Section III.B"
         used_in: [docs/DESIGN.md]
 
   - id: andersen-2019-parity-stabilization
