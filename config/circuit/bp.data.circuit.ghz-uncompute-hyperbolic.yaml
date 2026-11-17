@@ -1,0 +1,19 @@
+# config/circuit/bp.data.circuit.ghz-uncompute-hyperbolic.yaml
+
+name: ghz-uncompute-hyperbolic
+label: ghz-uncompute, hyperbolic
+processor: hyperbolic
+analysis:
+  name: postselect
+notes: >-
+  Built by src/bellbench/builders.py on hyperbolic along the path [0, 1, 9, 12]: ghz_uncompute().
+circuit: |
+  OPENQASM 3.0;
+  include "stdgates.inc";
+  qubit[13] q;
+  h q[0];
+  cx q[0], q[1];
+  cx q[1], q[9];
+  cx q[9], q[12];
+  cx q[1], q[9];
+  cx q[0], q[1];

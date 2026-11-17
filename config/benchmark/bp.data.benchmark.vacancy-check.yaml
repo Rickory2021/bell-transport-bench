@@ -1,0 +1,64 @@
+# config/benchmark/bp.data.benchmark.vacancy-check.yaml
+
+name: vacancy-check
+label: A vacancy read at the end of the move chain, against starting excitation
+notes: >-
+  An optional study: the baseline, move_chain alone, move_chain with a vacancy read of
+  the path's interior at the end, and with the XX check on a spare path, with and
+  without the vacancy read, under boston-2026 at starting excitations 0, 0.005, 0.01
+  and 0.02, 50,000 shots per basis. ibm2016 has no spare path, so its XX rows are absent.
+shots: 50000
+base_seed: 20261116
+runs:
+  - {run: baseline-ibm2016-exc-0, circuit: baseline-ibm2016, noise: boston-2026, conditional: {starting_excitation: 0.0}}
+  - {run: baseline-ibm2016-exc-5e-3, circuit: baseline-ibm2016, noise: boston-2026, conditional: {starting_excitation: 0.005}}
+  - {run: baseline-ibm2016-exc-1e-2, circuit: baseline-ibm2016, noise: boston-2026, conditional: {starting_excitation: 0.01}}
+  - {run: baseline-ibm2016-exc-2e-2, circuit: baseline-ibm2016, noise: boston-2026, conditional: {starting_excitation: 0.02}}
+  - {run: move-ibm2016-exc-0, circuit: move-chain-ibm2016, noise: boston-2026, conditional: {starting_excitation: 0.0}}
+  - {run: move-ibm2016-exc-5e-3, circuit: move-chain-ibm2016, noise: boston-2026, conditional: {starting_excitation: 0.005}}
+  - {run: move-ibm2016-exc-1e-2, circuit: move-chain-ibm2016, noise: boston-2026, conditional: {starting_excitation: 0.01}}
+  - {run: move-ibm2016-exc-2e-2, circuit: move-chain-ibm2016, noise: boston-2026, conditional: {starting_excitation: 0.02}}
+  - {run: move-vac-ibm2016-exc-0, circuit: move-chain-vac-ibm2016, noise: boston-2026, conditional: {starting_excitation: 0.0}}
+  - {run: move-vac-ibm2016-exc-5e-3, circuit: move-chain-vac-ibm2016, noise: boston-2026, conditional: {starting_excitation: 0.005}}
+  - {run: move-vac-ibm2016-exc-1e-2, circuit: move-chain-vac-ibm2016, noise: boston-2026, conditional: {starting_excitation: 0.01}}
+  - {run: move-vac-ibm2016-exc-2e-2, circuit: move-chain-vac-ibm2016, noise: boston-2026, conditional: {starting_excitation: 0.02}}
+  - {run: baseline-contemporary-exc-0, circuit: baseline-contemporary, noise: boston-2026, conditional: {starting_excitation: 0.0}}
+  - {run: baseline-contemporary-exc-5e-3, circuit: baseline-contemporary, noise: boston-2026, conditional: {starting_excitation: 0.005}}
+  - {run: baseline-contemporary-exc-1e-2, circuit: baseline-contemporary, noise: boston-2026, conditional: {starting_excitation: 0.01}}
+  - {run: baseline-contemporary-exc-2e-2, circuit: baseline-contemporary, noise: boston-2026, conditional: {starting_excitation: 0.02}}
+  - {run: move-contemporary-exc-0, circuit: move-chain-contemporary, noise: boston-2026, conditional: {starting_excitation: 0.0}}
+  - {run: move-contemporary-exc-5e-3, circuit: move-chain-contemporary, noise: boston-2026, conditional: {starting_excitation: 0.005}}
+  - {run: move-contemporary-exc-1e-2, circuit: move-chain-contemporary, noise: boston-2026, conditional: {starting_excitation: 0.01}}
+  - {run: move-contemporary-exc-2e-2, circuit: move-chain-contemporary, noise: boston-2026, conditional: {starting_excitation: 0.02}}
+  - {run: move-vac-contemporary-exc-0, circuit: move-chain-vac-contemporary, noise: boston-2026, conditional: {starting_excitation: 0.0}}
+  - {run: move-vac-contemporary-exc-5e-3, circuit: move-chain-vac-contemporary, noise: boston-2026, conditional: {starting_excitation: 0.005}}
+  - {run: move-vac-contemporary-exc-1e-2, circuit: move-chain-vac-contemporary, noise: boston-2026, conditional: {starting_excitation: 0.01}}
+  - {run: move-vac-contemporary-exc-2e-2, circuit: move-chain-vac-contemporary, noise: boston-2026, conditional: {starting_excitation: 0.02}}
+  - {run: xx-contemporary-exc-0, circuit: move-chain-spare-xx-contemporary, noise: boston-2026, conditional: {starting_excitation: 0.0}}
+  - {run: xx-contemporary-exc-5e-3, circuit: move-chain-spare-xx-contemporary, noise: boston-2026, conditional: {starting_excitation: 0.005}}
+  - {run: xx-contemporary-exc-1e-2, circuit: move-chain-spare-xx-contemporary, noise: boston-2026, conditional: {starting_excitation: 0.01}}
+  - {run: xx-contemporary-exc-2e-2, circuit: move-chain-spare-xx-contemporary, noise: boston-2026, conditional: {starting_excitation: 0.02}}
+  - {run: xx-vac-contemporary-exc-0, circuit: move-chain-spare-xx-vac-contemporary, noise: boston-2026, conditional: {starting_excitation: 0.0}}
+  - {run: xx-vac-contemporary-exc-5e-3, circuit: move-chain-spare-xx-vac-contemporary, noise: boston-2026, conditional: {starting_excitation: 0.005}}
+  - {run: xx-vac-contemporary-exc-1e-2, circuit: move-chain-spare-xx-vac-contemporary, noise: boston-2026, conditional: {starting_excitation: 0.01}}
+  - {run: xx-vac-contemporary-exc-2e-2, circuit: move-chain-spare-xx-vac-contemporary, noise: boston-2026, conditional: {starting_excitation: 0.02}}
+  - {run: baseline-hyperbolic-exc-0, circuit: baseline-hyperbolic, noise: boston-2026, conditional: {starting_excitation: 0.0}}
+  - {run: baseline-hyperbolic-exc-5e-3, circuit: baseline-hyperbolic, noise: boston-2026, conditional: {starting_excitation: 0.005}}
+  - {run: baseline-hyperbolic-exc-1e-2, circuit: baseline-hyperbolic, noise: boston-2026, conditional: {starting_excitation: 0.01}}
+  - {run: baseline-hyperbolic-exc-2e-2, circuit: baseline-hyperbolic, noise: boston-2026, conditional: {starting_excitation: 0.02}}
+  - {run: move-hyperbolic-exc-0, circuit: move-chain-hyperbolic, noise: boston-2026, conditional: {starting_excitation: 0.0}}
+  - {run: move-hyperbolic-exc-5e-3, circuit: move-chain-hyperbolic, noise: boston-2026, conditional: {starting_excitation: 0.005}}
+  - {run: move-hyperbolic-exc-1e-2, circuit: move-chain-hyperbolic, noise: boston-2026, conditional: {starting_excitation: 0.01}}
+  - {run: move-hyperbolic-exc-2e-2, circuit: move-chain-hyperbolic, noise: boston-2026, conditional: {starting_excitation: 0.02}}
+  - {run: move-vac-hyperbolic-exc-0, circuit: move-chain-vac-hyperbolic, noise: boston-2026, conditional: {starting_excitation: 0.0}}
+  - {run: move-vac-hyperbolic-exc-5e-3, circuit: move-chain-vac-hyperbolic, noise: boston-2026, conditional: {starting_excitation: 0.005}}
+  - {run: move-vac-hyperbolic-exc-1e-2, circuit: move-chain-vac-hyperbolic, noise: boston-2026, conditional: {starting_excitation: 0.01}}
+  - {run: move-vac-hyperbolic-exc-2e-2, circuit: move-chain-vac-hyperbolic, noise: boston-2026, conditional: {starting_excitation: 0.02}}
+  - {run: xx-hyperbolic-exc-0, circuit: move-chain-spare-xx-hyperbolic, noise: boston-2026, conditional: {starting_excitation: 0.0}}
+  - {run: xx-hyperbolic-exc-5e-3, circuit: move-chain-spare-xx-hyperbolic, noise: boston-2026, conditional: {starting_excitation: 0.005}}
+  - {run: xx-hyperbolic-exc-1e-2, circuit: move-chain-spare-xx-hyperbolic, noise: boston-2026, conditional: {starting_excitation: 0.01}}
+  - {run: xx-hyperbolic-exc-2e-2, circuit: move-chain-spare-xx-hyperbolic, noise: boston-2026, conditional: {starting_excitation: 0.02}}
+  - {run: xx-vac-hyperbolic-exc-0, circuit: move-chain-spare-xx-vac-hyperbolic, noise: boston-2026, conditional: {starting_excitation: 0.0}}
+  - {run: xx-vac-hyperbolic-exc-5e-3, circuit: move-chain-spare-xx-vac-hyperbolic, noise: boston-2026, conditional: {starting_excitation: 0.005}}
+  - {run: xx-vac-hyperbolic-exc-1e-2, circuit: move-chain-spare-xx-vac-hyperbolic, noise: boston-2026, conditional: {starting_excitation: 0.01}}
+  - {run: xx-vac-hyperbolic-exc-2e-2, circuit: move-chain-spare-xx-vac-hyperbolic, noise: boston-2026, conditional: {starting_excitation: 0.02}}

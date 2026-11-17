@@ -1,0 +1,21 @@
+# config/benchmark/bp.data.benchmark.check-compare.yaml
+
+name: check-compare
+label: XX check, ZZ check and both, after move_chain
+notes: >-
+  An optional study: move_chain alone, with bus_xx, with bus_zz, and with both, on
+  the contemporary and hyperbolic graphs under boston-2026 at 100,000 shots per basis.
+  A ZZ check on the pair's own path reads its bus mid-circuit, at mid-circuit
+  measurement error 0.01.
+shots: 100000
+base_seed: 20261116
+runs:
+  - {run: move-contemporary, circuit: move-chain-contemporary, noise: boston-2026}
+  - {run: xx-contemporary, circuit: move-chain-spare-xx-contemporary, noise: boston-2026}
+  - {run: zz-contemporary, circuit: move-chain-spare-zz-contemporary, noise: boston-2026}
+  - {run: xx-zz-path-contemporary, circuit: move-chain-xx-spare-zz-path-contemporary, noise: boston-2026, conditional: {mid_circuit_measurement_error: 0.01}}
+  - {run: move-hyperbolic, circuit: move-chain-hyperbolic, noise: boston-2026}
+  - {run: xx-hyperbolic, circuit: move-chain-spare-xx-hyperbolic, noise: boston-2026}
+  - {run: zz-hyperbolic, circuit: move-chain-spare-zz-hyperbolic, noise: boston-2026}
+  - {run: xx-zz-spare-hyperbolic, circuit: move-chain-spare-xx-zz-hyperbolic, noise: boston-2026}
+  - {run: xx-zz-path-hyperbolic, circuit: move-chain-xx-spare-zz-path-hyperbolic, noise: boston-2026, conditional: {mid_circuit_measurement_error: 0.01}}

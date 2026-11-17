@@ -1,0 +1,33 @@
+# config/circuit/bp.data.circuit.move-chain-spare-zz-hyperbolic.yaml
+
+name: move-chain-spare-zz-hyperbolic
+label: move_chain + zz spare, hyperbolic
+processor: hyperbolic
+analysis:
+  name: parity
+  settings:
+    checks:
+    - - check_zz[0]
+    frame_z:
+    - frame_z_zz[0]
+notes: >-
+  Built by src/bellbench/builders.py on hyperbolic along the path [0, 1, 9, 12]: move_chain();
+  then bus_zz(on=[0, 3, 11, 12], reset=False).
+circuit: |
+  OPENQASM 3.0;
+  include "stdgates.inc";
+  bit[1] check_zz;
+  bit[1] frame_z_zz;
+  qubit[13] q;
+  h q[0];
+  cx q[0], q[1];
+  cx q[1], q[9];
+  cx q[9], q[1];
+  cx q[9], q[12];
+  cx q[12], q[9];
+  cx q[0], q[3];
+  cx q[3], q[11];
+  cx q[12], q[11];
+  check_zz[0] = measure q[11];
+  h q[3];
+  frame_z_zz[0] = measure q[3];

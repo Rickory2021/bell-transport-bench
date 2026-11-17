@@ -1,0 +1,27 @@
+# config/circuit/bp.data.circuit.ghz-measure-hyperbolic.yaml
+
+name: ghz-measure-hyperbolic
+label: ghz-measure, hyperbolic
+processor: hyperbolic
+analysis:
+  name: parity
+  settings:
+    checks: []
+    frame_z:
+    - frame_z_ghz[0]
+    - frame_z_ghz[1]
+notes: >-
+  Built by src/bellbench/builders.py on hyperbolic along the path [0, 1, 9, 12]: ghz_measure(reset=False).
+circuit: |
+  OPENQASM 3.0;
+  include "stdgates.inc";
+  bit[2] frame_z_ghz;
+  qubit[13] q;
+  h q[1];
+  cx q[1], q[9];
+  cx q[9], q[12];
+  cx q[1], q[0];
+  h q[1];
+  frame_z_ghz[0] = measure q[1];
+  h q[9];
+  frame_z_ghz[1] = measure q[9];

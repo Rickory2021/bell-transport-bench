@@ -1,0 +1,26 @@
+# config/benchmark/bp.data.benchmark.transport-compare.yaml
+
+name: transport-compare
+label: Transports compared, no checks
+notes: >-
+  An optional study, kept apart from the nine cases: the baseline, move_chain,
+  move_middle_out, ghz_uncompute and ghz_measure on each graph under boston-2026,
+  with no checks. ghz_measure reads its interior qubits at the end, under the profile's readout error.
+shots: 20000
+base_seed: 20261116
+runs:
+  - {run: baseline-ibm2016, circuit: baseline-ibm2016, noise: boston-2026}
+  - {run: baseline-contemporary, circuit: baseline-contemporary, noise: boston-2026}
+  - {run: baseline-hyperbolic, circuit: baseline-hyperbolic, noise: boston-2026}
+  - {run: move-ibm2016, circuit: move-chain-ibm2016, noise: boston-2026}
+  - {run: move-contemporary, circuit: move-chain-contemporary, noise: boston-2026}
+  - {run: move-hyperbolic, circuit: move-chain-hyperbolic, noise: boston-2026}
+  - {run: middle-out-ibm2016, circuit: move-middle-out-ibm2016, noise: boston-2026}
+  - {run: middle-out-contemporary, circuit: move-middle-out-contemporary, noise: boston-2026}
+  - {run: middle-out-hyperbolic, circuit: move-middle-out-hyperbolic, noise: boston-2026}
+  - {run: ghz-uncompute-ibm2016, circuit: ghz-uncompute-ibm2016, noise: boston-2026}
+  - {run: ghz-uncompute-contemporary, circuit: ghz-uncompute-contemporary, noise: boston-2026}
+  - {run: ghz-uncompute-hyperbolic, circuit: ghz-uncompute-hyperbolic, noise: boston-2026}
+  - {run: ghz-measure-ibm2016, circuit: ghz-measure-ibm2016, noise: boston-2026}
+  - {run: ghz-measure-contemporary, circuit: ghz-measure-contemporary, noise: boston-2026}
+  - {run: ghz-measure-hyperbolic, circuit: ghz-measure-hyperbolic, noise: boston-2026}

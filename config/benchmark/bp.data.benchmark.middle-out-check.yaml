@@ -1,0 +1,15 @@
+# config/benchmark/bp.data.benchmark.middle-out-check.yaml
+
+name: middle-out-check
+label: move_chain against move_middle_out, more shots, a second seed
+notes: >-
+  An optional study: move_chain and move_middle_out on the contemporary and
+  hyperbolic graphs under boston-2026 at 200,000 shots per basis and a base seed
+  other than the core's, to see whether the difference seen at 20,000 shots holds.
+shots: 200000
+base_seed: 77123
+runs:
+  - {run: move-contemporary, circuit: move-chain-contemporary, noise: boston-2026}
+  - {run: middle-out-contemporary, circuit: move-middle-out-contemporary, noise: boston-2026}
+  - {run: move-hyperbolic, circuit: move-chain-hyperbolic, noise: boston-2026}
+  - {run: middle-out-hyperbolic, circuit: move-middle-out-hyperbolic, noise: boston-2026}

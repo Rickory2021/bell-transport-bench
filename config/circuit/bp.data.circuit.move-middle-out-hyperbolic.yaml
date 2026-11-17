@@ -1,0 +1,19 @@
+# config/circuit/bp.data.circuit.move-middle-out-hyperbolic.yaml
+
+name: move-middle-out-hyperbolic
+label: move-middle-out, hyperbolic
+processor: hyperbolic
+analysis:
+  name: postselect
+notes: >-
+  Built by src/bellbench/builders.py on hyperbolic along the path [0, 1, 9, 12]: move_middle_out().
+circuit: |
+  OPENQASM 3.0;
+  include "stdgates.inc";
+  qubit[13] q;
+  h q[1];
+  cx q[1], q[9];
+  cx q[1], q[0];
+  cx q[0], q[1];
+  cx q[9], q[12];
+  cx q[12], q[9];
