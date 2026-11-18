@@ -131,7 +131,7 @@
 #
 # **What this notebook is.** The bell-transport-bench repository, compressed into one self-contained file so the benchmark runs anywhere, Colab included, without a clone. The repository is where the work is done: a teammate drives it with `make` commands, shown under "How the repository works" below. This notebook packs the repository's package, its recorded runs and its config files, shows each config file where it explains it, remakes every run it reports, and sets each beside the run the repository recorded. Every config file, circuit and result below is the repository's own, carried here.
 #
-# **Overview.** Under one simulated noise model, our protection raised the fidelity F of a Bell pair between two distant qubits on all three processor graphs, keeping at least {{ pct([c[3], c[6], c[9]] | map(attribute="acceptance") | min) }} of shots and using fewer two-qubit gates than the organisers' baseline. [Section {{ sec("s5-1") }}]({{ ref("s5-1") }}) gives each graph's numbers.{{ chk() }}
+# **Overview.** Under one simulated noise model, our protection raised the fidelity F of a Bell pair between two distant qubits on all three processor graphs, keeping at least {{ pct([c[3], c[6], c[9]] | map(attribute="acceptance") | min) }} of shots and using fewer two-qubit gates than our baseline, the SWAP circuit. [Section {{ sec("s5-1") }}]({{ ref("s5-1") }}) gives each graph's numbers.{{ chk() }}
 #
 # - **The task:** create the Bell state |β₀₀⟩ = (|00⟩ + |11⟩)/√2, which the challenge writes |Φ+⟩, between two fixed qubits, the ports, on three processor graphs, and measure what error detection with postselection buys and costs.
 # - **Our protection:** GHZ disentangling moves the pair by preparing a GHZ state along the path between the ports and disentangling it with gates, which leaves the path's interior qubits in |0⟩. The vacancy read then reads those qubits at the end of the circuit and discards each shot where any reads 1. It detects errors and corrects none.
@@ -300,10 +300,16 @@ MADE = WORK / "made"  # the runs this notebook makes; the recorded runs stay whe
 BASES = ("XX", "YY", "ZZ")
 
 
+def heading(text):
+    """A divider and a bold label above a block of output, so each part of a cell's output says what it is."""
+    display(Markdown(f"---\n\n**{text}**"))
+
+
 def show(function):
-    """The package's own code for a function, as the payload holds it, so what is shown is what runs. It is shown as a
-    Markdown code block, so each viewer highlights it in its own theme, light or dark."""
-    display(Markdown(f"```python\n{inspect.getsource(function)}```"))
+    """The package's own code for a function, as the payload holds it, so what is shown is what runs, under a divider
+    naming it. It is shown as a Markdown code block, so each viewer highlights it in its own theme, light or dark."""
+    display(Markdown(f"---\n\n**bellbench's code:** `{function.__module__}.{function.__qualname__}`\n\n"
+                     f"```python\n{inspect.getsource(function)}```"))
 
 
 def md_table(columns, rows):
@@ -430,6 +436,7 @@ def beside_record(benchmark, extra=()):
                      "same files": all(configs.content_hash(WORK / r["path"]) == r["hash"] for r in refs)})
         provenance |= {key for key in ("commit", "packages") if mine["provenance"][key] != rec["provenance"][key]}
     table = pd.DataFrame(rows).set_index("run")
+    heading(f"Each run of {benchmark} beside the run the repository recorded")
     display(table)
     print("every run identical to its record, counts, circuits and numbers" if table.identical.all() and table["same files"].all()
           else "SOME RUNS DIFFER from their records: see the table")
@@ -473,6 +480,7 @@ def noisy_scores(folder):
 
 # %%
 run = CircuitRun("{{ prot.contemporary.circuit }}", NOISE, SHOTS, BASE_SEED)
+heading("Output: the run")
 print(f"{run.circuit.name} on the {run.nc.processor_name} graph, ports {run.nc.ports}, {SHOTS:,} shots per basis")
 print("seeds derived from the base seed:", run.seeds)
 
@@ -485,6 +493,7 @@ print("seeds derived from the base seed:", run.seeds)
 
 # %%
 show(noise._build_snapshot)
+heading("Output: the noise model")
 print(run.nc.noise_model)
 
 # %% [markdown]
@@ -497,6 +506,7 @@ print(run.nc.noise_model)
 # %%
 show(pipeline.basis_circuits)
 circuits = pipeline.basis_circuits(run.circuit.circuit, run.nc.ports)
+heading("Output: the XX circuit, as written")
 fig = circuits["XX"].draw("mpl", idle_wires=False, fold=-1)
 display(fig)
 plt.close(fig)
@@ -512,6 +522,7 @@ plt.close(fig)
 # %%
 show(pipeline.compile_bases)
 compiled = pipeline.compile_bases(circuits, run.nc, run.seeds["transpile"])
+heading("Output: each basis circuit's gates, compiled at level 1")
 gates = list(dict.fromkeys(g for c in compiled.values() for g in c.compiled.count_ops()))
 md_table(["Gate", *compiled], [(g, *(c.compiled.count_ops().get(g, 0) for c in compiled.values())) for g in gates])
 
@@ -525,6 +536,7 @@ for level in (1, 2):
     measured = [out.find_bit(i.qubits[0]).index for i in out.data if i.operation.name == "measure"]
     levels.append((level, sum(n for gate, n in out.count_ops().items() if gate in ("cz", "cx", "swap")),
                    ", ".join(map(str, measured)), "yes" if measured == list(baseline.nc.ports) else "no"))
+heading("Output: case {{ BCASE.contemporary }}'s baseline compiled at levels 1 and 2")
 md_table(["Optimization level", "Two-qubit gates", "Ports measured on qubits", "Pair on the ports"], levels)
 
 # %% [markdown]
@@ -538,6 +550,7 @@ md_table(["Optimization level", "Two-qubit gates", "Ports measured on qubits", "
 # %%
 show(pipeline.schedule)
 scheduled = {basis: pipeline.schedule(c.compiled, run.nc) for basis, c in compiled.items()}
+heading("Output: the ZZ circuit's schedule")
 print(f"the ZZ circuit takes {pipeline.scheduled_duration(scheduled['ZZ'], run.nc) * 1e6:.2f} µs, "
       f"with {sum(i.operation.name == 'delay' for i in scheduled['ZZ'].data)} delays filling idle time")
 display(timeline_figure(compiled["ZZ"].compiled, run.nc))
@@ -556,6 +569,7 @@ show(fidelity.bell_fidelity)
 sim = pipeline.simulate(scheduled, run.nc.noise_model, SHOTS, run.seeds["noisy"])
 registers = [(r.name, r.size) for r in compiled["ZZ"].compiled.cregs]
 steps = Score(read_shots(run.circuit.analysis, sim.raw, registers, SHOTS))
+heading("Output: F and acceptance, step by step")
 print(f"step by step: F = {steps.accepted.value:.6f} ± {steps.accepted.standard_error:.6f}, acceptance {steps.acceptance:.6f}")
 
 # %% [markdown]
@@ -568,6 +582,7 @@ print(f"step by step: F = {steps.accepted.value:.6f} ± {steps.accepted.standard
 # %%
 run.run()
 f_rec, a_rec = noisy_scores(recorded(REPORTED) / "{{ prot.contemporary.run }}")
+heading("Output: the same numbers three ways")
 print(f"run.run():     F = {run.scores['noisy'].accepted.value:.6f}, acceptance {run.scores['noisy'].acceptance:.6f}")
 print(f"step by step:  F = {steps.accepted.value:.6f}, acceptance {steps.acceptance:.6f}")
 print(f"the record:    F = {f_rec:.6f}, acceptance {a_rec:.6f}")
@@ -634,6 +649,7 @@ noise_model = NoiseModel.from_backend(TargetOnly(target), readout_error=False)
 p10, p01 = readout["reads_1_when_0"], readout["reads_0_when_1"]
 for i in range(n):
     noise_model.add_readout_error(ReadoutError([[1 - p10, p10], [p01, 1 - p01]]), [i])
+heading("Check 1: the noise model")
 print("the same noise model as bellbench's:", noise_model == run.nc.noise_model)
 
 # Step 2 by hand: the written circuit, three times, each with its basis rotation on the ports and a 2-bit "port"
@@ -648,6 +664,7 @@ def gates_of(circuit):
             for i in circuit.data]
 
 
+heading("Check 2: the compiled gates")
 by_hand = {}
 for basis in BASES:
     circuit = written.copy()
@@ -688,6 +705,7 @@ def correlator(counts):
 # F from the three correlators, as in section 3, and the acceptance: the kept shots over every shot run.
 (xx, kx), (yy, ky), (zz_, kz) = (correlator(c) for c in counts)
 f_hand, acceptance_hand = (1 + xx - yy + zz_) / 4, (kx + ky + kz) / (3 * SHOTS)
+heading("Check 3: F and acceptance")
 print(f"plain Qiskit: F = {f_hand:.6f}, acceptance {acceptance_hand:.6f}")
 print(f"bellbench:    F = {run.scores['noisy'].accepted.value:.6f}, acceptance {run.scores['noisy'].acceptance:.6f}")
 print("the same numbers" if (round(f_hand, 12), round(acceptance_hand, 12)) == (round(run.scores["noisy"].accepted.value, 12),
@@ -805,7 +823,7 @@ pd.DataFrame(
 # %% [markdown]
 # ### {{ H["s4-3"] }}
 #
-# **One benchmark file fills the nine cases: it names each run, a circuit file under the noise profile, the shots and the base seed, and which run fills each case.** Cases 1, 2, 4, 5, 7 and 8 are the organisers' baseline; cases 3, 6 and 9 are our protection, the same steps on every graph. The file runs nothing else. To separate what the transport buys from what the check buys, section {{ sec("s5-2") }} takes the transport without the check from each graph's extended benchmark (section 6), which runs it under the same shots and seed. Each run takes {{ "{:,}".format(B.shots) }} shots per basis. The notebook makes the benchmark itself at the end of section {{ sec("s4-4") }}, once its circuit files are written.
+# **One benchmark file fills the nine cases: it names each run, a circuit file under the noise profile, the shots and the base seed, and which run fills each case.** Cases 1, 2, 4, 5, 7 and 8 are our baseline, the SWAP circuit; cases 3, 6 and 9 are our protection, the same steps on every graph. The file runs nothing else. To separate what the transport buys from what the check buys, section {{ sec("s5-2") }} takes the transport without the check from each graph's extended benchmark (section 6), which runs it under the same shots and seed. Each run takes {{ "{:,}".format(B.shots) }} shots per basis. The notebook makes the benchmark itself at the end of section {{ sec("s4-4") }}, once its circuit files are written.
 {{ config_fold("config/benchmark/bp.data.benchmark." ~ REPORTED ~ ".yaml") }}
 
 # %% [markdown]
@@ -813,7 +831,7 @@ pd.DataFrame(
 #
 # **Each run is one circuit file: an OpenQASM 3 circuit on the graph's physical qubits, and how its measured bits are read.** One transport and one check, besides the baseline, fill the nine cases:
 #
-# - **Baseline (cases 1, 2, 4, 5, 7, 8):** the organisers' recipe, H and CX at one port, SWAPs out to the other port and back, each SWAP three CX gates.
+# - **Baseline, the SWAP circuit (cases 1, 2, 4, 5, 7, 8):** the baseline we chose: H and CX at one port, SWAPs out to the other port and back, each SWAP three CX gates. It follows the routing in the organisers' example notebook, a reference rather than a requirement, and uses the same number of two-qubit gates: {{ c[2].two_qubit_gates }}, {{ c[5].two_qubit_gates }} and {{ c[8].two_qubit_gates }} on the 2016-inspired, contemporary and hyperbolic-inspired graphs.
 # - **GHZ disentangling, our transport:** H on the first port, then a chain of CX gates along the path copies its bit onto every qubit, giving the GHZ state (|0…0⟩ + |1…1⟩)/√2 on the whole path. A second chain of CX gates walks back towards the first port, each gate controlled by the qubit before it, and returns every interior qubit to |0⟩, so only the two ports keep the shared bit: the Bell pair. The last of these gates is controlled by the first port. Liao et al. build a long-range CNOT the same way, preparing a GHZ state and disentangling it with gates ([arXiv:2411.14638](https://arxiv.org/abs/2411.14638)).{{ chk() }}
 # - **Vacancy read (cases 3, 6, 9):** after the transport, each interior qubit is measured in the Z basis at the end of the circuit. Each should read 0, so a shot where any reads 1 is discarded. A bit flip on an interior qubit reads 1, and so does a bit flip on the first port before the last gate, which copies it onto an interior qubit. The read cannot see a phase flip, and it adds no gate and no qubit.
 #
@@ -1071,7 +1089,7 @@ beside_record(REPORTED, extra=[(MADE / "transport-alone" / f"ghz-uncompute-{p}",
 #
 # Each run is named for its circuit, followed by the graph; a suffix marks the one run that changes a setting.
 #
-# - `baseline`: the organisers' baseline, SWAPs out and back.
+# - `baseline`: our baseline, the SWAP circuit: SWAPs out and back.
 # - `move-chain`: each hop moves the pair's far half with two CX gates; no check.
 # - `ghz-measure`: the textbook GHZ transport, reading the interior in X, with a Z owed on the first port for each 1; no check.
 # - `ghz-measure-…-readout-0`: the same circuit with no readout error on the interior qubits it reads, the only run that changes the profile.
