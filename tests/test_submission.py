@@ -197,7 +197,8 @@ def test_each_payload_cell_opens_folded_under_its_title():
 
 def test_the_payloads_say_where_they_come_from():
     text = _markdown()
-    assert f"[`{INVOKE['repo']}`](https://github.com/{INVOKE['repo']}/tree/{INVOKE['tag']}) at tag `{INVOKE['tag']}`" in text
+    url = f"https://github.com/{INVOKE['repo']}/tree/{INVOKE['tag']}"
+    assert f"from the repository at its `{INVOKE['tag']}` tag, [{url}]({url})" in text  # the link shows the tag it opens
     for name in PAYLOADS:
         assert f"({len(_payload(name))} files)" in text
 

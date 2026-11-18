@@ -148,7 +148,7 @@
 # | What do we recommend for future systems? | [7]({{ ref("s7") }}) |
 {%- endif %}
 #
-# **How the repository works.** Four `make` commands drive the benchmark, drawn in the diagram below. Every input is a YAML file checked against a schema, so every result traces to a config file, a seed and pinned package versions, all in the [repository](https://github.com/{{ repo }}/tree/{{ tag }}).
+# **How the repository works.** Four `make` commands drive the benchmark, drawn in the diagram below. Every input is a YAML file checked against a schema, so every result traces to a config file, a seed and pinned package versions, all in the repository at its `{{ tag }}` tag, [https://github.com/{{ repo }}/tree/{{ tag }}](https://github.com/{{ repo }}/tree/{{ tag }}).
 #
 # | Command | What it does |
 # |---|---|
@@ -182,7 +182,7 @@
 #
 # <details><summary><b>What these cells do</b></summary>
 #
-# The notebook needs Python 3.12 or later, as the repository does. The first cell checks the version, then installs the packages the repository's `pyproject.toml` pins, into the Python this notebook runs on; pip leaves any already installed at the right version. The next four cells are payloads, each one line, which opens folded under its title in Colab, from the repository [`{{ repo }}`](https://github.com/{{ repo }}/tree/{{ tag }}) at tag `{{ tag }}`:
+# The notebook needs Python 3.12 or later, as the repository does. The first cell checks the version, then installs the packages the repository's `pyproject.toml` pins, into the Python this notebook runs on; pip leaves any already installed at the right version. The next four cells are payloads, each one line, which opens folded under its title in Colab, from the repository at its `{{ tag }}` tag, [https://github.com/{{ repo }}/tree/{{ tag }}](https://github.com/{{ repo }}/tree/{{ tag }}):
 #
 # - **The code:** the `bellbench` package, `src/bellbench/`, exactly as the repository holds it ({{ code.count }} files).
 # - **The nine cases' runs:** every file of the snapshot behind the nine cases, `{{ reported }}`, from `results/runs/benchmark/` ({{ results.count }} files).
