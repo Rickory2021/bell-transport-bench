@@ -480,7 +480,7 @@ display(fig)
 plt.close(fig)
 
 # %% [markdown]
-# **3. Compile, at optimisation level 1.** `compile_bases` compiles each basis circuit into the Target with Qiskit's preset pass manager, at optimisation level 1, on the physical qubits as written, with the run's transpiler seed. Level 1 is a choice. From level 2 up, Qiskit's `ElidePermutations` pass deletes SWAP gates and measures each state on the qubit where it already sits. The measurement stays valid, but the pair is no longer between the ports: the second table compiles case {{ BCASE.contemporary }}'s baseline, which moves the pair with SWAPs, at levels 1 and 2, and at level 2 it is measured on two other qubits with fewer two-qubit gates, so its F would describe a pair that never made the trip the task asks for. GHZ disentangling has no SWAP gates, so it compiles the same at either level.
+# **3. Compile, at optimisation level 1.** `compile_bases` compiles each basis circuit into the Target at optimisation level 1, on the qubits as written, with the run's transpiler seed. Why not a higher level: from level 2, Qiskit deletes SWAP gates and simply measures each state where it already is. The measurement stays correct, but the move is skipped, so the baseline would score a better F without ever bringing the pair to the ports, as the second table shows for case {{ BCASE.contemporary }}'s baseline. Level 1 compiles every circuit as written, and it gives ours no edge: GHZ disentangling has no SWAP gates, so it compiles the same at either level.
 
 # %%
 show(pipeline.compile_bases)
@@ -501,7 +501,7 @@ for level in (1, 2):
 display(pd.DataFrame(levels).set_index("optimisation level"))
 
 # %% [markdown]
-# **4. Schedule.** The compile step fixed which gates run; `schedule` decides only when, and changes no gate, so the cost each run reports (its gates, depth and SWAPs) comes from the compile step and the schedule adds only the duration. It places every gate as late as possible and fills each idle period with a timed delay, which the noise model turns into decay, as on hardware. As late as possible puts each qubit's waiting before its first gate, while it is still in |0⟩, which relaxation and dephasing leave unchanged; scheduled as soon as possible, a qubit would start early and wait while it holds part of the pair.
+# **4. Schedule.** On hardware a qubit decays while it waits, so a fair run must count its waiting time. `schedule` gives every gate a start time and fills each wait with a timed delay, which the noise model turns into decay. It changes no gate, so the cost each run reports comes from step 3. Gates start as late as possible, so a qubit spends its wait in |0⟩, which decay leaves unchanged, instead of waiting while it holds part of the pair. Every run is scheduled the same way.
 
 # %%
 show(pipeline.schedule)
@@ -533,6 +533,9 @@ print(f"the record:    F = {f_rec:.6f}, acceptance {a_rec:.6f}")
 print("the same numbers" if round(run.scores["noisy"].accepted.value, 12) == round(steps.accepted.value, 12)
       == round(f_rec, 12) else "DIFFERENT numbers")
 
+# %% [markdown]
+# **The check.** The cell below rebuilds the same run in plain Qiskit and Aer, without calling bellbench, and compares each step with the package's: the noise model, the compiled gates, and F with the acceptance. It repeats steps 1 to 5, so it opens folded in Colab and Jupyter; open it to see a run made with nothing but Qiskit.
+
 # %% cellView="form" jupyter={"source_hidden":true}
 #@title Check: the same run rebuilt in plain Qiskit and Aer, without bellbench
 from qiskit import ClassicalRegister, qasm3
@@ -543,10 +546,15 @@ from qiskit.transpiler.passes import ALAPScheduleAnalysis, PadDelay
 from qiskit_aer import AerSimulator
 from qiskit_aer.noise import NoiseModel, ReadoutError
 
+# Step 1 by hand: read the two config files as plain YAML, the way any script would.
 profile = yaml.safe_load((WORK / f"config/noise/bp.data.noise.{NOISE}.yaml").read_text())
 graph = yaml.safe_load((WORK / "config/processor/bp.data.processor.contemporary.yaml").read_text())
 n, qubit, readout = len(graph["qubits"]), profile["qubit"], profile["qubit"]["readout_error"]
 couplers = [tuple(e) for e in graph["edges"]] + [tuple(reversed(e)) for e in graph["edges"]]  # a CZ either way
+
+# The Target: every native gate on every qubit or coupler, each with Boston's median error and duration, every qubit
+# with the same T1 and T2, then the measurement, reset and delay. Its measurement error is the mean of the two readout
+# directions; the noise model below replaces it with both directions.
 gate = get_standard_gate_name_mapping()
 target = Target(num_qubits=n, dt=profile["time_step"],
                 qubit_properties=[QubitProperties(t1=qubit["t1_relaxation_time"], t2=qubit["t2_dephasing_time"])] * n)
@@ -575,12 +583,16 @@ class TargetOnly(BackendV2):
         raise NotImplementedError("this backend only carries a Target")
 
 
+# Aer builds the gate errors and the relaxation, during gates and idle delays alike, from the Target. Readout is left
+# out there and added per qubit here, with its two directions apart: reads 1 when 0, and reads 0 when 1.
 noise_model = NoiseModel.from_backend(TargetOnly(target), readout_error=False)
 p10, p01 = readout["reads_1_when_0"], readout["reads_0_when_1"]
 for i in range(n):
     noise_model.add_readout_error(ReadoutError([[1 - p10, p10], [p01, 1 - p01]]), [i])
 print("the same noise model as bellbench's:", noise_model == run.nc.noise_model)
 
+# Step 2 by hand: the written circuit, three times, each with its basis rotation on the ports and a 2-bit "port"
+# register measuring them. ZZ measures as is, XX applies H first, and YY applies S dagger then H.
 written = qasm3.loads(yaml.safe_load((WORK / "config/circuit/bp.data.circuit.{{ prot.contemporary.circuit }}.yaml").read_text())["circuit"])
 a, b = graph["ports"]
 
@@ -602,17 +614,23 @@ for basis in BASES:
         if basis in ("XX", "YY"):
             circuit.h(q)
     circuit.measure([a, b], [port[0], port[1]])
+    # Steps 3 and 4 by hand: compile at level 1 on the qubits as written, with bellbench's transpiler seed, then
+    # schedule as late as possible and fill each idle period with a delay.
     hand = generate_preset_pass_manager(optimization_level=1, target=target, initial_layout=list(range(n)),
                                         seed_transpiler=run.seeds["transpile"]).run(circuit)
     by_hand[basis] = PassManager([ALAPScheduleAnalysis(target=target), PadDelay(target=target)]).run(hand)
     print(f"{basis}: the same gates on the same qubits as bellbench's:", gates_of(hand) == gates_of(run.compiled[basis].compiled))
 
+# Step 5 by hand: one Aer job runs the three scheduled circuits with bellbench's noisy seed, so the shots match
+# shot for shot.
 counts = AerSimulator(noise_model=noise_model, seed_simulator=run.seeds["noisy"]).run(
     [by_hand[basis] for basis in BASES], shots=SHOTS).result().get_counts()
 
 
 def correlator(counts):
-    """The basis's correlator over the kept shots, a shot kept when every read but the ports' gave 0."""
+    """The basis's correlator over the kept shots. Each count's key holds one bit string per register, the port
+    register first, since it was added last; the rest are the vacancy reads. A shot is kept when every read gave 0,
+    and adds +1 when the two port bits agree and -1 when they differ."""
     kept = {}
     for key, k in counts.items():
         ports, *checks = key.split()
@@ -622,6 +640,7 @@ def correlator(counts):
     return sum((1 if bits[0] == bits[1] else -1) * k for bits, k in kept.items()) / total, total
 
 
+# F from the three correlators, as in section 3, and the acceptance: the kept shots over every shot run.
 (xx, kx), (yy, ky), (zz_, kz) = (correlator(c) for c in counts)
 f_hand, acceptance_hand = (1 + xx - yy + zz_) / 4, (kx + ky + kz) / (3 * SHOTS)
 print(f"plain Qiskit: F = {f_hand:.6f}, acceptance {acceptance_hand:.6f}")
