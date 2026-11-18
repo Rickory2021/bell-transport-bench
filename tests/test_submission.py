@@ -153,6 +153,17 @@ def test_every_link_lands_on_a_heading():
     assert "<a id=" not in text
 
 
+def test_every_function_the_walkthrough_shows_is_the_package_s():
+    """Section 2 shows bellbench's own code with show(module.function), read from the code payload when it runs, so
+    what it shows is what runs; this checks each name still exists in src/bellbench/, so no cell breaks on a rename."""
+    import importlib
+
+    shown = re.findall(r"^show\((\w+)\.(\w+)\)$", "\n".join(s for kind, s in _cells() if kind == "code"), re.M)
+    assert len(shown) >= 6
+    for module, name in shown:
+        assert callable(getattr(importlib.import_module(f"bellbench.{module}"), name, None)), f"bellbench.{module}.{name}"
+
+
 # -- The payloads ----------------------------------------------------------------------
 
 
