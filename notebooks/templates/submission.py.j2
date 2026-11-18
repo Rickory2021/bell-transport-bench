@@ -118,8 +118,8 @@
 #
 # **Overview.** Under one simulated noise model, our protection raised the fidelity F of a Bell pair between two distant qubits on all three processor graphs, keeping at least {{ pct([c[3], c[6], c[9]] | map(attribute="acceptance") | min) }} of shots and using fewer two-qubit gates than our baseline, the SWAP circuit. [Section {{ sec("s5-1") }}]({{ ref("s5-1") }}) gives each graph's numbers.{{ chk() }}
 #
-# - **The task:** create the Bell state |β₀₀⟩ = (|00⟩ + |11⟩)/√2, which the challenge writes |Φ+⟩, between two fixed qubits, the ports, on three processor graphs, and measure what error detection with postselection buys and costs.
-# - **Our protection:** GHZ disentangling moves the pair by preparing a GHZ state along the path between the ports and disentangling it with gates, which leaves the path's interior qubits in |0⟩. The vacancy read then reads those qubits at the end of the circuit and discards each shot where any reads 1. It detects errors and corrects none.
+# - **The task:** create the Bell state $\lvert\beta_{00}\rangle = (\lvert 00\rangle + \lvert 11\rangle)/\sqrt{2}$, which the challenge writes $\lvert\Phi^+\rangle$, between two fixed qubits, the ports, on three processor graphs, and measure what error detection with postselection buys and costs.
+# - **Our protection:** GHZ disentangling moves the pair by preparing a GHZ state along the path between the ports and disentangling it with gates, which leaves the path's interior qubits in $\lvert 0\rangle$. The vacancy read then reads those qubits at the end of the circuit and discards each shot where any reads 1. It detects errors and corrects none.
 # - **The noise:** one model from IBM's Boston calibration medians, the same on every graph, simulated with {{ "{:,}".format(B.shots) }} shots per basis. Every result holds for this one model.
 #
 # **Where to look.** In Colab, the Table of contents pane in the left sidebar lists every heading; in Jupyter and VS Code, the links below jump there.
@@ -454,6 +454,7 @@ def noisy_scores(folder):
 # | 5. Simulate and score | `simulate` | `AerSimulator` |
 #
 # - **Files:** the contemporary processor file, the noise profile and case {{ BCASE.contemporary + 1 }}'s circuit file, shown below, with case {{ BCASE.contemporary }}'s baseline for step 3. [Section 4]({{ ref("s4") }}) explains each kind of file and shows the rest.
+# - **Names in the files:** GHZ disentangling is `ghz-uncompute` in circuit and run names, after its second CX chain, which uncomputes the GHZ state; the vacancy read is `vacancy`. Case {{ BCASE.contemporary + 1 }}'s run is `ghz-uncompute-vacancy-contemporary`.
 # - **After this section:** every run is made with the one call in step 6.
 {{ config_fold("config/processor/bp.data.processor.contemporary.yaml") }}
 {{ config_fold("config/noise/bp.data.noise.boston-2026.yaml") }}
@@ -533,7 +534,7 @@ md_table(["Optimization level", "Two-qubit gates", "Ports measured on qubits", "
 #
 # - **Does:** `schedule` gives every gate a start time and fills each wait with a timed delay, which the noise model turns into decay. It changes no gate, so a run's cost comes from step 3.
 # - **Why:** on hardware a qubit decays while it waits, so a fair run counts its waiting time.
-# - **Why as late as possible:** a qubit then waits in |0⟩, which decay leaves unchanged, instead of waiting while it holds part of the pair. Every run is scheduled the same way.
+# - **Why as late as possible:** a qubit then waits in $\lvert 0\rangle$, which decay leaves unchanged, instead of waiting while it holds part of the pair. Every run is scheduled the same way.
 # - **Output:** the ZZ circuit's duration and delays, then its schedule as a timeline: one row per qubit that acts, one block per gate, coloured by gate, and a gap wherever the qubit waits. The long blocks at the end are the measurements.
 
 # %%
@@ -548,7 +549,7 @@ display(timeline_figure(compiled["ZZ"].compiled, run.nc))
 # #### Step 5. Simulate, then score
 #
 # - **Does:** `simulate` runs the three scheduled circuits in one Aer job under the noise model, with the run's noisy seed.
-# - **Scoring:** a shot is kept when every vacancy read gave 0. Over the kept shots, each basis's correlator is (agreements − disagreements)/kept, and F = (1 + ⟨XX⟩ − ⟨YY⟩ + ⟨ZZ⟩)/4.
+# - **Scoring:** a shot is kept when every vacancy read gave 0. Over the kept shots, each basis's correlator is the agreements minus the disagreements, divided by the shots kept, and $F = (1 + \langle XX\rangle - \langle YY\rangle + \langle ZZ\rangle)/4$.
 # - **Output:** F with its standard error, and the acceptance.
 
 # %%
@@ -705,7 +706,7 @@ print("the same numbers" if (round(f_hand, 12), round(acceptance_hand, 12)) == (
 #
 # ## {{ H["s3"] }}
 #
-# **On each of three processor graphs, create the Bell pair |β₀₀⟩ = (|00⟩ + |11⟩)/√2 between two fixed qubits, the ports, measure how close it comes, and test one strategy that protects it.**
+# **On each of three processor graphs, create the Bell pair $\lvert\beta_{00}\rangle = (\lvert 00\rangle + \lvert 11\rangle)/\sqrt{2}$ between two fixed qubits, the ports, measure how close it comes, and test one strategy that protects it.**
 #
 # - **Why it is hard:** a two-qubit gate acts only between neighbours on the graph, so a pair made at one port must be moved to the other, and each added gate adds noise.
 # - **How close it comes:** we measure the two ports in three bases and combine the three correlators into the fidelity. F = 1 is the target exactly; F above 1/2 shows entanglement.
@@ -724,26 +725,26 @@ print("the same numbers" if (round(f_hand, 12), round(acceptance_hand, 12)) == (
 #
 # **The states**
 #
-# - A qubit's state is a unit vector in ℂ²; two qubits share one in ℂ⁴, with basis |00⟩, |01⟩, |10⟩ and |11⟩.
-# - The target, |β₀₀⟩ = (|00⟩ + |11⟩)/√2, is the vector (1, 0, 0, 1)/√2.
-# - The other three Bell states: |β₀₁⟩ = (|01⟩ + |10⟩)/√2, |β₁₀⟩ = (|00⟩ − |11⟩)/√2 and |β₁₁⟩ = (|01⟩ − |10⟩)/√2.
+# - A qubit's state is a unit vector in $\mathbb{C}^2$; two qubits share one in $\mathbb{C}^4$, with basis $\lvert 00\rangle$, $\lvert 01\rangle$, $\lvert 10\rangle$ and $\lvert 11\rangle$.
+# - The target, $\lvert\beta_{00}\rangle = (\lvert 00\rangle + \lvert 11\rangle)/\sqrt{2}$, is the vector $(1, 0, 0, 1)/\sqrt{2}$.
+# - The other three Bell states: $\lvert\beta_{01}\rangle = (\lvert 01\rangle + \lvert 10\rangle)/\sqrt{2}$, $\lvert\beta_{10}\rangle = (\lvert 00\rangle - \lvert 11\rangle)/\sqrt{2}$ and $\lvert\beta_{11}\rangle = (\lvert 01\rangle - \lvert 10\rangle)/\sqrt{2}$.
 #
 # **The Pauli matrices**
 #
-# - X = [[0, 1], [1, 0]], Y = [[0, −i], [i, 0]] and Z = [[1, 0], [0, −1]].
+# - X = [[0, 1], [1, 0]], Y = [[0, -i], [i, 0]] and Z = [[1, 0], [0, -1]].
 #
 # **The correlators**
 #
-# - ⟨BB⟩ is the expectation value of B ⊗ B in the pair's state ρ: Tr(ρ (B ⊗ B)), for B one of X, Y and Z.
-# - From shots: ⟨BB⟩ = P(00) + P(11) − P(01) − P(10).
+# - $\langle BB\rangle$ is the expectation value of $B \otimes B$ in the pair's state $\rho$: $\mathrm{Tr}(\rho\,(B \otimes B))$, for $B$ one of $X$, $Y$ and $Z$.
+# - From shots: $\langle BB\rangle = P(00) + P(11) - P(01) - P(10)$.
 #
 # **Why the formula gives F**
 #
-# - |β₀₀⟩⟨β₀₀| = (I⊗I + X⊗X − Y⊗Y + Z⊗Z)/4, so F = ⟨β₀₀|ρ|β₀₀⟩, the overlap of the prepared state with the target, is the formula above.
+# - $\lvert\beta_{00}\rangle\langle\beta_{00}\rvert = (I \otimes I + X \otimes X - Y \otimes Y + Z \otimes Z)/4$, so $F = \langle\beta_{00}\rvert\,\rho\,\lvert\beta_{00}\rangle$, the overlap of the prepared state with the target, is the formula above.
 #
 # **What each basis sees**
 #
-# - ZZ sees a bit flip, XX a phase flip, and YY either; all three together tell |β₀₀⟩ from the other three Bell states.
+# - ZZ sees a bit flip, XX a phase flip, and YY either; all three together tell $\lvert\beta_{00}\rangle$ from the other three Bell states.
 #
 # **Why 1/2**
 #
@@ -759,10 +760,10 @@ print("the same numbers" if (round(f_hand, 12), round(acceptance_hand, 12)) == (
 # **Each case reports F with its standard error, the acceptance (the fraction of shots kept), and the circuit's cost,** as the challenge's five measures require. Each run takes {{ "{:,}".format(B.shots) }} shots per basis, simulated ideal and noisy with seeds derived from one base seed, {{ B.base_seed }}, so every run repeats exactly.
 #
 # - **F after postselection** is F of the kept shots; **F raw** is F of every shot. A protected result is never shown without its acceptance.
-# - **Standard error:** a correlator c from N shots has variance (1 − c²)/N; the three bases are separate shots, so SE(F) = √(Σ var)/4, with N the kept shots. Two runs differ by more than chance when their difference exceeds about two combined standard errors, √(SE₁² + SE₂²); this notebook gives each difference in those units.
+# - **Standard error:** a correlator c from N shots has variance $(1 - c^2)/N$; the three bases are separate shots, so $\mathrm{SE}(F) = \sqrt{\sum \mathrm{var}}/4$, with N the kept shots. Two runs differ by more than chance when their difference exceeds about two combined standard errors, $\sqrt{\mathrm{SE}_1^2 + \mathrm{SE}_2^2}$; this notebook gives each difference in those units.
 # - **Cost:** two-qubit gates, depth, SWAPs and qubits used, from the compiled circuit before scheduling, and the scheduled duration.
 # - **Two-qubit gates per accepted pair:** the gates divided by the acceptance, what each kept pair costs.
-# - **Infidelity removed per rejection:** (F − F raw)/(1 − p), how much a check lowers 1 − F for each unit of shots it discards.
+# - **Infidelity removed per rejection:** $(F - F_{\mathrm{raw}})/(1 - p)$, how much a check lowers $1 - F$ for each unit of shots it discards.
 
 # %% [markdown]
 # ---
@@ -819,7 +820,7 @@ pd.DataFrame(
 #
 # **The calibration snapshot gives one number per gate, per qubit's readout and per qubit's T1 and T2, and the model uses only those, so every effect below is left out.** [DESIGN.md, section 4]({{ link("docs/DESIGN.md") }}#4-noise-model) holds the full noise model.
 #
-# - **Qubits that start a shot excited:** a qubit begins in |1⟩ instead of |0⟩. A run can set it as a conditional channel, but the snapshot gives no value for it, and no run here sets it.
+# - **Qubits that start a shot excited:** a qubit begins in $\lvert 1\rangle$ instead of $\lvert 0\rangle$. A run can set it as a conditional channel, but the snapshot gives no value for it, and no run here sets it.
 # - **Measurement-induced dephasing:** reading one qubit disturbs its neighbours' phase. The snapshot gives no value for it; every read in the nine cases is at the end of the circuit.
 # - **Always-on ZZ coupling:** neighbours keep a small interaction while idle. The snapshot gives no value for it; an idle qubit here only decays.
 # - **Spectator errors:** a gate disturbs the qubits next to the ones it acts on. The snapshot gives each gate's error on its own qubits only.
@@ -827,7 +828,7 @@ pd.DataFrame(
 # - **Drift:** calibration values change over time. One snapshot is one moment; every run uses the same values, so the three graphs compare under the same noise.
 # - **Feedforward latency:** the delay before a circuit can act on a mid-circuit result. No case acts on a result during the circuit; every read is used after the shot.
 # - **Cosmic-ray bursts:** rare events that raise error rates across a chip at once. They correlate errors across qubits and shots, which a per-gate, per-shot model cannot express.
-# - **Leakage:** a qubit leaving |0⟩ and |1⟩ for a higher level. The simulator treats each qubit as two-level, and the snapshot gives no value for it.
+# - **Leakage:** a qubit leaving $\lvert 0\rangle$ and $\lvert 1\rangle$ for a higher level. The simulator treats each qubit as two-level, and the snapshot gives no value for it.
 # - **Frequency crowding:** qubits with close frequencies disturbing each other. The snapshot gives no coupling between qubit frequencies.
 #
 # </details>
@@ -844,10 +845,10 @@ pd.DataFrame(
 # **Each run is one circuit file: an OpenQASM 3 circuit on the graph's physical qubits, and how its measured bits are read.** One transport and one check, besides the baseline, fill the nine cases:
 #
 # - **Baseline, the SWAP circuit (cases 1, 2, 4, 5, 7, 8):** the baseline we chose: H and CX at one port, SWAPs out to the other port and back, each SWAP three CX gates. It follows the routing in the organisers' example notebook, a reference rather than a requirement, and uses the same number of two-qubit gates: {{ c[2].two_qubit_gates }}, {{ c[5].two_qubit_gates }} and {{ c[8].two_qubit_gates }} on the 2016-inspired, contemporary and hyperbolic-inspired graphs.
-# - **GHZ disentangling, our transport:** H on the first port, then a chain of CX gates along the path copies its bit onto every qubit, giving the GHZ state (|0…0⟩ + |1…1⟩)/√2 on the whole path. A second chain of CX gates walks back towards the first port, each gate controlled by the qubit before it, and returns every interior qubit to |0⟩, so only the two ports keep the shared bit: the Bell pair. The last of these gates is controlled by the first port. Liao et al. build a long-range CNOT the same way, preparing a GHZ state and disentangling it with gates ([arXiv:2411.14638](https://arxiv.org/abs/2411.14638)).{{ chk() }}
-# - **Vacancy read (cases 3, 6, 9):** after the transport, each interior qubit is measured in the Z basis at the end of the circuit. Each should read 0, so a shot where any reads 1 is discarded. A bit flip on an interior qubit reads 1, and so does a bit flip on the first port before the last gate, which copies it onto an interior qubit. The read cannot see a phase flip, and it adds no gate and no qubit.
+# - **GHZ disentangling, our transport, `ghz-uncompute` in file names:** H on the first port, then a chain of CX gates along the path copies its bit onto every qubit, giving the GHZ state $(\lvert 0\ldots0\rangle + \lvert 1\ldots1\rangle)/\sqrt{2}$ on the whole path. A second chain of CX gates walks back towards the first port, each gate controlled by the qubit before it, and returns every interior qubit to $\lvert 0\rangle$, so only the two ports keep the shared bit: the Bell pair. The last of these gates is controlled by the first port. Liao et al. build a long-range CNOT the same way, preparing a GHZ state and disentangling it with gates ([arXiv:2411.14638](https://arxiv.org/abs/2411.14638)).{{ chk() }}
+# - **Vacancy read (cases 3, 6, 9), `vacancy` in file names:** after the transport, each interior qubit is measured in the Z basis at the end of the circuit. Each should read 0, so a shot where any reads 1 is discarded. A bit flip on an interior qubit reads 1, and so does a bit flip on the first port before the last gate, which copies it onto an interior qubit. The read cannot see a phase flip, and it adds no gate and no qubit.
 #
-# For each graph, the two circuits its cases use, then the transport alone that section {{ sec("s5-2") }} makes, each as the repository holds it, then as the workbench shows it: the graph with the couplers the circuit uses, the written circuit and its cost, then two dropdowns: a step-through of the written circuit with no noise, and the compiled circuits, with a dropdown for each basis holding its compiled circuit, a timeline of when each qubit is busy, and the circuit as OpenQASM 3 (challenge material 02). Each view compiles its circuit here, as a run does, at optimization level 1 into Boston's native gates (CZ, √X, X and Rz), without simulating.
+# For each graph, the two circuits its cases use, then the transport alone that section {{ sec("s5-2") }} makes, each as the repository holds it, then as the workbench shows it: the graph with the couplers the circuit uses, the written circuit and its cost, then two dropdowns: a step-through of the written circuit with no noise, and the compiled circuits, with a dropdown for each basis holding its compiled circuit, a timeline of when each qubit is busy, and the circuit as OpenQASM 3 (challenge material 02). Each view compiles its circuit here, as a run does, at optimization level 1 into Boston's native gates (`cz`, `sx`, `x` and `rz`), without simulating.
 
 {%- for p in P %}
 
@@ -953,7 +954,7 @@ finish(fig, "The nine cases", f"{REPORTED}; every ± is smaller than its dot", l
 # | Graph | Baseline F | Transport adds | Read adds | Protected F | Shots kept | Two-qubit gates |
 # |---|---|---|---|---|---|---|
 {%- for p in P %}
-# | {{ TITLE[p][0] | upper }}{{ TITLE[p][1:] }} | {{ F(base[p]) }} | {{ diff(tr[p], base[p]) }} | {{ diff(prot[p], tr[p]) }} | {{ F(prot[p]) }} | {{ pct(prot[p].acceptance) }} | {{ base[p].two_qubit_gates }} → {{ prot[p].two_qubit_gates }} |
+# | {{ TITLE[p][0] | upper }}{{ TITLE[p][1:] }} | {{ F(base[p]) }} | {{ diff(tr[p], base[p]) }} | {{ diff(prot[p], tr[p]) }} | {{ F(prot[p]) }} | {{ pct(prot[p].acceptance) }} | {{ base[p].two_qubit_gates }} to {{ prot[p].two_qubit_gates }} |
 {%- endfor %}
 #
 # The transport alone, GHZ disentangling without the read, is made here with the nine cases' shots and seed; its circuits are in section {{ sec("s4-4") }}.
@@ -1026,7 +1027,7 @@ finish(fig, "Quality against cost", "noisy cases and the transport alone, as mad
 # - **The 2016-inspired graph, with one path between its ports, gives the highest protected F.** The vacancy read uses the pair's own path at the end of the circuit, so it needs no spare path.
 {%- set hq, hx, ht = L.hyperbolic.runs["ghz-uncompute-vacancy-hyperbolic"], L.hyperbolic.runs["ghz-uncompute-vacancy-spare-xx-hyperbolic"], L.hyperbolic.runs["ghz-uncompute-hyperbolic"] %}
 {%- set cq, cx = L.contemporary.runs["ghz-uncompute-vacancy-contemporary"], L.contemporary.runs["ghz-uncompute-vacancy-spare-xx-contemporary"] %}
-# - **What a spare path buys:** on the hyperbolic-inspired graph, an XX check on a spare path after the read raised F by {{ diff(hx, hq) }}, discarding {{ pct(hq.acceptance - hx.acceptance) }} more of the shots, with {{ hx.two_qubit_gates - hq.two_qubit_gates }} more two-qubit gates and {{ hx.qubits_used - hq.qubits_used }} more qubits. On the contemporary graph it raised F by {{ diff(cx, cq) }}, through the graph's five-edge qubit, whose extra error the model leaves out. The read alone gains {{ "%.2f"|format((hq.fidelity - ht.fidelity) / (1 - hq.acceptance)) }} in F per discarded shot on the hyperbolic-inspired graph, the check {{ "%.2f"|format((hx.fidelity - hq.fidelity) / (hq.acceptance - hx.acceptance)) }} per extra discarded shot, so we report the read alone on every graph, which also keeps the three graphs' cases one strategy.
+# - **What a spare path buys:** an XX check on a spare path after the read raises F a little, by {{ diff(hx, hq) }} on the hyperbolic-inspired graph and {{ diff(cx, cq) }} on the contemporary graph, at a cost in shots, two-qubit gates and qubits, so we report the read alone on every graph, which also keeps the three graphs' cases one strategy. Sections {{ sec("s6-2") }} and {{ sec("s6-3") }} set out each graph's costs.
 # - **The hyperbolic-inspired graph is a schematic,** a 13-qubit graph of short distances and high degree, not a patch of a hyperbolic lattice; we claim no advantage from its geometry beyond these three features.
 
 # %% [markdown]
@@ -1069,7 +1070,7 @@ beside_record(REPORTED, extra=[(MADE / "transport-alone" / f"ghz-uncompute-{p}",
 # - `baseline`: our baseline, the SWAP circuit: SWAPs out and back.
 # - `move-chain`: each hop moves the pair's far half with two CX gates; no check.
 # - `ghz-measure`: the textbook GHZ transport, reading the interior in X, with a Z owed on the first port for each 1; no check.
-# - `ghz-measure-…-readout-0`: the same circuit with no readout error on the interior qubits it reads, the only run that changes the profile.
+# - `ghz-measure-<graph>-readout-0`: the same circuit with no readout error on the interior qubits it reads, the only run that changes the profile.
 # - `ghz-uncompute`: GHZ disentangling, the protected case's transport; no check.
 # - `move-chain-vacancy`: the move chain, then the vacancy read.
 # - `ghz-uncompute-vacancy`: the protected case, GHZ disentangling then the vacancy read.
@@ -1088,6 +1089,7 @@ beside_record(REPORTED, extra=[(MADE / "transport-alone" / f"ghz-uncompute-{p}",
 # - **Against the earlier protected case:** {{ diff(q, R[OLD[p]]) }}, keeping {{ pct(q.acceptance) }} of shots against {{ pct(R[OLD[p]].acceptance) }}, with {{ q.two_qubit_gates }} two-qubit gates against {{ R[OLD[p]].two_qubit_gates }}.{% if ("ghz-uncompute-vacancy-spare-xx-" ~ p) not in R %} With no spare path on this graph, that check reads a qubit of the pair's path mid-circuit, under a mid-circuit measurement error of {{ "%g"|format(mcm) }}.{% endif %}
 {%- if ("ghz-uncompute-vacancy-spare-xx-" ~ p) in R %}
 # - **With a spare-path XX check after the read:** F moves by {{ diff(R["ghz-uncompute-vacancy-spare-xx-" ~ p], q) }} at an acceptance of {{ a3(R["ghz-uncompute-vacancy-spare-xx-" ~ p].acceptance) }}, with {{ R["ghz-uncompute-vacancy-spare-xx-" ~ p].two_qubit_gates - q.two_qubit_gates }} more two-qubit gates.
+# - **Why the protected case leaves it out:** the check discards {{ pct(q.acceptance - R["ghz-uncompute-vacancy-spare-xx-" ~ p].acceptance) }} more of the shots, keeping {{ pct(R["ghz-uncompute-vacancy-spare-xx-" ~ p].acceptance) }} against {{ pct(q.acceptance) }}, for {{ diff(R["ghz-uncompute-vacancy-spare-xx-" ~ p], q) }}. Per extra discarded shot it gains {{ "%.2f"|format((R["ghz-uncompute-vacancy-spare-xx-" ~ p].fidelity - q.fidelity) / (q.acceptance - R["ghz-uncompute-vacancy-spare-xx-" ~ p].acceptance)) }} in F, where the read gains {{ "%.2f"|format((q.fidelity - R["ghz-uncompute-" ~ p].fidelity) / (1 - q.acceptance)) }} per discarded shot, and it adds {{ R["ghz-uncompute-vacancy-spare-xx-" ~ p].qubits_used - q.qubits_used }} qubits.{% if p == "contemporary" %} Its check also runs through the graph's five-edge qubit, whose extra error the model leaves out, so the model, if anything, favours this check.{% endif %}
 {%- endif %}
 #
 # | Run | F ± SE | Acceptance | Two-qubit gates | Against the protected case |
