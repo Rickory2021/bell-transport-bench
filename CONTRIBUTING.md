@@ -85,4 +85,6 @@ make bp-validate
 
 Both must pass. If your change moves results, commit it, remake each benchmark it affects (`make benchmark`, then `make benchmark NAME=<n>` for each of `deliverable-2026-11-17`, its three extended benchmarks `deliverable-2026-11-17-extended-ibm2016`, `-contemporary` and `-hyperbolic`, `move-chain`, `biased-noise`, `mid-circuit-sweep` and `starting-excitation`), and commit the new folders in the next commit, as [Commit chunking](#commit-chunking) says.
 
+**After any change to `src/bellbench/`, `config/`, `results/` or a notebook template, run `make submission` in your own clone and commit the rendered notebook with the change.** The submission notebook packs the package, the reported run records and the schemas byte for byte, so a notebook rendered from any other copy of the repo, even one with the same numbers, fails `make test`.
+
 The folders of the repo and what each holds are in the README's [Layout](README.md#layout) and [File naming](README.md#file-naming).

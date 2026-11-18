@@ -7,7 +7,7 @@ A benchmark for creating a Bell pair between two distant qubits and protecting i
 
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Rickory2021/bell-transport-bench/blob/submission/notebooks/bp.output.submission.ipynb)
 
-**The submission notebook opens in Colab with the badge above, at the `submission` tag.** It needs Python 3.12 or later, installs the pinned packages in its first cell, and carries the code and recorded runs it needs, so it runs with no copy of the repo.
+**The submission notebook opens in Colab with the badge above, at the `submission` tag.** It needs Python 3.12 or later, installs the pinned packages in its first cell, and carries the code and recorded runs it needs, so it runs with no copy of the repo. The tutorial and workbench notebooks import `bellbench` from the repo, so they run only in a clone set up with `make setup`, not from a Colab link.
 
 The full task is in [`docs/CHALLENGE.md`](docs/CHALLENGE.md): three processor models, nine core cases, and what to report. The design decisions and their reasons are in [`docs/DESIGN.md`](docs/DESIGN.md), and every source we rely on is in [`docs/bp.data.references.yaml`](docs/bp.data.references.yaml).
 
@@ -48,7 +48,7 @@ make submission                             # render the submission notebook fro
 | `config/` | Typed configs: processor files, noise profiles, circuit files and benchmark files |
 | `results/` | Runs and benchmarks made from committed code, each in a folder never edited afterwards |
 | `workspace/` | Your workbench copy, trial circuits, and anything made with uncommitted changes or from a trial; only its README is committed |
-| `notebooks/` | The workbench and submission notebooks, generated from their templates; narrative and plots only |
+| `notebooks/` | The tutorial, workbench and submission notebooks, generated from their templates; narrative and plots only |
 | `docs/` | `CHALLENGE.md` (the task), `DESIGN.md` (decisions and reasons), and the references data |
 | `scripts/` | blueprint-render (validates and renders typed YAML) and flatten-sync (exports the repo for Claude Projects) |
 | `tests/` | pytest suite |
