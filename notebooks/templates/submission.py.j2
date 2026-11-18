@@ -288,7 +288,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import yaml
-from IPython.display import Code
+from IPython.display import Markdown
 from qiskit.transpiler import generate_preset_pass_manager
 from bellbench import fidelity, noise, pipeline
 from bellbench.analysis import read_shots
@@ -306,8 +306,9 @@ BASES = ("XX", "YY", "ZZ")
 
 
 def show(function):
-    """The package's own code for a function, as the payload holds it, so what is shown is what runs."""
-    display(Code(inspect.getsource(function), language="python"))
+    """The package's own code for a function, as the payload holds it, so what is shown is what runs. It is shown as a
+    Markdown code block, so each viewer highlights it in its own theme, light or dark."""
+    display(Markdown(f"```python\n{inspect.getsource(function)}```"))
 
 
 def make(benchmark):
