@@ -219,11 +219,15 @@ def test_the_payloads_say_where_they_come_from():
 
 
 def test_the_case_table_in_the_text_is_the_records():
+    """Section 5.1's table gives every case every measure, each from the reported snapshot's comparison table."""
     cases, text = _cases(INVOKE["reported"]), _markdown()
-    for graph, (ideal, base, protected) in zip(("2016-inspired", "Contemporary", "Hyperbolic-inspired"), CASES.values()):
-        row = f"| {graph} | 1 (case {ideal}) | {_F(cases[base])} (case {base}) | " \
-              f"{_F(cases[protected])}, {cases[protected].acceptance:.3f} (case {protected}) |"
-        assert row in text
+    names = {"ibm2016": "2016-inspired", "contemporary": "Contemporary", "hyperbolic": "Hyperbolic-inspired"}
+    for n, r in cases.items():
+        kept = r.shots_accepted_XX + r.shots_accepted_YY + r.shots_accepted_ZZ
+        row = (f"| {n} | {names[r.processor]} | {['protected', 'ideal', 'noisy baseline'][n % 3]} | {_F(r)} | "
+               f"{r.fidelity_raw:.4f} | {r.acceptance:.3f} | {int(r.shots_total - kept):,} | {r.two_qubit_gates} | "
+               f"{r.depth} | {r.swaps} | {r.qubits_used} | {r.scheduled_duration * 1e6:.2f} |")
+        assert row in text, row
 
 
 def test_the_overview_quotes_the_records():
