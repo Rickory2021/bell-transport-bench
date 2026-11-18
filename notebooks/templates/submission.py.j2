@@ -3,6 +3,16 @@
 # notebooks/bp.invoke.submission.yaml through notebooks/bp.process.submission.yaml and writes
 # notebooks/bp.output.submission.ipynb; make submission runs it. Edit this file, never the output.
 # Every number in the notebook's text comes from the reported snapshots' comparison tables at render time.
+#
+# Readers. The primary reader is a challenge judge: they know quantum computing and Qiskit, score the six
+# criteria in docs/CHALLENGE.md with the video at hand, and meet the code here for the first time. Read top to
+# bottom, the notebook leaves them knowing the result, its evidence, and whether the repository deserves a look.
+# The secondary reader is a teammate, fluent in Python with basic linear algebra and little quantum knowledge,
+# who reads it as the way into the repository. The main text assumes quantum and Qiskit; definitions for the
+# teammate sit in folds. The notebook shows what the benchmark system gives a teammate, the workbench, its views
+# and the workflow from config files to recorded runs, as the case for the repository. A judge must be able to
+# skim it both locally, where folds and in-page links work, and in Colab, where folds work but in-page links do
+# not, so headings and each section's opening sentence carry the navigation.
 
 {#- The reported benchmark and its nine cases by number. -#}
 {%- set M = tables[reported] %}
@@ -13,7 +23,7 @@
 {#- Every heading a link points at, once: a link targets the heading itself, the way Jupyter and VS Code name it,
     so renaming a heading here renames its links too. #}
 {%- set H = {
-    "top": "Moving a Bell pair across three processor graphs, and checking it by reading the path it leaves empty",
+    "top": "bell-transport-bench: moving a Bell pair across three processor graphs",
     "s1": "1. Setup",
     "s2": "2. The task",
     "s3": "3. Methods",
@@ -109,7 +119,7 @@
 #
 # [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/{{ repo }}/blob/{{ tag }}/notebooks/bp.output.submission.ipynb)
 #
-# **bell-transport-bench · UCF IBM Qiskit Fall Fest 2026 · quanTA challenge**
+# **Our submission to the quanTA challenge, UCF IBM Qiskit Fall Fest 2026: a report that remakes every run it reports.**
 #
 # **Abstract.** We built a benchmark that creates the Bell state |Φ+⟩ between two fixed qubits, the ports, on three processor graphs, under one noise model built from IBM's Boston calibration, and measures what error detection with postselection buys and costs. Our protection moves the pair by preparing a GHZ state along the path between the ports and disentangling it with gates, which leaves the path's interior qubits in |0⟩, then reads those qubits at the end of the circuit and discards each shot where any reads 1. Against the organisers' noisy baseline it raised the fidelity F from {{ F(c[2]) }} to {{ F(c[3]) }} keeping {{ pct(c[3].acceptance) }} of shots on the 2016-inspired graph, from {{ F(c[5]) }} to {{ F(c[6]) }} keeping {{ pct(c[6].acceptance) }} on the contemporary graph, and from {{ F(c[8]) }} to {{ F(c[9]) }} keeping {{ pct(c[9].acceptance) }} on the hyperbolic-inspired graph (one standard error each), with {{ c[3].two_qubit_gates }}, {{ c[6].two_qubit_gates }} and {{ c[9].two_qubit_gates }} two-qubit gates against the baseline's {{ c[2].two_qubit_gates }}, {{ c[5].two_qubit_gates }} and {{ c[8].two_qubit_gates }}, and no extra qubit. The read alone added {{ d4(c[3].fidelity - tr.ibm2016.fidelity) }}, {{ d4(c[6].fidelity - tr.contemporary.fidelity) }} and {{ d4(c[9].fidelity - tr.hyperbolic.fidelity) }} to the same transport without it. Every result holds for this one noise model, simulated with {{ "{:,}".format(B.shots) }} shots per basis; appendix A sets each protected case beside the circuits one step from it.{{ chk() }}
 #
