@@ -720,13 +720,14 @@ print("the same numbers" if (round(f_hand, 12), round(acceptance_hand, 12)) == (
 #
 # ## {{ H["s3"] }}
 #
-# **On each of three processor graphs, create the Bell pair |β₀₀⟩ = (|00⟩ + |11⟩)/√2 between two fixed qubits, measure how close it comes, and test one strategy that protects it.** Two qubits share a unit vector in ℂ⁴, and |β₀₀⟩ is the vector (1, 0, 0, 1)/√2. A two-qubit gate acts only between neighbours on the graph, so a pair made at one port must be moved, or routed, to the other, and each added gate adds noise.
+# **On each of three processor graphs, create the Bell pair |β₀₀⟩ = (|00⟩ + |11⟩)/√2 between two fixed qubits, the ports, measure how close it comes, and test one strategy that protects it.**
 #
-# We verify the pair by measuring the two ports in three bases and combining the three correlators into the fidelity:
+# - **Why it is hard:** a two-qubit gate acts only between neighbours on the graph, so a pair made at one port must be moved to the other, and each added gate adds noise.
+# - **How close it comes:** we measure the two ports in three bases and combine the three correlators into the fidelity. F = 1 is the target exactly; F above 1/2 shows entanglement.
 #
 # $$F = \frac{1 + \langle XX\rangle - \langle YY\rangle + \langle ZZ\rangle}{4}$$
 #
-# F = 1 is the target exactly; F above 1/2 shows entanglement. The challenge fixes nine cases, each graph under three conditions:
+# **The nine cases:** each graph under three conditions.
 #
 # | Graph | Ideal | Noisy | Noisy, protected |
 # |---|---|---|---|
@@ -736,9 +737,31 @@ print("the same numbers" if (round(f_hand, 12), round(acceptance_hand, 12)) == (
 #
 # <details><summary><b>The linear algebra behind the formula</b></summary>
 #
-# - A correlator ⟨BB⟩ is the expectation value of B ⊗ B in the pair's state ρ, Tr(ρ (B ⊗ B)), for B one of the Pauli matrices X = [[0, 1], [1, 0]], Y = [[0, −i], [i, 0]] and Z = [[1, 0], [0, −1]]. From shots it is P(00) + P(11) − P(01) − P(10).
-# - |β₀₀⟩⟨β₀₀| = (I⊗I + X⊗X − Y⊗Y + Z⊗Z)/4, so F = ⟨β₀₀|ρ|β₀₀⟩, the overlap of the prepared state with the target.
-# - ZZ sees a bit flip, XX a phase flip, and YY either; all three together tell |β₀₀⟩ from the other three Bell states, |β₀₁⟩, |β₁₀⟩ and |β₁₁⟩.
+# **The states**
+#
+# - A qubit's state is a unit vector in ℂ²; two qubits share one in ℂ⁴, with basis |00⟩, |01⟩, |10⟩ and |11⟩.
+# - The target, |β₀₀⟩ = (|00⟩ + |11⟩)/√2, is the vector (1, 0, 0, 1)/√2.
+# - The other three Bell states: |β₀₁⟩ = (|01⟩ + |10⟩)/√2, |β₁₀⟩ = (|00⟩ − |11⟩)/√2 and |β₁₁⟩ = (|01⟩ − |10⟩)/√2.
+#
+# **The Pauli matrices**
+#
+# - X = [[0, 1], [1, 0]], Y = [[0, −i], [i, 0]] and Z = [[1, 0], [0, −1]].
+#
+# **The correlators**
+#
+# - ⟨BB⟩ is the expectation value of B ⊗ B in the pair's state ρ: Tr(ρ (B ⊗ B)), for B one of X, Y and Z.
+# - From shots: ⟨BB⟩ = P(00) + P(11) − P(01) − P(10).
+#
+# **Why the formula gives F**
+#
+# - |β₀₀⟩⟨β₀₀| = (I⊗I + X⊗X − Y⊗Y + Z⊗Z)/4, so F = ⟨β₀₀|ρ|β₀₀⟩, the overlap of the prepared state with the target, is the formula above.
+#
+# **What each basis sees**
+#
+# - ZZ sees a bit flip, XX a phase flip, and YY either; all three together tell |β₀₀⟩ from the other three Bell states.
+#
+# **Why 1/2**
+#
 # - A state that is not entangled cannot have F above 1/2, so 1/2 is the line a classical correlation cannot cross.
 #
 # The full statement of the task, with its sources, is [CHALLENGE.md]({{ link("docs/CHALLENGE.md") }}).
