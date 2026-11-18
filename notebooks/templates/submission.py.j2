@@ -119,32 +119,38 @@
 #
 # [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/{{ repo }}/blob/{{ tag }}/notebooks/bp.output.submission.ipynb)
 #
-# **Our submission to the quanTA challenge, UCF IBM Qiskit Fall Fest 2026: a report that remakes every run it reports.**
+# **Our submission to the quanTA challenge, UCF IBM Qiskit Fall Fest 2026.**
+#
+# **What this notebook is.** The bell-transport-bench repository, compressed into one self-contained file so the benchmark runs anywhere, Colab included, without a clone. The repository is where the work is done: a teammate drives it with `make` commands, shown under "How the repository works" below. This notebook packs the repository's package, its recorded runs and its config files, writes each config file out where it explains it, remakes every run it reports, and sets each beside the run the repository recorded. Every config file, circuit and result below is the repository's own, carried here.
 #
 # **Overview.** Under one simulated noise model, our protection raised the fidelity F of a Bell pair between two distant qubits on all three processor graphs, keeping at least {{ pct([c[3], c[6], c[9]] | map(attribute="acceptance") | min) }} of shots and using fewer two-qubit gates than the organisers' baseline. [Section 4.1]({{ ref("s4-1") }}) gives each graph's numbers.{{ chk() }}
 #
 # - **The task:** create the Bell state |β₀₀⟩ = (|00⟩ + |11⟩)/√2, which the challenge writes |Φ+⟩, between two fixed qubits, the ports, on three processor graphs, and measure what error detection with postselection buys and costs.
 # - **Our protection:** GHZ disentangling moves the pair by preparing a GHZ state along the path between the ports and disentangling it with gates, which leaves the path's interior qubits in |0⟩. The vacancy read then reads those qubits at the end of the circuit and discards each shot where any reads 1. It detects errors and corrects none.
 # - **The noise:** one model from IBM's Boston calibration medians, the same on every graph, simulated with {{ "{:,}".format(B.shots) }} shots per basis. Every result holds for this one model.
-# - **The evidence:** this notebook carries the code and the recorded runs, remakes every run it reports, and sets each beside the run the repository recorded.
 #
 # **Where to look.** In Colab, the Table of contents pane in the left sidebar lists every heading; in Jupyter and VS Code, the links below jump there.
 #
-# | To check | Look at | Judging criterion |
-# |---|---|---|
-# | F, acceptance and cost of the nine cases | [{{ sec("s4-1") }}]({{ ref("s4-1") }}) | Architecture comparison |
-# | What the transport and the read each buy, and what they cost | [{{ sec("s4-2") }}]({{ ref("s4-2") }}) | Protection strategy |
-# | Why the graphs differ: port distance and spare paths | [{{ sec("s4-3") }}]({{ ref("s4-3") }}) | Architecture comparison |
-# | Every run remade here and matched to its record | [{{ sec("s4-4") }}]({{ ref("s4-4") }}) | Correctness and reproducibility |
-# | One run rebuilt by hand in Qiskit and Aer, matching the package | [{{ sec("s3-run") }}]({{ ref("s3-run") }}) | Effective use of Qiskit |
-# | Every circuit, written and compiled | [{{ sec("s3-4") }}]({{ ref("s3-4") }}) | Effective use of Qiskit |
-# | Why we wrote the transports instead of leaving routing to the transpiler | [{{ sec("s3-6") }}]({{ ref("s3-6") }}) | Effective use of Qiskit |
-# | The noise model, and what it leaves out | [{{ sec("s3-2") }}]({{ ref("s3-2") }}) | Correctness and reproducibility |
-# | The protected case beside each alternative, and what readout decides | [Appendix A]({{ ref("sA") }}), [A.4]({{ ref("sA-4") }}) | Protection strategy |
-# | What the results show, and their limits | [5]({{ ref("s5") }}), [6]({{ ref("s6") }}) | Correctness and reproducibility |
+# | Question | Where |
+# |---|---|
+# | How did each of the nine cases do: F, acceptance and cost? | [{{ sec("s4-1") }}]({{ ref("s4-1") }}) |
+# | What do the transport and the read each buy, and what do they cost? | [{{ sec("s4-2") }}]({{ ref("s4-2") }}) |
+# | Why do the three graphs differ? | [{{ sec("s4-3") }}]({{ ref("s4-3") }}) |
+# | Does every run reproduce? | [{{ sec("s4-4") }}]({{ ref("s4-4") }}) |
+# | What does a run do in plain Qiskit and Aer? | [{{ sec("s3-run") }}]({{ ref("s3-run") }}) |
+# | What do the circuits look like, written and compiled? | [{{ sec("s3-4") }}]({{ ref("s3-4") }}) |
+# | Why not leave routing to the transpiler? | [{{ sec("s3-6") }}]({{ ref("s3-6") }}) |
+# | What noise did we model, and what did we leave out? | [{{ sec("s3-2") }}]({{ ref("s3-2") }}) |
+# | How does the protected case compare with its alternatives? | [Appendix A]({{ ref("sA") }}) |
+# | When does readout favour the textbook GHZ transport? | [A.4]({{ ref("sA-4") }}) |
+# | What do the results mean, and where do they stop? | [5]({{ ref("s5") }}), [6]({{ ref("s6") }}) |
 {%- if recommendation %}
-# | Our recommendation for future systems | [7]({{ ref("s7") }}) | Evidence for the recommendation |
+# | What do we recommend for future systems? | [7]({{ ref("s7") }}) |
 {%- endif %}
+#
+# **How the repository works.** The benchmark is a small framework a teammate drives with four commands, drawn below. `make workbench` gives them their own copy of the workbench notebook, where they pick a graph and a noise profile, build a circuit, see it written and compiled, and save it as a circuit file; the circuit views in this notebook are the workbench's own. `make benchmark` makes every run a benchmark file names, and each run records its commit, seeds and package versions. `make run` remakes a recorded run and reports any difference. `make submission` renders this notebook from the recorded runs. Every input is a YAML file checked against a schema, so every result traces to a config file, a seed and pinned package versions, all in the [repository](https://github.com/{{ repo }}/tree/{{ tag }}).
+#
+# <img src="https://raw.githubusercontent.com/{{ repo }}/{{ tag }}/docs/assets/design-flow.png" width="480" alt="The workflow: processor files, noise profiles, circuit files and benchmark files in config/ feed the workbench notebook and make benchmark; both build the processor and its noise with NoiseControl, which feeds CircuitRun to compile, simulate and score each run; runs land in workspace/ or results/runs/, a benchmark's runs in one folder with a comparison table, and the submission notebook reads the deliverable benchmark.">
 #
 # **To run it:** Run all, in [Colab](https://colab.research.google.com/github/{{ repo }}/blob/{{ tag }}/notebooks/bp.output.submission.ipynb) or in Jupyter on Python 3.12 or later. Section 1 installs the pinned packages, and the runs took about four minutes on our machine.
 
@@ -153,7 +159,11 @@
 #
 # ## {{ H["s1"] }}
 #
-# **Run the cells of this section first.** The notebook needs Python 3.12 or later, as the repository does. The first cell checks the version, then installs the packages the repository's `pyproject.toml` pins, into the Python this notebook runs on; pip leaves any already installed at the right version. In Colab, if it upgrades a package Colab has already loaded, restart the runtime when asked and run the cells again. In the repository's own environment, which uv made, everything is installed already and the cell only reports that pip is absent. The next four cells are payloads, each one line, which opens folded under its title in Colab, from the repository [`{{ repo }}`](https://github.com/{{ repo }}/tree/{{ tag }}) at tag `{{ tag }}`:
+# **Run these cells first:** they install the pinned packages and unpack the code and recorded runs this notebook carries.
+#
+# <details><summary><b>What these cells do</b></summary>
+#
+# The notebook needs Python 3.12 or later, as the repository does. The first cell checks the version, then installs the packages the repository's `pyproject.toml` pins, into the Python this notebook runs on; pip leaves any already installed at the right version. In Colab, if it upgrades a package Colab has already loaded, restart the runtime when asked and run the cells again. In the repository's own environment, which uv made, everything is installed already and the cell only reports that pip is absent. The next four cells are payloads, each one line, which opens folded under its title in Colab, from the repository [`{{ repo }}`](https://github.com/{{ repo }}/tree/{{ tag }}) at tag `{{ tag }}`:
 #
 # - **The code:** the `bellbench` package, `src/bellbench/`, exactly as the repository holds it ({{ code.count }} files).
 # - **The nine cases' runs:** every file of the snapshot behind the nine cases, `{{ reported }}`, from `results/runs/benchmark/` ({{ results.count }} files).
@@ -162,7 +172,9 @@
 #
 # The sixth cell unpacks the payloads into a temporary folder, and lists every file with its SHA-256, so each one can be checked against the same file at that tag. Nothing is written outside that folder.
 #
-# **Every config file but the schemas is written out where this notebook explains it,** not packed: each `%%repo_file` cell writes one file into the same folder, and the code reads it from there. The schemas are packed instead, since every config file and run record is checked against them when it loads, so they must be in place before the first one; each is shown in a dropdown after the setup, with the core benchmark file, which only the workbench reads.
+# Every config file but the schemas is written out where this notebook explains it, not packed: each `%%repo_file` cell writes one file into the same folder, and the code reads it from there. The schemas are packed instead, since every config file and run record is checked against them when it loads, so they must be in place before the first one; each is shown in a dropdown after the setup, with the core benchmark file, which only the workbench reads.
+#
+# </details>
 
 # %%
 import sys
