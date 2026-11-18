@@ -185,13 +185,15 @@ def test_every_config_file_is_shown_once_folded_as_the_repository_holds_it():
     """Each config file appears once in the text as a folded YAML dropdown, rendered from the file at build time, so a
     reader sees it before anything runs; the code reads the same file from the config payload."""
     shown = {}
-    for path, body in re.findall(r"<details><summary><b>(config/[^<]+)</b></summary>\n\n```yaml\n(.*?)\n```\n\n</details>",
+    for path, body in re.findall(r"<details><summary><b>(config/[^<]+)</b> · <a href=\"[^\"]+\">on GitHub</a></summary>\n\n```yaml\n(.*?)\n```\n\n</details>",
                                  _markdown(), re.S):
         assert path not in shown, f"{path} is shown twice"
         shown[path] = body + "\n"  # the dropdown drops the file's final newline
     expected = {p.relative_to(ROOT).as_posix(): p.read_text(encoding="utf-8") for p in (ROOT / "config").rglob("*.yaml")}
     assert shown == expected
     assert not any(source.startswith("%%") for kind, source in _cells() if kind == "code")  # no config file is a code cell
+    for path in shown:  # each dropdown links to its file at the tag the invoke names
+        assert f'<a href="https://github.com/{INVOKE["repo"]}/blob/{INVOKE["tag"]}/{path}">on GitHub</a>' in _markdown()
 
 
 def test_each_payload_cell_opens_folded_under_its_title():

@@ -97,7 +97,7 @@
 {%- macro config_fold(path) %}
 
 # %% [markdown]
-# <details><summary><b>{{ path }}</b></summary>
+# <details><summary><b>{{ path }}</b> · <a href="{{ link(path) }}">on GitHub</a></summary>
 #
 # ```yaml
 {%- for l in cfg[path].rstrip("\n").split("\n") %}
@@ -295,6 +295,7 @@ from bellbench.views.show import Compiled, basis_html, show_parts
 from bellbench.workbench import Result, Workbench
 
 REPORTED = "{{ REPORTED }}"
+SOURCE = "https://github.com/{{ repo }}/blob/{{ tag }}"  # the repository at the tag the payloads come from
 NOISE, SHOTS, BASE_SEED = "{{ B.runs[0].noise }}", {{ B.shots }}, {{ B.base_seed }}  # every benchmark here shares them
 MADE = WORK / "made"  # the runs this notebook makes; the recorded runs stay where the payloads put them
 BASES = ("XX", "YY", "ZZ")
@@ -308,8 +309,11 @@ def heading(text):
 def show(function):
     """The package's own code for a function, as the payload holds it, so what is shown is what runs, under a divider
     naming it. It is shown as a Markdown code block, so each viewer highlights it in its own theme, light or dark."""
-    display(Markdown(f"---\n\n**bellbench's code:** `{function.__module__}.{function.__qualname__}`\n\n"
-                     f"```python\n{inspect.getsource(function)}```"))
+    lines, start = inspect.getsourcelines(function)
+    path = "src/" + inspect.getsourcefile(function).replace("\\", "/").split("/src/", 1)[1]  # its path in the repository
+    where = f"[{path}, lines {start} to {start + len(lines) - 1}]({SOURCE}/{path}#L{start}-L{start + len(lines) - 1})"
+    display(Markdown(f"---\n\n**bellbench's code:** `{function.__module__}.{function.__qualname__}`, from {where}\n\n"
+                     f"```python\n{''.join(lines)}```"))
 
 
 def md_table(columns, rows):
