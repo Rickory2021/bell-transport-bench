@@ -8,6 +8,13 @@ line starting `# %%` opens a code cell. In a Markdown cell, each line's leading
 template can open with a comment naming its path. Blank lines at either end of
 a cell are trimmed.
 
+A marker line may set the cell's metadata the way Jupytext's percent format
+does, as `key=value` words whose value is JSON with no spaces, such as
+`# %% cellView="form" jupyter={"source_hidden":true}`, which opens the cell
+folded in Colab. Any other word on the marker line is a title and is dropped. A
+value that is not JSON fails the render, so a misspelt setting is never
+silently ignored.
+
 The context from the map stage fills the template's Jinja tags; undefined
 variables raise, so a missing value fails the render instead of leaving a
 blank. The output carries no outputs, execution counts or volatile metadata,
@@ -21,6 +28,7 @@ import re
 import jinja2
 
 MARKER = re.compile(r"^# %%(?P<rest>.*)$")
+OPTION = re.compile(r"^(?P<key>[A-Za-z_][\w.-]*)=(?P<value>\S+)$")
 KERNEL = {
     "kernelspec": {"display_name": "Python 3 (ipykernel)", "language": "python", "name": "python3"},
     "language_info": {"name": "python"},
@@ -45,22 +53,36 @@ def render(context, template_path, output_path, root, **kwargs):
 
 def cells(text: str) -> list[dict]:
     """The notebook cells a percent-format text holds, in order."""
-    found, kind, lines = [], None, []
+    found, kind, metadata, lines = [], None, {}, []
     for line in text.splitlines():
         match = MARKER.match(line)
         if match:
             if kind is not None:
-                found.append(_cell(kind, lines, len(found)))
+                found.append(_cell(kind, lines, len(found), metadata))
             kind = "markdown" if match["rest"].strip().startswith("[markdown]") else "code"
+            metadata = _metadata(line, match["rest"])
             lines = []
         elif kind is not None:
             lines.append(line)
     if kind is not None:
-        found.append(_cell(kind, lines, len(found)))
+        found.append(_cell(kind, lines, len(found), metadata))
     return found
 
 
-def _cell(kind: str, lines: list[str], index: int) -> dict:
+def _metadata(line: str, rest: str) -> dict:
+    """The `key=value` words on a marker line, each value read as JSON."""
+    metadata = {}
+    for word in rest.split():
+        option = OPTION.match(word)
+        if option:
+            try:
+                metadata[option["key"]] = json.loads(option["value"])
+            except json.JSONDecodeError as error:
+                raise ValueError(f"cell metadata on {line!r}: {option['key']}'s value is not JSON") from error
+    return metadata
+
+
+def _cell(kind: str, lines: list[str], index: int, metadata: dict) -> dict:
     if kind == "markdown":
         lines = [re.sub(r"^# ?", "", line) if line.startswith("#") else line for line in lines]
     while lines and not lines[0].strip():
@@ -68,7 +90,7 @@ def _cell(kind: str, lines: list[str], index: int) -> dict:
     while lines and not lines[-1].strip():
         lines.pop()
     source = [line + "\n" for line in lines[:-1]] + lines[-1:]
-    cell = {"cell_type": kind, "id": f"cell-{index:02d}", "metadata": {}, "source": source}
+    cell = {"cell_type": kind, "id": f"cell-{index:02d}", "metadata": metadata, "source": source}
     if kind == "code":
         cell |= {"execution_count": None, "outputs": []}
     return cell

@@ -107,6 +107,8 @@
 # %% [markdown]
 # # {{ H["top"] }}
 #
+# [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/{{ repo }}/blob/{{ tag }}/notebooks/bp.output.submission.ipynb)
+#
 # **bell-transport-bench · UCF IBM Qiskit Fall Fest 2026 · quanTA challenge**
 #
 # **Abstract.** We built a benchmark that creates the Bell state |Φ+⟩ between two fixed qubits, the ports, on three processor graphs, under one noise model built from IBM's Boston calibration, and measures what error detection with postselection buys and costs. Our protection moves the pair by preparing a GHZ state along the path between the ports and disentangling it with gates, which leaves the path's interior qubits in |0⟩, then reads those qubits at the end of the circuit and discards each shot where any reads 1. Against the organisers' noisy baseline it raised the fidelity F from {{ F(c[2]) }} to {{ F(c[3]) }} keeping {{ pct(c[3].acceptance) }} of shots on the 2016-inspired graph, from {{ F(c[5]) }} to {{ F(c[6]) }} keeping {{ pct(c[6].acceptance) }} on the contemporary graph, and from {{ F(c[8]) }} to {{ F(c[9]) }} keeping {{ pct(c[9].acceptance) }} on the hyperbolic-inspired graph (one standard error each), with {{ c[3].two_qubit_gates }}, {{ c[6].two_qubit_gates }} and {{ c[9].two_qubit_gates }} two-qubit gates against the baseline's {{ c[2].two_qubit_gates }}, {{ c[5].two_qubit_gates }} and {{ c[8].two_qubit_gates }}, and no extra qubit. The read alone added {{ d4(c[3].fidelity - tr.ibm2016.fidelity) }}, {{ d4(c[6].fidelity - tr.contemporary.fidelity) }} and {{ d4(c[9].fidelity - tr.hyperbolic.fidelity) }} to the same transport without it. Every result holds for this one noise model, simulated with {{ "{:,}".format(B.shots) }} shots per basis; appendix A sets each protected case beside the circuits one step from it.{{ chk() }}
@@ -130,7 +132,7 @@
 # %% [markdown]
 # ## {{ H["s1"] }}
 #
-# **Run the cells of this section first.** The notebook needs Python 3.12 or later, as the repository does. The first cell checks the version, then installs the packages the repository's `pyproject.toml` pins, into the Python this notebook runs on; pip leaves any already installed at the right version. In Colab, if it upgrades a package Colab has already loaded, restart the runtime when asked and run the cells again. In the repository's own environment, which uv made, everything is installed already and the cell only reports that pip is absent. The next four cells are payloads, each one line, from the repository [`{{ repo }}`](https://github.com/{{ repo }}/tree/{{ tag }}) at tag `{{ tag }}`:
+# **Run the cells of this section first.** The notebook needs Python 3.12 or later, as the repository does. The first cell checks the version, then installs the packages the repository's `pyproject.toml` pins, into the Python this notebook runs on; pip leaves any already installed at the right version. In Colab, if it upgrades a package Colab has already loaded, restart the runtime when asked and run the cells again. In the repository's own environment, which uv made, everything is installed already and the cell only reports that pip is absent. The next four cells are payloads, each one line, which opens folded under its title in Colab, from the repository [`{{ repo }}`](https://github.com/{{ repo }}/tree/{{ tag }}) at tag `{{ tag }}`:
 #
 # - **The code:** the `bellbench` package, `src/bellbench/`, exactly as the repository holds it ({{ code.count }} files).
 # - **The nine cases' runs:** every file of the snapshot behind the nine cases, `{{ reported }}`, from `results/runs/benchmark/` ({{ results.count }} files).
@@ -150,19 +152,24 @@ if sys.version_info < (3, 12):
 %pip install -q "qiskit==2.6.2" "qiskit-aer==0.18.2" "qiskit-ibm-runtime==0.51.0" "qiskit-qasm3-import==0.6.0" "openqasm3[parser]==1.0.1" "networkx==3.7" numpy pandas matplotlib pyyaml "jsonschema>=4.20" "pylatexenc==2.10"
 import jsonschema, matplotlib, networkx, openqasm3, pandas, pylatexenc, qiskit, qiskit_aer, yaml  # a failed install stops here
 
-# %%
+# %% cellView="form" jupyter={"source_hidden":true}
+#@title The code payload: src/bellbench/, {{ code.count }} files
 CODE = "{{ code.payload }}"
 
-# %%
+# %% cellView="form" jupyter={"source_hidden":true}
+#@title The nine cases' runs: {{ results.count }} files
 RESULTS = "{{ results.payload }}"
 
-# %%
+# %% cellView="form" jupyter={"source_hidden":true}
+#@title The extended benchmarks' runs: {{ studies_payload.count }} files
 STUDIES = "{{ studies_payload.payload }}"
 
-# %%
+# %% cellView="form" jupyter={"source_hidden":true}
+#@title The schemas and the core benchmark file: {{ schemas.count }} files
 SCHEMAS = "{{ schemas.payload }}"
 
-# %%
+# %% cellView="form" jupyter={"source_hidden":true}
+#@title Unpack the payloads, list each file's SHA-256, and define %%repo_file
 import base64, hashlib, html, io, sys, tempfile, zipfile
 from pathlib import Path
 
@@ -309,7 +316,8 @@ pd.DataFrame(
 #
 # **Inside a run there is only Qiskit and Aer. This section makes case 3 by hand, from the files written above, with nothing but Qiskit and Aer, and checks each step against the same run made by the package.** The package wraps these steps in checks, records and views; everything after this section uses it. Case 3 is GHZ disentangling followed by a read of the emptied qubit on the 2016-inspired graph, section {{ sec("s3-4") }} explains both, and its circuit is short: three two-qubit gates on qubits 0, 3 and 4. First the helpers the rest of the notebook uses, then case 3's circuit file.
 
-# %%
+# %% cellView="form" jupyter={"source_hidden":true}
+#@title The notebook's helpers: make and compare the runs, draw the circuit views and charts
 from html import escape
 
 import numpy as np
@@ -672,7 +680,8 @@ print("GHZ disentangling, pair on the ports every time:", ours)
 #
 # The table below gives every case the five measures the challenge asks every result to report, from the runs this notebook made of the {{ REPORTED }} benchmark, the benchmark that fills the nine cases.
 
-# %%
+# %% cellView="form" jupyter={"source_hidden":true}
+#@title Build the nine cases' table and charts
 table_all = read_table(made(REPORTED) / "comparison.csv")
 cases = table_all.dropna(subset=["case"]).sort_values("case")
 raw = sum(cases[f"shots_raw_{b}"] for b in BASES)
@@ -767,7 +776,8 @@ side_by_side("{{ p }}")
 # %% [markdown]
 # **Across the three graphs,** F of the kept shots against what each kept pair costs in two-qubit gates, the gates divided by the acceptance (section {{ sec("s3-5") }}). Each line runs from a graph's noisy baseline to its transport alone and its protected case: the transport moves left, by dropping SWAPs, and up; the read moves almost straight up, since it adds no gate and discards few shots.
 
-# %%
+# %% cellView="form" jupyter={"source_hidden":true}
+#@title Draw the chart of what the transport and the read each buy, on each graph
 from matplotlib.ticker import FixedLocator, NullLocator
 
 noisy = read_table(made(REPORTED) / "comparison.csv").query("simulation == 'noisy'")

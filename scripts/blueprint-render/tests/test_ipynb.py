@@ -22,13 +22,25 @@ def _render(tmp_path, context):
 
 def test_cells_follow_the_markers(tmp_path):
     nb = json.loads(_render(tmp_path, {"title": "Demo", "value": 7}).read_text(encoding="utf-8"))
-    assert [c["cell_type"] for c in nb["cells"]] == ["markdown", "code", "code"]
+    assert [c["cell_type"] for c in nb["cells"]] == ["markdown", "code", "code", "code"]
     assert nb["cells"][0]["source"] == ["# Demo\n", "\n", "Some *text*.\n", "\n", "no space after the hash"]
     assert nb["cells"][1]["source"] == ["x = 7\n", "\n", "print(x)"]
     assert nb["cells"][2]["source"] == ["y = 2"]
     assert nb["cells"][1]["outputs"] == [] and nb["cells"][1]["execution_count"] is None
-    assert [c["id"] for c in nb["cells"]] == ["cell-00", "cell-01", "cell-02"]
+    assert [c["id"] for c in nb["cells"]] == ["cell-00", "cell-01", "cell-02", "cell-03"]
     assert (nb["nbformat"], nb["nbformat_minor"]) == (4, 5)
+
+
+def test_a_marker_line_sets_the_cell_metadata(tmp_path):
+    """key=value words are JSON metadata; any other word after the marker is a title, and dropped."""
+    nb = json.loads(_render(tmp_path, {"title": "Demo", "value": 7}).read_text(encoding="utf-8"))
+    assert [c["metadata"] for c in nb["cells"]] == [{}, {}, {}, {"cellView": "form", "jupyter": {"source_hidden": True}}]
+    assert nb["cells"][3]["source"] == ["#@title A folded cell\n", "z = 3"]
+
+
+def test_a_metadata_value_that_is_not_json_fails_the_render():
+    with pytest.raises(ValueError, match="cellView's value is not JSON"):
+        ipynb.cells("# %% cellView=form\nx = 1\n")
 
 
 def test_rendering_twice_gives_the_same_bytes(tmp_path):
