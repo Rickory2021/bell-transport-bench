@@ -166,13 +166,25 @@
 #
 # ## {{ H["s1"] }}
 #
-# **Run these cells first:** they install the pinned packages and unpack the code and recorded runs this notebook carries.
+# **Run these cells first:** they install the pinned packages and unpack the code and recorded runs this notebook carries. In Colab the install may print a pip error; it is expected, and the first dropdown below says what to expect in each viewer.
 #
-# **In Colab, a pip error here is expected.** pip may print "ERROR: pip's dependency resolver does not currently take into account all the packages that are installed", naming packages Colab preinstalls, such as `bigframes` or `google-cloud-bigquery`, that want an older `python-dateutil`. This notebook uses none of those packages: the install worked if the cell's last line, the imports, raises no error.
+# <details><summary><b>What to expect in Colab, Jupyter and VS Code, including the pip error</b></summary>
+#
+# | | Colab | JupyterLab and Jupyter Notebook 7 | VS Code |
+# |---|---|---|---|
+# | The first cell, which installs the packages | pip may print "ERROR: pip's dependency resolver does not currently take into account all the packages that are installed", naming packages Colab preinstalls, such as `bigframes` or `google-cloud-bigquery`. This notebook uses none of them: the install worked if the cell's last line, the imports, raises no error. If Colab asks to restart the runtime, restart and run all again | In the repository's own environment, everything is installed already and the cell reports only that pip is absent | As in Jupyter |
+# | The plumbing code cells: the payloads, the unpack cell, the helpers and two chart cells | Folded under their title | Folded, input hidden | Shown in full: VS Code ignores the folding metadata, so collapse them by hand if you like |
+# | The text dropdowns, like this one | Fold | Fold | Fold |
+# | Links to a section | Do not jump: use the Table of contents pane in the left sidebar | Jump | Jump |
+# | A list of every heading | Table of contents pane | Table of contents sidebar | Outline view |
+#
+# In Colab, the config file cells may show their YAML underlined as if it were Python; they run as written.
+#
+# </details>
 #
 # <details><summary><b>What these cells do</b></summary>
 #
-# The notebook needs Python 3.12 or later, as the repository does. The first cell checks the version, then installs the packages the repository's `pyproject.toml` pins, into the Python this notebook runs on; pip leaves any already installed at the right version. In Colab, if it upgrades a package Colab has already loaded, restart the runtime when asked and run the cells again. In the repository's own environment, which uv made, everything is installed already and the cell only reports that pip is absent. The next four cells are payloads, each one line, which opens folded under its title in Colab, from the repository [`{{ repo }}`](https://github.com/{{ repo }}/tree/{{ tag }}) at tag `{{ tag }}`:
+# The notebook needs Python 3.12 or later, as the repository does. The first cell checks the version, then installs the packages the repository's `pyproject.toml` pins, into the Python this notebook runs on; pip leaves any already installed at the right version. The next four cells are payloads, each one line, which opens folded under its title in Colab, from the repository [`{{ repo }}`](https://github.com/{{ repo }}/tree/{{ tag }}) at tag `{{ tag }}`:
 #
 # - **The code:** the `bellbench` package, `src/bellbench/`, exactly as the repository holds it ({{ code.count }} files).
 # - **The nine cases' runs:** every file of the snapshot behind the nine cases, `{{ reported }}`, from `results/runs/benchmark/` ({{ results.count }} files).
