@@ -10,7 +10,9 @@ exactly as the repository holds it; that its first cell installs what
 pyproject.toml pins, on the Python it requires; that every link in its text lands
 on a heading; that the numbers in its text are the run records'; and that every
 claim the text makes still holds for the snapshots the invoke names, so changing a
-snapshot cannot leave the text saying something the records no longer show.
+snapshot cannot leave the text saying something the records no longer show. The
+executed copy, notebooks/bp.output.submission.executed.ipynb, must be a run of the
+committed render, with no error and no trace of its temporary work folder.
 """
 
 import base64
@@ -33,6 +35,7 @@ from bellbench.run import read_table
 ROOT = Path(__file__).resolve().parents[1]
 BLUEPRINT = ROOT / "scripts" / "blueprint-render"
 NOTEBOOK = ROOT / "notebooks" / "bp.output.submission.ipynb"
+EXECUTED = ROOT / "notebooks" / "bp.output.submission.executed.ipynb"  # make submission-executed writes it
 INVOKE = yaml.safe_load((ROOT / "notebooks" / "bp.invoke.submission.yaml").read_text(encoding="utf-8"))
 BENCHMARKS = ROOT / "results" / "runs" / "benchmark"
 PAYLOADS = ("CODE", "RESULTS", "STUDIES", "CONFIG")
@@ -130,6 +133,19 @@ def test_the_committed_notebook_is_a_fresh_render(tmp_path):
         assert _payload(name, fresh) == _payload(name), f"the {name} payload differs: run make submission"
     code = [c for c in json.loads(NOTEBOOK.read_text(encoding="utf-8"))["cells"] if c["cell_type"] == "code"]
     assert all(c["outputs"] == [] and c["execution_count"] is None for c in code)  # committed without outputs
+
+
+def test_the_executed_copy_is_a_run_of_the_committed_render():
+    """The same cells, payloads included, each code cell run once in order and none ending in an error, and no trace
+    of the run's temporary work folder; a render committed without its run fails here."""
+    assert _cells(EXECUTED) == _cells(), "run make submission-executed and commit both notebooks"
+    code = [c for c in json.loads(EXECUTED.read_text(encoding="utf-8"))["cells"] if c["cell_type"] == "code"]
+    assert [c["execution_count"] for c in code] == list(range(1, len(code) + 1))
+    assert not [o for c in code for o in c["outputs"] if o["output_type"] == "error"]
+    texts = [o.get("text", "") for c in code for o in c["outputs"]]
+    texts += [v for c in code for o in c["outputs"] for m, v in o.get("data", {}).items() if not m.startswith("image/")]
+    texts = [t if isinstance(t, str) else json.dumps(t) for t in texts]
+    assert not [t for t in texts if re.search(r"bellbench-\w{8}", t)]  # the work folder, normalized away
 
 
 # -- The setup ---------------------------------------------------------------------------

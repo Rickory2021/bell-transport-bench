@@ -7,7 +7,7 @@ A benchmark for creating a Bell pair between two distant qubits and protecting i
 
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Rickory2021/bell-transport-bench/blob/submission/notebooks/bp.output.submission.ipynb)
 
-**The submission notebook opens in Colab with the badge above, at the `submission` tag.** It needs Python 3.12 or later, installs the pinned packages in its first cell, and carries the code and recorded runs it needs, so it runs with no copy of the repo. The tutorial and workbench notebooks import `bellbench` from the repo, so they run only in a clone set up with `make setup`, not from a Colab link.
+**The submission notebook opens in Colab with the badge above, at the `submission` tag.** It needs Python 3.12 or later, installs the pinned packages in its first cell, and carries the code and recorded runs it needs, so it runs with no copy of the repo. To read it with every output, without running anything, open its executed copy, [`notebooks/bp.output.submission.executed.ipynb`](https://github.com/Rickory2021/bell-transport-bench/blob/submission/notebooks/bp.output.submission.executed.ipynb), on GitHub. The tutorial and workbench notebooks import `bellbench` from the repo, so they run only in a clone set up with `make setup`, not from a Colab link.
 
 The full task is in [`docs/CHALLENGE.md`](docs/CHALLENGE.md): three processor models, nine core cases, and what to report. The design decisions and their reasons are in [`docs/DESIGN.md`](docs/DESIGN.md), and every source we rely on is in [`docs/bp.data.references.yaml`](docs/bp.data.references.yaml).
 
@@ -36,6 +36,7 @@ make benchmark NAME=<study>                 # an optional study: biased-noise, m
 make run RUN=<run folder>                   # rebuild a run from its record and report any difference
 make report RUN=<run folder>                # redraw a run folder's diagrams and report.md
 make submission                             # render the submission notebook from the snapshots its invoke names
+make submission-executed                    # render it, then run it into its executed copy, with every output
 ```
 
 **A run or benchmark made from committed code lands in `results/runs/`.** One made while `src/` or `config/` has uncommitted changes lands in `workspace/runs/`, which is never committed, and so does a run of a trial circuit in `workspace/circuits/`; a benchmark that names a trial is refused. To keep a result, commit the change, or promote the trial and commit it, and make it again. What each benchmark answers, and where its folders land, is in [DESIGN.md, section 6](docs/DESIGN.md#6-benchmarks-and-results). `make help` lists every target.
