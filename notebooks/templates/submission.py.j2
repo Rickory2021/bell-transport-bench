@@ -480,7 +480,7 @@ display(fig)
 plt.close(fig)
 
 # %% [markdown]
-# **3. Compile, at optimisation level 1.** `compile_bases` compiles each basis circuit into the Target with Qiskit's preset pass manager, at optimisation level 1, on the physical qubits as written, with the run's transpiler seed. Level 1 is a choice. From level 2 up, Qiskit removes explicit SWAPs and tracks where each qubit's state went instead, so a pair moved by SWAPs never reaches the ports. The second table compiles case {{ BCASE.contemporary }}'s baseline, which moves the pair with SWAPs, at levels 1 and 2.
+# **3. Compile, at optimisation level 1.** `compile_bases` compiles each basis circuit into the Target with Qiskit's preset pass manager, at optimisation level 1, on the physical qubits as written, with the run's transpiler seed. Level 1 is a choice. From level 2 up, Qiskit's `ElidePermutations` pass deletes SWAP gates and measures each state on the qubit where it already sits. The measurement stays valid, but the pair is no longer between the ports: the second table compiles case {{ BCASE.contemporary }}'s baseline, which moves the pair with SWAPs, at levels 1 and 2, and at level 2 it is measured on two other qubits with fewer two-qubit gates, so its F would describe a pair that never made the trip the task asks for. GHZ disentangling has no SWAP gates, so it compiles the same at either level.
 
 # %%
 show(pipeline.compile_bases)
@@ -501,7 +501,7 @@ for level in (1, 2):
 display(pd.DataFrame(levels).set_index("optimisation level"))
 
 # %% [markdown]
-# **4. Schedule.** `schedule` places every gate as late as possible and fills each idle period with a timed delay. Scheduling comes before noise, so the noise model turns idle time into decay, as on hardware: a qubit waiting for a {{ "%.1f"|format(read_us) }} µs measurement decays while it waits.
+# **4. Schedule.** The compile step fixed which gates run; `schedule` decides only when, and changes no gate, so the cost each run reports (its gates, depth and SWAPs) comes from the compile step and the schedule adds only the duration. It places every gate as late as possible and fills each idle period with a timed delay, which the noise model turns into decay, as on hardware. As late as possible puts each qubit's waiting before its first gate, while it is still in |0⟩, which relaxation and dephasing leave unchanged; scheduled as soon as possible, a qubit would start early and wait while it holds part of the pair.
 
 # %%
 show(pipeline.schedule)
