@@ -287,7 +287,7 @@ from IPython.display import Markdown
 from qiskit.transpiler import generate_preset_pass_manager
 from bellbench import fidelity, noise, pipeline
 from bellbench.analysis import read_shots
-from bellbench.run import Score
+from bellbench.run import Score, timeline_figure
 from bellbench.circuits import circuit_to_qasm
 from bellbench.run import CircuitRun, comparison_rows, current_benchmark, read_table, run_benchmark
 from bellbench.views.base import emit, fold
@@ -304,6 +304,12 @@ def show(function):
     """The package's own code for a function, as the payload holds it, so what is shown is what runs. It is shown as a
     Markdown code block, so each viewer highlights it in its own theme, light or dark."""
     display(Markdown(f"```python\n{inspect.getsource(function)}```"))
+
+
+def md_table(columns, rows):
+    """A few rows as a Markdown table, which each viewer draws in its own style, with no index column."""
+    head = "| " + " | ".join(columns) + " |\n|" + "---|" * len(columns) + "\n"
+    display(Markdown(head + "".join("| " + " | ".join(str(v) for v in row) + " |\n" for row in rows)))
 
 
 def make(benchmark):
@@ -496,9 +502,9 @@ display(fig)
 plt.close(fig)
 
 # %% [markdown]
-# #### Step 3. Compile, at optimisation level 1
+# #### Step 3. Compile, at optimization level 1
 #
-# - **Does:** `compile_bases` compiles each basis circuit into the Target at optimisation level 1, on the qubits as written, with the run's transpiler seed.
+# - **Does:** `compile_bases` compiles each basis circuit into the Target at optimization level 1, on the qubits as written, with the run's transpiler seed.
 # - **Why level 1:** from level 2, Qiskit deletes SWAP gates and measures each state where it already is. The measurement stays correct, but the move is skipped, so the baseline would score a better F without ever bringing the pair to the ports.
 # - **Fair to every circuit:** GHZ disentangling has no SWAP gates, so it compiles the same at either level.
 # - **Output:** the gate counts of each basis circuit, then case {{ BCASE.contemporary }}'s baseline compiled at levels 1 and 2: its two-qubit gates, and which qubits it measures.
@@ -506,7 +512,8 @@ plt.close(fig)
 # %%
 show(pipeline.compile_bases)
 compiled = pipeline.compile_bases(circuits, run.nc, run.seeds["transpile"])
-display(pd.DataFrame({basis: dict(c.compiled.count_ops()) for basis, c in compiled.items()}).fillna(0).astype(int))
+gates = list(dict.fromkeys(g for c in compiled.values() for g in c.compiled.count_ops()))
+md_table(["Gate", *compiled], [(g, *(c.compiled.count_ops().get(g, 0) for c in compiled.values())) for g in gates])
 
 baseline = CircuitRun("{{ base.contemporary.circuit }}", NOISE, SHOTS, BASE_SEED)
 zz = pipeline.basis_circuits(baseline.circuit.circuit, baseline.nc.ports)["ZZ"]
@@ -516,10 +523,9 @@ for level in (1, 2):
                                        initial_layout=list(range(baseline.nc.num_qubits)),
                                        seed_transpiler=baseline.seeds["transpile"]).run(zz)
     measured = [out.find_bit(i.qubits[0]).index for i in out.data if i.operation.name == "measure"]
-    levels.append({"optimisation level": level,
-                   "two-qubit gates": sum(n for gate, n in out.count_ops().items() if gate in ("cz", "cx", "swap")),
-                   "ports measured on qubits": measured, "pair on the ports": measured == list(baseline.nc.ports)})
-display(pd.DataFrame(levels).set_index("optimisation level"))
+    levels.append((level, sum(n for gate, n in out.count_ops().items() if gate in ("cz", "cx", "swap")),
+                   ", ".join(map(str, measured)), "yes" if measured == list(baseline.nc.ports) else "no"))
+md_table(["Optimization level", "Two-qubit gates", "Ports measured on qubits", "Pair on the ports"], levels)
 
 # %% [markdown]
 # #### Step 4. Schedule
@@ -527,13 +533,14 @@ display(pd.DataFrame(levels).set_index("optimisation level"))
 # - **Does:** `schedule` gives every gate a start time and fills each wait with a timed delay, which the noise model turns into decay. It changes no gate, so a run's cost comes from step 3.
 # - **Why:** on hardware a qubit decays while it waits, so a fair run counts its waiting time.
 # - **Why as late as possible:** a qubit then waits in |0⟩, which decay leaves unchanged, instead of waiting while it holds part of the pair. Every run is scheduled the same way.
-# - **Output:** the ZZ circuit's duration and how many delays fill its idle time.
+# - **Output:** the ZZ circuit's duration and delays, then its schedule as a timeline: one row per qubit that acts, one block per gate, coloured by gate, and a gap wherever the qubit waits. The long blocks at the end are the measurements.
 
 # %%
 show(pipeline.schedule)
 scheduled = {basis: pipeline.schedule(c.compiled, run.nc) for basis, c in compiled.items()}
 print(f"the ZZ circuit takes {pipeline.scheduled_duration(scheduled['ZZ'], run.nc) * 1e6:.2f} µs, "
       f"with {sum(i.operation.name == 'delay' for i in scheduled['ZZ'].data)} delays filling idle time")
+display(timeline_figure(compiled["ZZ"].compiled, run.nc))
 
 # %% [markdown]
 # #### Step 5. Simulate, then score
@@ -810,7 +817,7 @@ pd.DataFrame(
 # - **GHZ disentangling, our transport:** H on the first port, then a chain of CX gates along the path copies its bit onto every qubit, giving the GHZ state (|0…0⟩ + |1…1⟩)/√2 on the whole path. A second chain of CX gates walks back towards the first port, each gate controlled by the qubit before it, and returns every interior qubit to |0⟩, so only the two ports keep the shared bit: the Bell pair. The last of these gates is controlled by the first port. Liao et al. build a long-range CNOT the same way, preparing a GHZ state and disentangling it with gates ([arXiv:2411.14638](https://arxiv.org/abs/2411.14638)).{{ chk() }}
 # - **Vacancy read (cases 3, 6, 9):** after the transport, each interior qubit is measured in the Z basis at the end of the circuit. Each should read 0, so a shot where any reads 1 is discarded. A bit flip on an interior qubit reads 1, and so does a bit flip on the first port before the last gate, which copies it onto an interior qubit. The read cannot see a phase flip, and it adds no gate and no qubit.
 #
-# For each graph, the two circuits its cases use, each as the repository holds it, then as the workbench shows it: the graph with the couplers the circuit uses, the written circuit and its cost, then two dropdowns: a step-through of the written circuit with no noise, and the compiled circuits, with a dropdown for each basis holding its compiled circuit, a timeline of when each qubit is busy, and the circuit as OpenQASM 3 (challenge material 02). Each view compiles its circuit here, as a run does, at optimisation level 1 into Boston's native gates (CZ, √X, X and Rz), without simulating.
+# For each graph, the two circuits its cases use, each as the repository holds it, then as the workbench shows it: the graph with the couplers the circuit uses, the written circuit and its cost, then two dropdowns: a step-through of the written circuit with no noise, and the compiled circuits, with a dropdown for each basis holding its compiled circuit, a timeline of when each qubit is busy, and the circuit as OpenQASM 3 (challenge material 02). Each view compiles its circuit here, as a run does, at optimization level 1 into Boston's native gates (CZ, √X, X and Rz), without simulating.
 
 {%- for p in P %}
 
