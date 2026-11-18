@@ -446,16 +446,29 @@ def noisy_scores(folder):
 #
 # ## {{ H["s2"] }}
 #
-# **bellbench turns the config files into a run in five steps, each a thin layer over Qiskit and Aer.** This section follows one run, case {{ BCASE.contemporary + 1 }}, the contemporary graph's protected case, from its files to its F: each step shows the package's own code, as the payload holds it, and runs it. Every later section makes its runs with the one call this section ends on.
+# **bellbench turns the config files into a run in five steps, each a thin layer over Qiskit and Aer.** This section follows one run, case {{ BCASE.contemporary + 1 }} (the contemporary graph's protected case), from its files to its F: each step shows the package's own code, as the payload holds it, and runs it.
 #
-# The run reads three files: the contemporary graph's processor file, the noise profile and the case's circuit file. The compile step also uses the graph's baseline circuit, case {{ BCASE.contemporary }}. [Section 4]({{ ref("s4") }}) explains each kind of file and writes out the rest.
+# | Step | bellbench | Qiskit or Aer underneath |
+# |---|---|---|
+# | 1. Processor and noise | `NoiseControl` | `Target`, `NoiseModel.from_backend` |
+# | 2. Basis circuits | `basis_circuits` | `QuantumCircuit` |
+# | 3. Compile | `compile_bases` | `generate_preset_pass_manager`, level 1 |
+# | 4. Schedule | `schedule` | `ALAPScheduleAnalysis`, `PadDelay` |
+# | 5. Simulate and score | `simulate` | `AerSimulator` |
+#
+# - **Files:** the contemporary processor file, the noise profile and case {{ BCASE.contemporary + 1 }}'s circuit file, written below, with case {{ BCASE.contemporary }}'s baseline for step 3. [Section 4]({{ ref("s4") }}) explains each kind of file and writes out the rest.
+# - **After this section:** every run is made with the one call in step 6.
 {{ repo_file("config/processor/bp.data.processor.contemporary.yaml") }}
 {{ repo_file("config/noise/bp.data.noise.boston-2026.yaml") }}
 {{ repo_file("config/circuit/bp.data.circuit." ~ base.contemporary.circuit ~ ".yaml") }}
 {{ repo_file("config/circuit/bp.data.circuit." ~ prot.contemporary.circuit ~ ".yaml") }}
 
 # %% [markdown]
-# **0. The run.** `CircuitRun` holds one run: a circuit file under a noise profile, the shots per basis, and the base seed every other seed derives from. Making it reads the files and builds the processor's noise model; nothing is compiled or simulated yet.
+# #### Step 0. The run
+#
+# - **Does:** `CircuitRun` holds one run: a circuit file under a noise profile, the shots per basis and the base seed. Making it reads the files and builds the noise model; nothing runs yet.
+# - **Why:** every seed derives from the base seed and the run's labels, so every run repeats exactly.
+# - **Output:** the run, its ports and its seeds.
 
 # %%
 run = CircuitRun("{{ prot.contemporary.circuit }}", NOISE, SHOTS, BASE_SEED)
@@ -463,14 +476,22 @@ print(f"{run.circuit.name} on the {run.nc.processor_name} graph, ports {run.nc.p
 print("seeds derived from the base seed:", run.seeds)
 
 # %% [markdown]
-# **1. The processor and its noise.** `NoiseControl` reads the processor file and the noise profile, and `_build_snapshot` puts the calibration values into a Qiskit `Target`: every gate on every qubit and coupler with its error and duration, each qubit's T1 and T2, and the measurement. Aer reads the `NoiseModel` from that Target, which gives each gate a depolarising error and relaxation for its duration; readout error is then added per qubit, its two directions kept apart.
+# #### Step 1. The processor and its noise
+#
+# - **Does:** `NoiseControl` reads the processor file and the noise profile, and `_build_snapshot` puts the calibration values into a Qiskit `Target`: each gate's error and duration, each qubit's T1 and T2, and the measurement. Aer reads the `NoiseModel` from that Target, then readout error is added per qubit, its two directions apart.
+# - **Why:** every graph's noise model is built the same way, by Qiskit's own `NoiseModel.from_backend`, so the graphs differ only in connectivity.
+# - **Output:** the noise model's gates and qubits.
 
 # %%
 show(noise._build_snapshot)
 print(run.nc.noise_model)
 
 # %% [markdown]
-# **2. The three basis circuits.** F needs the pair measured in three bases ([section 3]({{ ref("s3") }})). `basis_circuits` copies the written circuit three times, adds each basis's rotation on the ports and measures them into a register named `port`; the vacancy read's measurements are already in the written circuit. The XX circuit, as written:
+# #### Step 2. The three basis circuits
+#
+# - **Does:** `basis_circuits` copies the written circuit three times, adds each basis's rotation on the ports and measures them into a register named `port`. The vacancy read's measurements are already in the written circuit.
+# - **Why:** F needs the pair measured in three bases ([section 3]({{ ref("s3") }})).
+# - **Output:** the XX circuit, as written.
 
 # %%
 show(pipeline.basis_circuits)
@@ -480,7 +501,12 @@ display(fig)
 plt.close(fig)
 
 # %% [markdown]
-# **3. Compile, at optimisation level 1.** `compile_bases` compiles each basis circuit into the Target at optimisation level 1, on the qubits as written, with the run's transpiler seed. Why not a higher level: from level 2, Qiskit deletes SWAP gates and simply measures each state where it already is. The measurement stays correct, but the move is skipped, so the baseline would score a better F without ever bringing the pair to the ports, as the second table shows for case {{ BCASE.contemporary }}'s baseline. Level 1 compiles every circuit as written, and it gives ours no edge: GHZ disentangling has no SWAP gates, so it compiles the same at either level.
+# #### Step 3. Compile, at optimisation level 1
+#
+# - **Does:** `compile_bases` compiles each basis circuit into the Target at optimisation level 1, on the qubits as written, with the run's transpiler seed.
+# - **Why level 1:** from level 2, Qiskit deletes SWAP gates and measures each state where it already is. The measurement stays correct, but the move is skipped, so the baseline would score a better F without ever bringing the pair to the ports.
+# - **Fair to every circuit:** GHZ disentangling has no SWAP gates, so it compiles the same at either level.
+# - **Output:** the gate counts of each basis circuit, then case {{ BCASE.contemporary }}'s baseline compiled at levels 1 and 2: its two-qubit gates, and which qubits it measures.
 
 # %%
 show(pipeline.compile_bases)
@@ -501,7 +527,12 @@ for level in (1, 2):
 display(pd.DataFrame(levels).set_index("optimisation level"))
 
 # %% [markdown]
-# **4. Schedule.** On hardware a qubit decays while it waits, so a fair run must count its waiting time. `schedule` gives every gate a start time and fills each wait with a timed delay, which the noise model turns into decay. It changes no gate, so the cost each run reports comes from step 3. Gates start as late as possible, so a qubit spends its wait in |0⟩, which decay leaves unchanged, instead of waiting while it holds part of the pair. Every run is scheduled the same way.
+# #### Step 4. Schedule
+#
+# - **Does:** `schedule` gives every gate a start time and fills each wait with a timed delay, which the noise model turns into decay. It changes no gate, so a run's cost comes from step 3.
+# - **Why:** on hardware a qubit decays while it waits, so a fair run counts its waiting time.
+# - **Why as late as possible:** a qubit then waits in |0⟩, which decay leaves unchanged, instead of waiting while it holds part of the pair. Every run is scheduled the same way.
+# - **Output:** the ZZ circuit's duration and how many delays fill its idle time.
 
 # %%
 show(pipeline.schedule)
@@ -510,7 +541,11 @@ print(f"the ZZ circuit takes {pipeline.scheduled_duration(scheduled['ZZ'], run.n
       f"with {sum(i.operation.name == 'delay' for i in scheduled['ZZ'].data)} delays filling idle time")
 
 # %% [markdown]
-# **5. Simulate, then score.** `simulate` runs the three scheduled circuits in one Aer job under the noise model, with the run's noisy seed. A shot is kept when every vacancy read gave 0. Over the kept shots, each basis's correlator is (agreements − disagreements)/kept, and F = (1 + ⟨XX⟩ − ⟨YY⟩ + ⟨ZZ⟩)/4.
+# #### Step 5. Simulate, then score
+#
+# - **Does:** `simulate` runs the three scheduled circuits in one Aer job under the noise model, with the run's noisy seed.
+# - **Scoring:** a shot is kept when every vacancy read gave 0. Over the kept shots, each basis's correlator is (agreements − disagreements)/kept, and F = (1 + ⟨XX⟩ − ⟨YY⟩ + ⟨ZZ⟩)/4.
+# - **Output:** F with its standard error, and the acceptance.
 
 # %%
 show(pipeline.simulate)
@@ -522,7 +557,11 @@ steps = Score(read_shots(run.circuit.analysis, sim.raw, registers, SHOTS))
 print(f"step by step: F = {steps.accepted.value:.6f} ± {steps.accepted.standard_error:.6f}, acceptance {steps.acceptance:.6f}")
 
 # %% [markdown]
-# **6. The one call.** `CircuitRun.run` does steps 1 to 5 in one call, with an ideal simulation beside the noisy one, and every later section uses it, through the benchmark runner and the workbench's views. It gives the same numbers as the steps above, and the same as the run the repository recorded for case {{ BCASE.contemporary + 1 }}.
+# #### Step 6. The one call
+#
+# - **Does:** `CircuitRun.run` does steps 1 to 5 in one call, with an ideal simulation beside the noisy one.
+# - **Why:** every later section makes its runs with it, through the benchmark runner and the workbench's views.
+# - **Output:** the same numbers three ways: this call, the steps above, and the run the repository recorded for case {{ BCASE.contemporary + 1 }}.
 
 # %%
 run.run()
@@ -534,7 +573,11 @@ print("the same numbers" if round(run.scores["noisy"].accepted.value, 12) == rou
       == round(f_rec, 12) else "DIFFERENT numbers")
 
 # %% [markdown]
-# **The check.** The cell below rebuilds the same run in plain Qiskit and Aer, without calling bellbench, and compares each step with the package's: the noise model, the compiled gates, and F with the acceptance. It repeats steps 1 to 5, so it opens folded in Colab and Jupyter; open it to see a run made with nothing but Qiskit.
+# #### The check: the same run in plain Qiskit
+#
+# - **Does:** rebuilds the run without calling bellbench, then compares the noise model, the compiled gates, and F with the acceptance.
+# - **Why:** it shows bellbench adds no hidden step; every number comes from Qiskit and Aer.
+# - **Folded** in Colab and Jupyter, since it repeats steps 1 to 5: open it to see a run made with nothing but Qiskit.
 
 # %% cellView="form" jupyter={"source_hidden":true}
 #@title Check: the same run rebuilt in plain Qiskit and Aer, without bellbench
