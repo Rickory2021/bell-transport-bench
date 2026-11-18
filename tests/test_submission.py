@@ -213,20 +213,14 @@ def test_the_case_table_in_the_text_is_the_records():
         assert row in text
 
 
-def test_the_abstract_quotes_the_records():
+def test_the_overview_quotes_the_records():
+    """The overview's lead states the lowest acceptance among the protected cases; section 4.1's table, which the
+    test above checks, carries each graph's numbers."""
     cases = _cases(INVOKE["reported"])
-    abstract = _markdown().split("**Abstract.**")[1].split("**To run it:**")[0]
-    names = {"ibm2016": "2016-inspired", "contemporary": "Contemporary", "hyperbolic": "Hyperbolic-inspired"}
-    for processor, (_, base, protected) in CASES.items():
-        b, q = cases[base], cases[protected]
-        runs = _extended(processor)
-        read = runs[f"ghz-uncompute-vacancy-{processor}"].fidelity - runs[f"ghz-uncompute-{processor}"].fidelity
-        row = f"| {names[processor]} | {_F(b)} | {_F(q)} | {100 * q.acceptance:.1f}% | " \
-              f"{b.two_qubit_gates} → {q.two_qubit_gates} | {read:+.4f} |"
-        assert row in abstract
+    overview = _markdown().split("**Overview.**")[1].split("**Where to look.**")[0]
     lowest = min(cases[protected].acceptance for _, _, protected in CASES.values())
-    assert f"keeping at least {100 * lowest:.1f}% of shots" in abstract
-    assert f"{_shots():,} shots per basis" in abstract
+    assert f"keeping at least {100 * lowest:.1f}% of shots" in overview
+    assert f"{_shots():,} shots per basis" in overview
 
 
 def test_section_5_quotes_the_fidelity_the_transport_recovers():
