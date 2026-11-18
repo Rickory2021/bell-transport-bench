@@ -33,7 +33,6 @@
     "s4-2": "4.2 The noise model",
     "s4-3": "4.3 The benchmark",
     "s4-4": "4.4 The circuits, written and compiled",
-    "s4-5": "4.5 Limitations",
     "s5": "5. Results",
     "s5-1": "5.1 The nine cases",
     "s5-2": "5.2 What protection buys, and what it costs",
@@ -97,7 +96,7 @@
 {%- macro config_fold(path) %}
 
 # %% [markdown]
-# <details><summary><b>{{ path }}</b> · <a href="{{ link(path) }}">on GitHub</a></summary>
+# <details><summary><b>{{ path }}</b> (<a href="{{ link(path) }}">On GitHub</a>)</summary>
 #
 # ```yaml
 {%- for l in cfg[path].rstrip("\n").split("\n") %}
@@ -150,7 +149,7 @@
 # | What noise did we model, and what did we leave out? | [{{ sec("s4-2") }}]({{ ref("s4-2") }}) |
 # | How does the protected case compare with its alternatives? | [6]({{ ref("s6") }}) |
 # | When does readout favour the textbook GHZ transport? | [{{ sec("s6-4") }}]({{ ref("s6-4") }}) |
-# | What do the results mean, and where do they stop? | [{{ sec("s5-5") }}]({{ ref("s5-5") }}), [{{ sec("s4-5") }}]({{ ref("s4-5") }}) |
+# | What do the results mean? | [{{ sec("s5-5") }}]({{ ref("s5-5") }}) |
 {%- if recommendation %}
 # | What do we recommend for future systems? | [{{ sec("s5-6") }}]({{ ref("s5-6") }}) |
 {%- endif %}
@@ -784,7 +783,7 @@ print("the same numbers" if (round(f_hand, 12), round(acceptance_hand, 12)) == (
 #
 # ## {{ H["s4"] }}
 #
-# **The files that define every run: the three graphs, the noise model, the benchmark file and the circuits, then what the model leaves out.** Each file is shown, folded, as the repository holds it, except the four [section 2]({{ ref("s2") }}) shows.
+# **The files that define every run: the three graphs, the noise model with what it leaves out, the benchmark file and the circuits.** Each file is shown, folded, as the repository holds it, except the four [section 2]({{ ref("s2") }}) shows.
 
 # %% [markdown]
 # ### {{ H["s4-1"] }}
@@ -832,7 +831,7 @@ pd.DataFrame(
 # %% [markdown]
 # <details><summary><b>What the model leaves out</b></summary>
 #
-# **The calibration snapshot gives one number per gate, per qubit's readout and per qubit's T1 and T2, and the model uses only those, so every effect below is left out.** Section {{ sec("s4-5") }} states what that means for the results; [DESIGN.md, section 4]({{ link("docs/DESIGN.md") }}#4-noise-model) holds the full noise model.
+# **The calibration snapshot gives one number per gate, per qubit's readout and per qubit's T1 and T2, and the model uses only those, so every effect below is left out.** [DESIGN.md, section 4]({{ link("docs/DESIGN.md") }}#4-noise-model) holds the full noise model.
 #
 # - **Qubits that start a shot excited:** a qubit begins in |1⟩ instead of |0⟩. A run can set it as a conditional channel, but the snapshot gives no value for it, and no run here sets it.
 # - **Measurement-induced dephasing:** reading one qubit disturbs its neighbours' phase. The snapshot gives no value for it; every read in the nine cases is at the end of the circuit.
@@ -900,19 +899,6 @@ circuit_views("{{ r.circuit }}")
 # %%
 make(REPORTED)
 
-# %% [markdown]
-# ### {{ H["s4-5"] }}
-#
-# **These results describe circuits under one assumed noise model, simulated; they are not a measurement of any device.**{{ chk() }}
-#
-# - **One noise model:** Boston's calibration medians. What it leaves out, and why, is in [DESIGN.md, section 4]({{ link("docs/DESIGN.md") }}#4-noise-model).
-# - **One seed per run:** each run takes {{ "{:,}".format(B.shots) }} shots per basis, so F's standard error is about {{ "%.4f"|format([c[3], c[6], c[9]] | map(attribute="fidelity_se") | max) }}; a difference under about two combined standard errors needs more shots or seeds before it means anything.
-# - **Detection, not correction:** the read discards shots and corrects nothing, and no fault injector has tested it fault by fault.
-# - **Blind to phase flips:** the read checks bit flips only; a phase flip on a port passes it.
-# - **Idle qubits start in |0⟩:** the transport relies on it, and we have not run this strategy with qubits that may start a shot excited. A qubit that does should read 1 and be discarded, lowering acceptance, but that is untested.
-# - **The textbook GHZ transport's loss depends on readout:** with no readout error on the qubits it reads it beats ours before any check (section {{ sec("s6-4") }}), so that comparison holds only for Boston-like readout.
-# - **No degree penalty:** the XX checks on the contemporary graph in section {{ sec("s6-2") }} pass through its five-edge qubit with no extra error; the nine cases avoid that qubit.
-# - **The graphs:** the contemporary graph is the organisers' 9-node graph, not a real IBM layout, and the hyperbolic-inspired graph is a schematic.
 # %% [markdown]
 # ---
 #
