@@ -6,9 +6,9 @@
 # is published. At render time this process packs src/bellbench/ as the code
 # payload, the reported snapshot as the results payload, the study snapshots as the
 # studies payload, each snapshot whole so the notebook can show every run's circuits,
-# and the schemas with the core benchmark file as the schemas payload, shown folded; reads every
-# config file's text so the notebook writes each other one out where it explains it; and reads each snapshot's comparison table so every number in the
-# notebook's text comes from the run records.
+# and every config file as the config payload, which the code reads; reads every config
+# file's text so the notebook shows each one, folded, where it explains it; and reads each
+# snapshot's comparison table so every number in the notebook's text comes from the run records.
 
 vars:
   $schema: "https://json-schema.org/draft/2020-12/schema"
@@ -84,10 +84,10 @@ map:
           - "results/runs/benchmark/*/*/*/*.md"
       under: {literal: "results/runs/benchmark/"}
       whole: {var: studies}
-  schemas:
+  configs_payload:
     fn: scripts/blueprint-render/fn/collect/archive
     params:
-      files: {text: ["config/bp.schema.*.yaml", "config/benchmark/bp.data.benchmark.core.yaml"]}
+      files: {text: "config/**/*.yaml"}
   cfg:
     fn: scripts/blueprint-render/fn/collect/texts
     params:

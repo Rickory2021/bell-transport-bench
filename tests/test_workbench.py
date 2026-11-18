@@ -143,7 +143,9 @@ def test_make_workbench_renders_every_committed_notebook():
     names = next(line for line in (ROOT / "Makefile").read_text(encoding="utf-8").splitlines()
                  if line.startswith("WORKBENCH_NOTEBOOKS ="))
     assert tuple(names.split("=")[1].split()) == NOTEBOOKS
-    others = ["bp.output.submission.ipynb"]  # make submission renders the submission notebook (tests/test_submission.py)
+    # make submission renders the submission notebook, and make submission-executed writes its run beside it
+    # (tests/test_submission.py)
+    others = ["bp.output.submission.ipynb", "bp.output.submission.executed.ipynb"]
     assert sorted(p.name for p in (ROOT / "notebooks").glob("bp.output.*.ipynb")) == sorted(
         [f"bp.output.{name}.ipynb" for name in NOTEBOOKS] + others)
 

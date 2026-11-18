@@ -36,6 +36,8 @@ help:
 	@echo "    make workbench                   Render the tutorial and the workbench and copy them into workspace/"
 	@echo "    make workbench FORCE=1           The same, replacing existing workspace copies"
 	@echo "    make submission                  Render the submission notebook, notebooks/bp.output.submission.ipynb"
+	@echo "    make submission-executed         Render it, then run it into notebooks/bp.output.submission.executed.ipynb"
+	@echo "                                     (about six minutes), the copy with every output"
 	@echo ""
 	@echo "  Docs figures:"
 	@echo "    make figures                     Draw docs/assets/processor-models.png from the processor files"
@@ -69,7 +71,7 @@ bp-setup:
 
 # -- Benchmark -----------------------------------------------------------
 
-.PHONY: test test-fast test-serial benchmark run report workbench submission
+.PHONY: test test-fast test-serial benchmark run report workbench submission submission-executed
 
 NAME = core
 
@@ -114,6 +116,11 @@ workbench-%:
 # with the code and the chosen snapshots packed into it, and committed. It is never copied into workspace/.
 submission:
 	$(MAKE) -C $(BLUEPRINT_DIR) invoke PROJECT_ROOT=$(CURDIR) FILE=notebooks/bp.invoke.submission.yaml FORCE=true OUTPUT=adjacent
+
+# The submission notebook as a reader sees it after Run all: rendered, run top to bottom in a fresh kernel, and
+# normalized, so it differs from the last copy only where the notebook or its results do. Committed with the render.
+submission-executed: submission
+	uv run --group dev python scripts/execute_notebook.py notebooks/bp.output.submission.ipynb notebooks/bp.output.submission.executed.ipynb
 
 # -- Docs figures --------------------------------------------------------
 # make figures needs only the Python env. make diagram needs Node, because the

@@ -18,12 +18,12 @@ recommendation:
     gates or qubits.
   reasoning: >-
     On every graph the read raised F above the same transport without it by more than two
-    combined standard errors (section 4.2), and among the circuits we tested that kept at
+    combined standard errors (section 5.2), and among the circuits we tested that kept at
     least as many shots as the earlier XX check, it gave the highest F on every graph
-    (appendix A). The same read after the move chain gained less. An XX check on a spare
+    (section 6). The same read after the move chain gained less. An XX check on a spare
     path raised F a little further only by discarding more shots, so for this strategy
     port distance, not the number of disjoint paths, ordered the protected results (section
-    4.3). For hardware, readout quality decides between our transport and the textbook GHZ
-    transport that reads the path in X (appendix A.4). The recommendation is conditional on
+    5.3). For hardware, readout quality decides between our transport and the textbook GHZ
+    transport that reads the path in X (section 6.4). The recommendation is conditional on
     our Boston-based model, and we have not tested this strategy against qubits that start a
     shot excited.

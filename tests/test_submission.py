@@ -10,7 +10,9 @@ exactly as the repository holds it; that its first cell installs what
 pyproject.toml pins, on the Python it requires; that every link in its text lands
 on a heading; that the numbers in its text are the run records'; and that every
 claim the text makes still holds for the snapshots the invoke names, so changing a
-snapshot cannot leave the text saying something the records no longer show.
+snapshot cannot leave the text saying something the records no longer show. The
+executed copy, notebooks/bp.output.submission.executed.ipynb, must be a run of the
+committed render, with no error and no trace of its temporary work folder.
 """
 
 import base64
@@ -33,9 +35,10 @@ from bellbench.run import read_table
 ROOT = Path(__file__).resolve().parents[1]
 BLUEPRINT = ROOT / "scripts" / "blueprint-render"
 NOTEBOOK = ROOT / "notebooks" / "bp.output.submission.ipynb"
+EXECUTED = ROOT / "notebooks" / "bp.output.submission.executed.ipynb"  # make submission-executed writes it
 INVOKE = yaml.safe_load((ROOT / "notebooks" / "bp.invoke.submission.yaml").read_text(encoding="utf-8"))
 BENCHMARKS = ROOT / "results" / "runs" / "benchmark"
-PAYLOADS = ("CODE", "RESULTS", "STUDIES", "SCHEMAS")
+PAYLOADS = ("CODE", "RESULTS", "STUDIES", "CONFIG")
 GRAPHS = ("ibm2016", "contemporary", "hyperbolic")
 CASES = {"ibm2016": (1, 2, 3), "contemporary": (4, 5, 6), "hyperbolic": (7, 8, 9)}  # ideal, noisy baseline, protected
 EARLIER = {"ibm2016": "move-chain-path-xx-ibm2016", "contemporary": "move-chain-spare-xx-contemporary",
@@ -132,6 +135,19 @@ def test_the_committed_notebook_is_a_fresh_render(tmp_path):
     assert all(c["outputs"] == [] and c["execution_count"] is None for c in code)  # committed without outputs
 
 
+def test_the_executed_copy_is_a_run_of_the_committed_render():
+    """The same cells, payloads included, each code cell run once in order and none ending in an error, and no trace
+    of the run's temporary work folder; a render committed without its run fails here."""
+    assert _cells(EXECUTED) == _cells(), "run make submission-executed and commit both notebooks"
+    code = [c for c in json.loads(EXECUTED.read_text(encoding="utf-8"))["cells"] if c["cell_type"] == "code"]
+    assert [c["execution_count"] for c in code] == list(range(1, len(code) + 1))
+    assert not [o for c in code for o in c["outputs"] if o["output_type"] == "error"]
+    texts = [o.get("text", "") for c in code for o in c["outputs"]]
+    texts += [v for c in code for o in c["outputs"] for m, v in o.get("data", {}).items() if not m.startswith("image/")]
+    texts = [t if isinstance(t, str) else json.dumps(t) for t in texts]
+    assert not [t for t in texts if re.search(r"bellbench-\w{8}", t)]  # the work folder, normalized away
+
+
 # -- The setup ---------------------------------------------------------------------------
 
 
@@ -153,6 +169,17 @@ def test_every_link_lands_on_a_heading():
     assert "<a id=" not in text
 
 
+def test_every_function_the_walkthrough_shows_is_the_package_s():
+    """Section 2 shows bellbench's own code with show(module.function), read from the code payload when it runs, so
+    what it shows is what runs; this checks each name still exists in src/bellbench/, so no cell breaks on a rename."""
+    import importlib
+
+    shown = re.findall(r"^show\((\w+)\.(\w+)\)$", "\n".join(s for kind, s in _cells() if kind == "code"), re.M)
+    assert len(shown) >= 6
+    for module, name in shown:
+        assert callable(getattr(importlib.import_module(f"bellbench.{module}"), name, None)), f"bellbench.{module}.{name}"
+
+
 # -- The payloads ----------------------------------------------------------------------
 
 
@@ -166,22 +193,23 @@ def test_the_results_payloads_are_the_invoked_snapshots_and_nothing_else():
     _packed_as("STUDIES", set().union(*(_snapshot_files(s) for s in INVOKE["studies"])))
 
 
-def test_the_schemas_payload_is_the_schemas_and_the_core_benchmark_file():
-    _packed_as("SCHEMAS", {*(ROOT / "config").glob("bp.schema.*.yaml"), ROOT / "config/benchmark/bp.data.benchmark.core.yaml"})
+def test_the_config_payload_is_every_config_file():
+    _packed_as("CONFIG", set((ROOT / "config").rglob("*.yaml")))
 
 
-def test_every_other_config_file_is_written_once_exactly_as_the_repository_holds_it():
-    written = {}
-    for kind, source in _cells():
-        if kind == "code" and source.startswith("%%repo_file "):
-            line, _, body = source.partition("\n")
-            path = line[len("%%repo_file "):]
-            assert path not in written, f"{path} is written twice"
-            written[path] = body + "\n"  # a cell drops its file's final newline
-    packed = set(_payload("SCHEMAS"))
+def test_every_config_file_is_shown_once_folded_as_the_repository_holds_it():
+    """Each config file appears once in the text as a folded YAML dropdown, rendered from the file at build time, so a
+    reader sees it before anything runs; the code reads the same file from the config payload."""
+    shown = {}
+    for path, body in re.findall(r"<details><summary><b>(config/[^<]+)</b> \(<a href=\"[^\"]+\">On GitHub</a>\)</summary>\n\n```yaml\n(.*?)\n```\n\n</details>",
+                                 _markdown(), re.S):
+        assert path not in shown, f"{path} is shown twice"
+        shown[path] = body + "\n"  # the dropdown drops the file's final newline
     expected = {p.relative_to(ROOT).as_posix(): p.read_text(encoding="utf-8") for p in (ROOT / "config").rglob("*.yaml")}
-    assert not packed & set(written)
-    assert written == {path: text for path, text in expected.items() if path not in packed}
+    assert shown == expected
+    assert not any(source.startswith("%%") for kind, source in _cells() if kind == "code")  # no config file is a code cell
+    for path in shown:  # each dropdown links to its file at the tag the invoke names
+        assert f'(<a href="https://github.com/{INVOKE["repo"]}/blob/{INVOKE["tag"]}/{path}">On GitHub</a>)' in _markdown()
 
 
 def test_each_payload_cell_opens_folded_under_its_title():
@@ -197,7 +225,8 @@ def test_each_payload_cell_opens_folded_under_its_title():
 
 def test_the_payloads_say_where_they_come_from():
     text = _markdown()
-    assert f"[`{INVOKE['repo']}`](https://github.com/{INVOKE['repo']}/tree/{INVOKE['tag']}) at tag `{INVOKE['tag']}`" in text
+    url = f"https://github.com/{INVOKE['repo']}/tree/{INVOKE['tag']}"
+    assert f"from the repository at its `{INVOKE['tag']}` tag, [{url}]({url})" in text  # the link shows the tag it opens
     for name in PAYLOADS:
         assert f"({len(_payload(name))} files)" in text
 
@@ -206,25 +235,25 @@ def test_the_payloads_say_where_they_come_from():
 
 
 def test_the_case_table_in_the_text_is_the_records():
+    """Section 5.1's table gives every case every measure, each from the reported snapshot's comparison table."""
     cases, text = _cases(INVOKE["reported"]), _markdown()
-    for graph, (ideal, base, protected) in zip(("2016-inspired", "Contemporary", "Hyperbolic-inspired"), CASES.values()):
-        row = f"| {graph} | 1 (case {ideal}) | {_F(cases[base])} (case {base}) | " \
-              f"{_F(cases[protected])}, {cases[protected].acceptance:.3f} (case {protected}) |"
-        assert row in text
+    names = {"ibm2016": "2016-inspired", "contemporary": "Contemporary", "hyperbolic": "Hyperbolic-inspired"}
+    for n, r in cases.items():
+        kept = r.shots_accepted_XX + r.shots_accepted_YY + r.shots_accepted_ZZ
+        row = (f"| {n} | {names[r.processor]} | {['protected', 'ideal', 'noisy baseline'][n % 3]} | {_F(r)} | "
+               f"{r.fidelity_raw:.4f} | {r.acceptance:.3f} | {int(r.shots_total - kept):,} | {r.two_qubit_gates} | "
+               f"{r.depth} | {r.swaps} | {r.qubits_used} | {r.scheduled_duration * 1e6:.2f} |")
+        assert row in text, row
 
 
-def test_the_abstract_quotes_the_records():
+def test_the_overview_quotes_the_records():
+    """The overview's lead states the lowest acceptance among the protected cases; section 4.1's table, which the
+    test above checks, carries each graph's numbers."""
     cases = _cases(INVOKE["reported"])
-    abstract = _markdown().split("**Abstract.**")[1].split("**To run it:**")[0]
-    for processor, (_, base, protected) in CASES.items():
-        assert f"from {_F(cases[base])} to {_F(cases[protected])} keeping {100 * cases[protected].acceptance:.1f}%" \
-            in abstract
-    gates = lambda case_of: ", ".join(str(cases[c].two_qubit_gates) for c in case_of[:-1]) + \
-        f" and {cases[case_of[-1]].two_qubit_gates}"  # noqa: E731
-    assert f"with {gates((3, 6, 9))} two-qubit gates against the baseline's {gates((2, 5, 8))}" in abstract
-    read = [_extended(p)[f"ghz-uncompute-vacancy-{p}"].fidelity - _extended(p)[f"ghz-uncompute-{p}"].fidelity for p in GRAPHS]
-    assert "The read alone added " + ", ".join(f"{d:+.4f}" for d in read[:-1]) + f" and {read[-1]:+.4f}" in abstract
-    assert f"{_shots():,} shots per basis" in abstract
+    overview = _markdown().split("**Overview.**")[1].split("**Where to look.**")[0]
+    lowest = min(cases[protected].acceptance for _, _, protected in CASES.values())
+    assert f"keeping at least {100 * lowest:.1f}% of shots" in overview
+    assert f"{_shots():,} shots per basis" in overview
 
 
 def test_section_5_quotes_the_fidelity_the_transport_recovers():
@@ -232,8 +261,10 @@ def test_section_5_quotes_the_fidelity_the_transport_recovers():
     cases = _cases(INVOKE["reported"])
     share = [(_extended(p)[f"ghz-uncompute-{p}"].fidelity - cases[base].fidelity) / (1 - cases[base].fidelity)
              for p, base in (("ibm2016", 2), ("hyperbolic", 8), ("contemporary", 5))]
+    text = _markdown()
+    assert "two-qubit gates on the 2016-inspired graph, " in text and " on the hyperbolic-inspired graph and " in text
     assert f"recover {100 * share[0]:.0f}%, {100 * share[1]:.0f}% and {100 * share[2]:.0f}% of the fidelity the " \
-        "baseline lost, measured against F = 1" in _markdown()
+        "baseline lost on those graphs, in that order, measured against $F = 1$" in text
 
 
 def _shots():
