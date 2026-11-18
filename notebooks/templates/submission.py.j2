@@ -148,14 +148,14 @@
 # | What do we recommend for future systems? | [{{ sec("s5-6") }}]({{ ref("s5-6") }}) |
 {%- endif %}
 #
-# **How the repository works.** Four `make` commands drive the benchmark, drawn in the diagram below. Every input is a YAML file checked against a schema, so every result traces to a config file, a seed and pinned package versions, all in the repository at its `{{ tag }}` tag, [https://github.com/{{ repo }}/tree/{{ tag }}](https://github.com/{{ repo }}/tree/{{ tag }}).
+# **How the repository works.** Four `make` commands drive the benchmark, drawn in the diagram below. In the workbench a teammate picks a graph and a noise profile, builds a circuit, sees it written and compiled, and saves it as a circuit file; this notebook's circuit views come from it. Every input is a YAML file checked against a schema, so every result traces to a config file, a seed and pinned package versions, all in the repository at its `{{ tag }}` tag, [https://github.com/{{ repo }}/tree/{{ tag }}](https://github.com/{{ repo }}/tree/{{ tag }}).
 #
 # | Command | What it does |
 # |---|---|
-# | `make workbench` | Gives a teammate their own workbench notebook: pick a graph and a noise profile, build a circuit, see it written and compiled, and save it as a circuit file. This notebook's circuit views come from it. |
-# | `make benchmark` | Makes every run a benchmark file names; each run records its commit, seeds and package versions. |
-# | `make run` | Remakes a recorded run and reports any difference. |
-# | `make submission` | Renders this notebook from the recorded runs. |
+# | `make workbench` | A teammate's own workbench notebook: build a circuit and save it |
+# | `make benchmark` | Makes a benchmark's runs, each recording its commit and seeds |
+# | `make run` | Remakes a recorded run and reports any difference |
+# | `make submission` | Renders this notebook from the recorded runs |
 #
 # <img src="https://raw.githubusercontent.com/{{ repo }}/{{ tag }}/docs/assets/design-flow.png" width="480" alt="The workflow: processor files, noise profiles, circuit files and benchmark files in config/ feed the workbench notebook and make benchmark; both build the processor and its noise with NoiseControl, which feeds CircuitRun to compile, simulate and score each run; runs land in workspace/ or results/runs/, a benchmark's runs in one folder with a comparison table, and the submission notebook reads the deliverable benchmark.">
 #
@@ -168,17 +168,32 @@
 #
 # **Run these cells first:** they install the pinned packages and unpack the code and recorded runs this notebook carries. In VS Code, which shows these cells in full, [skip to section 2]({{ ref("s2") }}).
 #
-# **What to expect in Colab, Jupyter and VS Code:**
+# **What to expect in each viewer.** The notebook runs the same in Colab, Jupyter and VS Code; what differs is how it looks and how you move around in it. In Colab, two things look like errors and are not: the install may print a pip error, and the config file cells show lint errors. Open your viewer's dropdown for the details.
 #
-# | | Colab | JupyterLab and Jupyter Notebook 7 | VS Code |
-# |---|---|---|---|
-# | The first cell, which installs the packages | pip may print "ERROR: pip's dependency resolver does not currently take into account all the packages that are installed", naming packages Colab preinstalls, such as `bigframes` or `google-cloud-bigquery`. This notebook uses none of them: the install worked if the cell's last line, the imports, raises no error. If Colab asks to restart the runtime, restart and run all again | In the repository's own environment, everything is installed already and the cell reports only that pip is absent | As in Jupyter |
-# | The plumbing code cells: the payloads, the unpack cell, the helpers and two chart cells | Folded under their title | Folded, input hidden | Shown in full: VS Code ignores the folding metadata, so collapse them by hand if you like |
-# | The text dropdowns, like this one | Fold | Fold | Fold |
-# | Links to a section | Do not jump: use the Table of contents pane in the left sidebar | Jump | Jump |
-# | A list of every heading | Table of contents pane | Table of contents sidebar | Outline view |
+# <details><summary><b>Colab</b></summary>
 #
-# In Colab, the config file cells may show their YAML underlined as if it were Python; they run as written.
+# - **The first cell** may print "ERROR: pip's dependency resolver does not currently take into account all the packages that are installed", naming packages Colab preinstalls, such as `bigframes` or `google-cloud-bigquery`. This notebook uses none of them: the install worked if the cell's last line, the imports, raises no error. If Colab asks to restart the runtime, restart and run all again.
+# - **The config file cells,** each starting `%%repo_file`, show their YAML with lint errors, because Colab checks it as Python. They run as written: the line under each cell, "wrote config/… · content hash …", shows the file was written.
+# - **The plumbing code cells,** the payloads, the unpack cell, the helpers and two chart cells, open folded under their titles.
+# - **Links to a section do not jump.** The Table of contents pane in the left sidebar lists every heading and jumps to it.
+#
+# </details>
+#
+# <details><summary><b>JupyterLab and Jupyter Notebook 7</b></summary>
+#
+# - **The first cell,** in the repository's own environment, reports only that pip is absent: everything is installed already.
+# - **The plumbing code cells** open with their input hidden.
+# - **Links jump** to their section, and the Table of contents sidebar lists every heading.
+#
+# </details>
+#
+# <details><summary><b>VS Code</b></summary>
+#
+# - **The first cell,** in the repository's own environment, reports only that pip is absent.
+# - **The plumbing code cells are shown in full,** since VS Code ignores the folding metadata: collapse them by hand, or use the link above to skip to section 2.
+# - **Links jump** to their section, and the Outline view lists every heading.
+#
+# </details>
 #
 # <details><summary><b>What these cells do</b></summary>
 #
@@ -709,18 +724,16 @@ pd.DataFrame(
 #
 # **The calibration snapshot gives one number per gate, per qubit's readout and per qubit's T1 and T2, and the model uses only those, so every effect below is left out.** Section {{ sec("s4-5") }} states what that means for the results; [DESIGN.md, section 4]({{ link("docs/DESIGN.md") }}#4-noise-model) holds the full noise model.
 #
-# | Left out | What it is | Why it is left out |
-# |---|---|---|
-# | Qubits that start a shot excited | A qubit begins in \|1⟩ instead of \|0⟩ | A run can set it as a conditional channel, but the snapshot gives no value for it, and no run here sets it |
-# | Measurement-induced dephasing | Reading one qubit disturbs its neighbours' phase | The snapshot gives no value for it; every read in the nine cases is at the end of the circuit |
-# | Always-on ZZ coupling | Neighbours keep a small interaction while idle | The snapshot gives no value for it; an idle qubit here only decays |
-# | Spectator errors | A gate disturbs the qubits next to the ones it acts on | The snapshot gives each gate's error on its own qubits only |
-# | Coherent errors | Systematic over- or under-rotations that add up instead of averaging out | The snapshot gives each gate's error as one rate, with no angle, so the model applies it as a random error |
-# | Drift | Calibration values change over time | One snapshot is one moment; every run uses the same values, so the three graphs compare under the same noise |
-# | Feedforward latency | The delay before a circuit can act on a mid-circuit result | No case acts on a result during the circuit; every read is used after the shot |
-# | Cosmic-ray bursts | Rare events that raise error rates across a chip at once | They correlate errors across qubits and shots, which a per-gate, per-shot model cannot express |
-# | Leakage | A qubit leaving \|0⟩ and \|1⟩ for a higher level | The simulator treats each qubit as two-level, and the snapshot gives no value for it |
-# | Frequency crowding | Qubits with close frequencies disturbing each other | The snapshot gives no coupling between qubit frequencies |
+# - **Qubits that start a shot excited:** a qubit begins in |1⟩ instead of |0⟩. A run can set it as a conditional channel, but the snapshot gives no value for it, and no run here sets it.
+# - **Measurement-induced dephasing:** reading one qubit disturbs its neighbours' phase. The snapshot gives no value for it; every read in the nine cases is at the end of the circuit.
+# - **Always-on ZZ coupling:** neighbours keep a small interaction while idle. The snapshot gives no value for it; an idle qubit here only decays.
+# - **Spectator errors:** a gate disturbs the qubits next to the ones it acts on. The snapshot gives each gate's error on its own qubits only.
+# - **Coherent errors:** systematic over- or under-rotations that add up instead of averaging out. The snapshot gives each gate's error as one rate, with no angle, so the model applies it as a random error.
+# - **Drift:** calibration values change over time. One snapshot is one moment; every run uses the same values, so the three graphs compare under the same noise.
+# - **Feedforward latency:** the delay before a circuit can act on a mid-circuit result. No case acts on a result during the circuit; every read is used after the shot.
+# - **Cosmic-ray bursts:** rare events that raise error rates across a chip at once. They correlate errors across qubits and shots, which a per-gate, per-shot model cannot express.
+# - **Leakage:** a qubit leaving |0⟩ and |1⟩ for a higher level. The simulator treats each qubit as two-level, and the snapshot gives no value for it.
+# - **Frequency crowding:** qubits with close frequencies disturbing each other. The snapshot gives no coupling between qubit frequencies.
 #
 # </details>
 
@@ -943,7 +956,7 @@ finish(fig, "Quality against cost", "noisy cases and the transport alone, as mad
 #
 # **All three graphs share one noise model, so their differences come from connectivity alone. Port distance sets the cost of moving the pair, protected or not; a spare path, a second path between the ports, lets a check add a little more F at a cost in shots, gates and qubits.**{{ chk() }}
 #
-# | Graph | Hops between ports | Disjoint paths | Baseline gates, F | Transport alone gates, F | Protected F, acceptance | Plus an XX check on a spare path: F, acceptance |
+# | Graph | Hops between ports | Disjoint paths | Baseline gates, F | Transport alone gates, F | Protected F, acceptance | With a spare-path XX check: F, acceptance |
 # |---|---|---|---|---|---|---|
 # | 2016-inspired | 2 | 1 | {{ c[2].two_qubit_gates }}, {{ f4(c[2].fidelity) }} | {{ tr.ibm2016.two_qubit_gates }}, {{ f4(tr.ibm2016.fidelity) }} | {{ f4(c[3].fidelity) }}, {{ a3(c[3].acceptance) }} | no spare path |
 # | Hyperbolic-inspired | 3 | 3 | {{ c[8].two_qubit_gates }}, {{ f4(c[8].fidelity) }} | {{ tr.hyperbolic.two_qubit_gates }}, {{ f4(tr.hyperbolic.fidelity) }} | {{ f4(c[9].fidelity) }}, {{ a3(c[9].acceptance) }} | {{ f4(L.hyperbolic.runs["ghz-uncompute-vacancy-spare-xx-hyperbolic"].fidelity) }}, {{ a3(L.hyperbolic.runs["ghz-uncompute-vacancy-spare-xx-hyperbolic"].acceptance) }} |
@@ -993,17 +1006,15 @@ beside_record(REPORTED, extra=[(MADE / "transport-alone" / f"ghz-uncompute-{p}",
 #
 # Each run is named for its circuit, followed by the graph; a suffix marks the one run that changes a setting.
 #
-# | Run | What it is |
-# |---|---|
-# | baseline | The organisers' baseline: SWAPs out and back |
-# | move-chain | The move chain: each hop moves the pair's far half with two CX gates, no check |
-# | ghz-measure | The textbook GHZ transport: the interior read in X, a Z owed on the first port for each 1, no check |
-# | ghz-measure, then -readout-0 | The same circuit with no readout error on the interior qubits it reads, the only run that changes the profile |
-# | ghz-uncompute | GHZ disentangling, the protected case's transport, no check |
-# | move-chain-vacancy | The move chain, then the vacancy read |
-# | ghz-uncompute-vacancy | The protected case: GHZ disentangling, then the vacancy read |
-# | move-chain-path-xx, move-chain-spare-xx | The earlier protected case: the move chain with an XX check, on the path read mid-circuit, or on a spare path |
-# | ghz-uncompute-vacancy-spare-xx | The protected case, then an XX check on a spare path |
+# - `baseline`: the organisers' baseline, SWAPs out and back.
+# - `move-chain`: each hop moves the pair's far half with two CX gates; no check.
+# - `ghz-measure`: the textbook GHZ transport, reading the interior in X, with a Z owed on the first port for each 1; no check.
+# - `ghz-measure-…-readout-0`: the same circuit with no readout error on the interior qubits it reads, the only run that changes the profile.
+# - `ghz-uncompute`: GHZ disentangling, the protected case's transport; no check.
+# - `move-chain-vacancy`: the move chain, then the vacancy read.
+# - `ghz-uncompute-vacancy`: the protected case, GHZ disentangling then the vacancy read.
+# - `move-chain-path-xx`, `move-chain-spare-xx`: the earlier protected case, the move chain with an XX check on the path read mid-circuit, or on a spare path.
+# - `ghz-uncompute-vacancy-spare-xx`: the protected case, then an XX check on a spare path.
 {%- for p in P %}
 {%- set R = L[p].runs %}
 {%- set q = R["ghz-uncompute-vacancy-" ~ p] %}
@@ -1040,7 +1051,9 @@ beside_record("{{ L[p].name }}")
 #
 # **Under Boston's readout errors the textbook GHZ transport, which reads the interior in X, loses to GHZ disentangling on every graph; with no readout error on the qubits it reads, it wins on every graph.** Each misread interior qubit flips the Z owed on the first port, which leaves the pair in the wrong Bell state, so the loss grows with the qubits it reads: one on the 2016-inspired graph, two on the hyperbolic-inspired and three on the contemporary. Neither run has a check; both keep every shot.{{ chk() }}
 #
-# | Graph | Qubits read | ghz-measure minus ghz-uncompute, as modelled | ghz-measure minus ghz-uncompute, no readout error on the read qubits |
+# Each value is ghz-measure's F minus ghz-uncompute's:
+#
+# | Graph | Qubits read | As modelled | No readout error on the qubits read |
 # |---|---|---|---|
 {%- for p in P %}
 {%- set R = L[p].runs %}
