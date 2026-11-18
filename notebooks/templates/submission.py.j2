@@ -53,7 +53,7 @@
 {%- set base = {"ibm2016": c[2], "contemporary": c[5], "hyperbolic": c[8]} %}
 {%- set prot = {"ibm2016": c[3], "contemporary": c[6], "hyperbolic": c[9]} %}
 {%- set BCASE = {"ibm2016": 2, "contemporary": 5, "hyperbolic": 8} %}
-{#- The walkthrough in section 2 writes out these files, so section 4 does not write them again. -#}
+{#- The walkthrough in section 2 shows these files, so section 4 does not show them again. -#}
 {%- set EARLY = [base.contemporary.circuit, prot.contemporary.circuit] %}
 {%- set read_us = noise["boston-2026"].measure * 1e6 %}
 {#- The studies: one extended benchmark per graph, by processor, with its noisy rows by run. -#}
@@ -94,11 +94,18 @@
 {%- macro dropped(r) %}{{ r.shots_total - (r.shots_accepted_XX + r.shots_accepted_YY + r.shots_accepted_ZZ) }}{% endmacro %}
 {%- macro chk() %}{% if draft %} [check]{% endif %}{% endmacro %}
 {%- macro link(path) %}https://github.com/{{ repo }}/blob/{{ tag }}/{{ path }}{% endmacro %}
-{%- macro repo_file(path) %}
+{%- macro config_fold(path) %}
 
-# %%
-%%repo_file {{ path }}
-{{ cfg[path] }}
+# %% [markdown]
+# <details><summary><b>{{ path }}</b></summary>
+#
+# ```yaml
+{%- for l in cfg[path].rstrip("\n").split("\n") %}
+# {{ l }}
+{%- endfor %}
+# ```
+#
+# </details>
 {%- endmacro %}
 {%- macro measures(p) %}
 {%- set b, t, q = base[p], tr[p], prot[p] %}
@@ -122,7 +129,7 @@
 #
 # **Our submission to the quanTA challenge, UCF IBM Qiskit Fall Fest 2026.**
 #
-# **What this notebook is.** The bell-transport-bench repository, compressed into one self-contained file so the benchmark runs anywhere, Colab included, without a clone. The repository is where the work is done: a teammate drives it with `make` commands, shown under "How the repository works" below. This notebook packs the repository's package, its recorded runs and its config files, writes each config file out where it explains it, remakes every run it reports, and sets each beside the run the repository recorded. Every config file, circuit and result below is the repository's own, carried here.
+# **What this notebook is.** The bell-transport-bench repository, compressed into one self-contained file so the benchmark runs anywhere, Colab included, without a clone. The repository is where the work is done: a teammate drives it with `make` commands, shown under "How the repository works" below. This notebook packs the repository's package, its recorded runs and its config files, shows each config file where it explains it, remakes every run it reports, and sets each beside the run the repository recorded. Every config file, circuit and result below is the repository's own, carried here.
 #
 # **Overview.** Under one simulated noise model, our protection raised the fidelity F of a Bell pair between two distant qubits on all three processor graphs, keeping at least {{ pct([c[3], c[6], c[9]] | map(attribute="acceptance") | min) }} of shots and using fewer two-qubit gates than the organisers' baseline. [Section {{ sec("s5-1") }}]({{ ref("s5-1") }}) gives each graph's numbers.{{ chk() }}
 #
@@ -168,13 +175,12 @@
 #
 # **Run these cells first:** they install the pinned packages and unpack the code and recorded runs this notebook carries. In VS Code, which shows these cells in full, [skip to section 2]({{ ref("s2") }}).
 #
-# **What to expect in each viewer.** The notebook runs the same in Colab, Jupyter and VS Code; what differs is how it looks and how you move around in it. In Colab, two things look like errors and are not: the install may print a pip error, and the config file cells show lint errors. Open your viewer's dropdown for the details.
+# **What to expect in each viewer.** The notebook runs the same in Colab, Jupyter and VS Code; what differs is how it looks and how you move around in it. In Colab, the install may print a pip error; it is expected. Open your viewer's dropdown for the details.
 #
 # <details><summary><b>Colab</b></summary>
 #
 # - **The first cell** may print "ERROR: pip's dependency resolver does not currently take into account all the packages that are installed", naming packages Colab preinstalls, such as `bigframes` or `google-cloud-bigquery`. This notebook uses none of them: the install worked if the cell's last line, the imports, raises no error. If Colab asks to restart the runtime, restart and run all again.
-# - **The config file cells,** each starting `%%repo_file`, show their YAML with lint errors, because Colab checks it as Python. They run as written: the line under each cell, "wrote config/… · content hash …", shows the file was written.
-# - **The plumbing code cells,** the payloads, the unpack cell, the helpers and two chart cells, open folded under their titles.
+# - **The plumbing code cells,** the payloads, the unpack cell, the helpers, the plain-Qiskit check and two chart cells, open folded under their titles.
 # - **Links to a section do not jump.** The Table of contents pane in the left sidebar lists every heading and jumps to it.
 #
 # </details>
@@ -202,11 +208,11 @@
 # - **The code:** the `bellbench` package, `src/bellbench/`, exactly as the repository holds it ({{ code.count }} files).
 # - **The nine cases' runs:** every file of the snapshot behind the nine cases, `{{ reported }}`, from `results/runs/benchmark/` ({{ results.count }} files).
 # - **The extended benchmarks' runs:** every file of the three snapshots section 6 reports ({{ studies_payload.count }} files).
-# - **The schemas and the core benchmark file:** what a valid config file and run record must hold, and the workbench's defaults ({{ schemas.count }} files), shown folded after the setup.
+# - **The config files:** every file in `config/`, the schemas included ({{ configs_payload.count }} files). Each is shown, folded, where this notebook explains it.
 #
 # The sixth cell unpacks the payloads into a temporary folder, and lists every file with its SHA-256, so each one can be checked against the same file at that tag. Nothing is written outside that folder.
 #
-# Every config file but the schemas is written out where this notebook explains it, not packed: each `%%repo_file` cell writes one file into the same folder, and the code reads it from there. The schemas are packed instead, since every config file and run record is checked against them when it loads, so they must be in place before the first one; each is shown in a dropdown after the setup, with the core benchmark file, which only the workbench reads.
+# The code reads every config file from that folder, exactly as the repository holds it; the dropdowns in the text show the same files, rendered from them when this notebook was built.
 #
 # </details>
 
@@ -232,21 +238,20 @@ RESULTS = "{{ results.payload }}"
 STUDIES = "{{ studies_payload.payload }}"
 
 # %% cellView="form" jupyter={"source_hidden":true}
-#@title The schemas and the core benchmark file: {{ schemas.count }} files
-SCHEMAS = "{{ schemas.payload }}"
+#@title The config files: {{ configs_payload.count }} files
+CONFIG = "{{ configs_payload.payload }}"
 
 # %% cellView="form" jupyter={"source_hidden":true}
-#@title Unpack the payloads, list each file's SHA-256, and define %%repo_file
+#@title Unpack the payloads and list each file's SHA-256
 import base64, hashlib, html, io, sys, tempfile, zipfile
 from pathlib import Path
 
-from IPython.core.magic import register_cell_magic
 from IPython.display import HTML, display
 
 WORK = Path(tempfile.mkdtemp(prefix="bellbench-"))
 manifests = []
 for title, payload in (("The code payload", CODE), ("The nine cases' runs", RESULTS),
-                       ("The extended benchmarks' runs", STUDIES), ("The schemas", SCHEMAS)):
+                       ("The extended benchmarks' runs", STUDIES), ("The config files", CONFIG)):
     with zipfile.ZipFile(io.BytesIO(base64.b64decode(payload))) as archive:
         archive.extractall(WORK)
         rows = "".join(f"<tr><td><code>{html.escape(n)}</code></td>"
@@ -258,26 +263,16 @@ sys.path.insert(0, str(WORK / "src"))
 from bellbench import configs  # reads every config file from WORK
 
 
-@register_cell_magic
-def repo_file(line, cell):
-    """Write the cell's text to the repository path on the magic's line, inside WORK, and show its content hash."""
-    path = WORK / line.strip()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(cell, encoding="utf-8")
-    print(f"wrote {line.strip()} · content hash {configs.content_hash(path)[:19]}…")
-
 
 display(HTML("".join(manifests)))
 print(f"unpacked the four payloads into {WORK}")
 
 # %% [markdown]
-# **The schemas, and the core benchmark file:** the schemas say what a valid processor file, noise profile, circuit file, benchmark file, run list and run record must hold; the core benchmark file gives the workbench its default noise profile, shots and seed, and nothing in this notebook reports its runs. Each is folded: click one to read it.
-
-# %%
-display(HTML("".join(
-    f"<details><summary><b>{path.relative_to(WORK).as_posix()}</b> · content hash {configs.content_hash(path)[:19]}…"
-    f"</summary><pre>{html.escape(path.read_text(encoding='utf-8'))}</pre></details>"
-    for path in [*sorted((WORK / "config").glob("bp.schema.*.yaml")), WORK / "config/benchmark/bp.data.benchmark.core.yaml"])))
+# **The schemas, and the core benchmark file.** The schemas say what a valid processor file, noise profile, circuit file, benchmark file, run list and run record must hold; every config file and run record is checked against them when it loads. The core benchmark file gives the workbench its default noise profile, shots and seed; nothing in this notebook reports its runs.
+{%- for p in cfg if "/bp.schema." in p %}
+{{ config_fold(p) }}
+{%- endfor %}
+{{ config_fold("config/benchmark/bp.data.benchmark.core.yaml") }}
 
 # %% cellView="form" jupyter={"source_hidden":true}
 #@title The notebook's helpers: show the package's code, make and compare the runs, draw the circuit views and charts
@@ -456,12 +451,12 @@ def noisy_scores(folder):
 # | 4. Schedule | `schedule` | `ALAPScheduleAnalysis`, `PadDelay` |
 # | 5. Simulate and score | `simulate` | `AerSimulator` |
 #
-# - **Files:** the contemporary processor file, the noise profile and case {{ BCASE.contemporary + 1 }}'s circuit file, written below, with case {{ BCASE.contemporary }}'s baseline for step 3. [Section 4]({{ ref("s4") }}) explains each kind of file and writes out the rest.
+# - **Files:** the contemporary processor file, the noise profile and case {{ BCASE.contemporary + 1 }}'s circuit file, shown below, with case {{ BCASE.contemporary }}'s baseline for step 3. [Section 4]({{ ref("s4") }}) explains each kind of file and shows the rest.
 # - **After this section:** every run is made with the one call in step 6.
-{{ repo_file("config/processor/bp.data.processor.contemporary.yaml") }}
-{{ repo_file("config/noise/bp.data.noise.boston-2026.yaml") }}
-{{ repo_file("config/circuit/bp.data.circuit." ~ base.contemporary.circuit ~ ".yaml") }}
-{{ repo_file("config/circuit/bp.data.circuit." ~ prot.contemporary.circuit ~ ".yaml") }}
+{{ config_fold("config/processor/bp.data.processor.contemporary.yaml") }}
+{{ config_fold("config/noise/bp.data.noise.boston-2026.yaml") }}
+{{ config_fold("config/circuit/bp.data.circuit." ~ base.contemporary.circuit ~ ".yaml") }}
+{{ config_fold("config/circuit/bp.data.circuit." ~ prot.contemporary.circuit ~ ".yaml") }}
 
 # %% [markdown]
 # #### Step 0. The run
@@ -737,14 +732,14 @@ print("the same numbers" if (round(f_hand, 12), round(acceptance_hand, 12)) == (
 #
 # ## {{ H["s4"] }}
 #
-# **The files that define every run: the three graphs, the noise model, the benchmark file and the circuits, then what the model leaves out.** Each file is written out as the repository holds it, except the four [section 2]({{ ref("s2") }}) wrote.
+# **The files that define every run: the three graphs, the noise model, the benchmark file and the circuits, then what the model leaves out.** Each file is shown, folded, as the repository holds it, except the four [section 2]({{ ref("s2") }}) shows.
 
 # %% [markdown]
 # ### {{ H["s4-1"] }}
 #
 # **We use the organisers' three coupling graphs exactly, with the ports they fix, and explain results by three features of each graph:** the hops between the ports, the paths between the ports that share no qubit (disjoint paths), and the most edges at any qubit. The 2016-inspired and hyperbolic-inspired processor files come first, the contemporary one being in [section 2]({{ ref("s2") }}); the figure and the table are drawn from all three.
 {% for name in P if name != "contemporary" %}
-{{ repo_file("config/processor/bp.data.processor." ~ name ~ ".yaml") }}
+{{ config_fold("config/processor/bp.data.processor." ~ name ~ ".yaml") }}
 {%- endfor %}
 
 # %%
@@ -769,7 +764,7 @@ pd.DataFrame(
 # - **Set per run, by none of the nine cases:** a mid-circuit measurement error, for a circuit that reads a qubit and then uses it again. No case does; the earlier XX check on the 2016-inspired graph, which section {{ sec("s6-1") }} runs for comparison, sets it to {{ "%g"|format(mcm) }}. One run per graph in section 6 also sets the readout error of the qubits it reads to 0, to test what readout costs.
 
 # %% [markdown]
-# The noise profile is written out in [section 2]({{ ref("s2") }}); its values:
+# The noise profile is shown in [section 2]({{ ref("s2") }}); its values:
 
 # %%
 profile = configs.load_noise("boston-2026")
@@ -804,7 +799,7 @@ pd.DataFrame(
 # ### {{ H["s4-3"] }}
 #
 # **One benchmark file fills the nine cases: it names each run, a circuit file under the noise profile, the shots and the base seed, and which run fills each case.** Cases 1, 2, 4, 5, 7 and 8 are the organisers' baseline; cases 3, 6 and 9 are our protection, the same steps on every graph. The file runs nothing else. To separate what the transport buys from what the check buys, section {{ sec("s5-2") }} takes the transport without the check from each graph's extended benchmark (section 6), which runs it under the same shots and seed. Each run takes {{ "{:,}".format(B.shots) }} shots per basis. The notebook makes the benchmark itself at the end of section {{ sec("s4-4") }}, once its circuit files are written.
-{{ repo_file("config/benchmark/bp.data.benchmark." ~ REPORTED ~ ".yaml") }}
+{{ config_fold("config/benchmark/bp.data.benchmark." ~ REPORTED ~ ".yaml") }}
 
 # %% [markdown]
 # ### {{ H["s4-4"] }}
@@ -825,9 +820,9 @@ pd.DataFrame(
 {%- if r.circuit in EARLY %}
 
 # %% [markdown]
-# The baseline's circuit file is written out in [section 2]({{ ref("s2") }}).
+# The baseline's circuit file is shown in [section 2]({{ ref("s2") }}).
 {%- else %}
-{{ repo_file("config/circuit/bp.data.circuit." ~ r.circuit ~ ".yaml") }}
+{{ config_fold("config/circuit/bp.data.circuit." ~ r.circuit ~ ".yaml") }}
 {%- endif %}
 
 # %%
@@ -837,9 +832,9 @@ circuit_views("{{ r.circuit }}")
 {%- if r.circuit in EARLY %}
 
 # %% [markdown]
-# The protected case's circuit file is written out in [section 2]({{ ref("s2") }}).
+# The protected case's circuit file is shown in [section 2]({{ ref("s2") }}).
 {%- else %}
-{{ repo_file("config/circuit/bp.data.circuit." ~ r.circuit ~ ".yaml") }}
+{{ config_fold("config/circuit/bp.data.circuit." ~ r.circuit ~ ".yaml") }}
 {%- endif %}
 
 # %%
@@ -848,7 +843,7 @@ circuit_views("{{ r.circuit }}")
 {%- endfor %}
 
 # %% [markdown]
-# **Every file the nine cases use is now written, so the notebook makes the benchmark itself:** each run compiled and simulated ideal and noisy, {{ "{:,}".format(B.shots) }} shots per basis, with seeds derived from the base seed, into a folder of its own. Every table and chart from here on reads these runs; section {{ sec("s5-4") }} sets each beside the run the repository recorded.
+# **With every file the nine cases use shown, the notebook makes the benchmark itself:** each run compiled and simulated ideal and noisy, {{ "{:,}".format(B.shots) }} shots per basis, with seeds derived from the base seed, into a folder of its own. Every table and chart from here on reads these runs; section {{ sec("s5-4") }} sets each beside the run the repository recorded.
 
 # %%
 make(REPORTED)
@@ -942,7 +937,7 @@ finish(fig, "The nine cases", f"{REPORTED}; every ± is smaller than its dot", l
 # %% [markdown]
 # ### {{ H["s5-2"] }}
 #
-# **On every graph the protected case beats the noisy baseline on F while using fewer two-qubit gates, no SWAP and no extra qubit; its only added cost is the shots the read discards.** For each graph, a table sets the noisy baseline, the transport alone (made here with the nine cases' shots and seed, so the same seeds as its run in section 6) and the protected case side by side on the challenge's five measures, then the workbench draws them: a table and a bar per run of its F, and a second bar for a run's kept shots, with its acceptance. The baseline's and the protected case's circuits are in section {{ sec("s4-4") }}; each graph's block below writes out the transport alone, GHZ disentangling without the read, and makes it. Each difference is given with how many combined standard errors it spans.
+# **On every graph the protected case beats the noisy baseline on F while using fewer two-qubit gates, no SWAP and no extra qubit; its only added cost is the shots the read discards.** For each graph, a table sets the noisy baseline, the transport alone (made here with the nine cases' shots and seed, so the same seeds as its run in section 6) and the protected case side by side on the challenge's five measures, then the workbench draws them: a table and a bar per run of its F, and a second bar for a run's kept shots, with its acceptance. The baseline's and the protected case's circuits are in section {{ sec("s4-4") }}; each graph's block below shows the transport alone, GHZ disentangling without the read, and makes it. Each difference is given with how many combined standard errors it spans.
 
 # %%
 wb = Workbench(noise=NOISE, shots=SHOTS, base_seed=BASE_SEED)  # the nine cases' settings
@@ -968,7 +963,7 @@ def side_by_side(processor):
 
 # %% [markdown]
 # The transport alone:
-{{ repo_file("config/circuit/bp.data.circuit.ghz-uncompute-" ~ p ~ ".yaml") }}
+{{ config_fold("config/circuit/bp.data.circuit.ghz-uncompute-" ~ p ~ ".yaml") }}
 
 # %%
 circuit_views("{{ tr[p].circuit }}")
@@ -1065,7 +1060,7 @@ beside_record(REPORTED, extra=[(MADE / "transport-alone" / f"ghz-uncompute-{p}",
 #
 # ## {{ H["s6"] }}
 #
-# **For each graph, one extended benchmark runs the protected case beside the circuits that differ from it by one step, so each comparison shows what one change buys; none fills a case.** Every run shares the nine cases' noise profile, shots and base seed, so the runs the two benchmarks share repeat their numbers exactly. Each section writes out the benchmark file, tables each run against the protected case, shows the circuits section {{ sec("s4-4") }} does not, each with its pictures folded, then makes the benchmark and sets each run beside its record.
+# **For each graph, one extended benchmark runs the protected case beside the circuits that differ from it by one step, so each comparison shows what one change buys; none fills a case.** Every run shares the nine cases' noise profile, shots and base seed, so the runs the two benchmarks share repeat their numbers exactly. Each section shows the benchmark file, tables each run against the protected case, shows the circuits section {{ sec("s4-4") }} does not, each with its pictures folded, then makes the benchmark and sets each run beside its record.
 #
 # Each run is named for its circuit, followed by the graph; a suffix marks the one run that changes a setting.
 #
@@ -1092,16 +1087,16 @@ beside_record(REPORTED, extra=[(MADE / "transport-alone" / f"ghz-uncompute-{p}",
 {%- for run, r in R.items() %}
 # | {{ run }} | {{ F(r) }} | {{ a3(r.acceptance) }} | {{ r.two_qubit_gates }} | {% if run == "ghz-uncompute-vacancy-" ~ p %}the protected case{% else %}{{ diff(r, q) }}{% endif %} |
 {%- endfor %}
-{{ repo_file("config/benchmark/bp.data.benchmark." ~ L[p].name ~ ".yaml") }}
+{{ config_fold("config/benchmark/bp.data.benchmark." ~ L[p].name ~ ".yaml") }}
 {%- for name in study_circuits[p] %}
-{{ repo_file("config/circuit/bp.data.circuit." ~ name ~ ".yaml") }}
+{{ config_fold("config/circuit/bp.data.circuit." ~ name ~ ".yaml") }}
 
 # %%
 circuit_views("{{ name }}", folded=True)
 {%- endfor %}
 
 # %% [markdown]
-# Every file the {{ L[p].name }} benchmark uses is now written, so the notebook makes it, draws each run's F, and sets each run beside the run the repository recorded.
+# With every file the {{ L[p].name }} benchmark uses shown, the notebook makes it, draws each run's F, and sets each run beside the run the repository recorded.
 
 # %%
 make("{{ L[p].name }}")
@@ -1128,9 +1123,9 @@ beside_record("{{ L[p].name }}")
 #
 # ## {{ H["sA"] }}
 #
-# **Optional: every config file nothing above writes, the other noise profiles and the earlier benchmarks with their circuits.** Nothing above depends on them; they complete the repository's config, so every assumption the benchmark holds is in this notebook. Each circuit is compiled here as section {{ sec("s4-4") }} compiles the nine cases' circuits, with its pictures folded; nothing here is run.
+# **Optional: every config file nothing above shows, the other noise profiles and the earlier benchmarks with their circuits.** Nothing above depends on them; they complete the repository's config, so every assumption the benchmark holds is in this notebook. Each circuit is compiled here as section {{ sec("s4-4") }} compiles the nine cases' circuits, with its pictures folded; nothing here is run.
 {%- for p in cfg if p not in shown %}
-{{ repo_file(p) }}
+{{ config_fold(p) }}
 {%- if p.startswith("config/circuit/") %}
 
 # %%

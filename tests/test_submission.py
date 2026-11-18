@@ -35,7 +35,7 @@ BLUEPRINT = ROOT / "scripts" / "blueprint-render"
 NOTEBOOK = ROOT / "notebooks" / "bp.output.submission.ipynb"
 INVOKE = yaml.safe_load((ROOT / "notebooks" / "bp.invoke.submission.yaml").read_text(encoding="utf-8"))
 BENCHMARKS = ROOT / "results" / "runs" / "benchmark"
-PAYLOADS = ("CODE", "RESULTS", "STUDIES", "SCHEMAS")
+PAYLOADS = ("CODE", "RESULTS", "STUDIES", "CONFIG")
 GRAPHS = ("ibm2016", "contemporary", "hyperbolic")
 CASES = {"ibm2016": (1, 2, 3), "contemporary": (4, 5, 6), "hyperbolic": (7, 8, 9)}  # ideal, noisy baseline, protected
 EARLIER = {"ibm2016": "move-chain-path-xx-ibm2016", "contemporary": "move-chain-spare-xx-contemporary",
@@ -177,22 +177,21 @@ def test_the_results_payloads_are_the_invoked_snapshots_and_nothing_else():
     _packed_as("STUDIES", set().union(*(_snapshot_files(s) for s in INVOKE["studies"])))
 
 
-def test_the_schemas_payload_is_the_schemas_and_the_core_benchmark_file():
-    _packed_as("SCHEMAS", {*(ROOT / "config").glob("bp.schema.*.yaml"), ROOT / "config/benchmark/bp.data.benchmark.core.yaml"})
+def test_the_config_payload_is_every_config_file():
+    _packed_as("CONFIG", set((ROOT / "config").rglob("*.yaml")))
 
 
-def test_every_other_config_file_is_written_once_exactly_as_the_repository_holds_it():
-    written = {}
-    for kind, source in _cells():
-        if kind == "code" and source.startswith("%%repo_file "):
-            line, _, body = source.partition("\n")
-            path = line[len("%%repo_file "):]
-            assert path not in written, f"{path} is written twice"
-            written[path] = body + "\n"  # a cell drops its file's final newline
-    packed = set(_payload("SCHEMAS"))
+def test_every_config_file_is_shown_once_folded_as_the_repository_holds_it():
+    """Each config file appears once in the text as a folded YAML dropdown, rendered from the file at build time, so a
+    reader sees it before anything runs; the code reads the same file from the config payload."""
+    shown = {}
+    for path, body in re.findall(r"<details><summary><b>(config/[^<]+)</b></summary>\n\n```yaml\n(.*?)\n```\n\n</details>",
+                                 _markdown(), re.S):
+        assert path not in shown, f"{path} is shown twice"
+        shown[path] = body + "\n"  # the dropdown drops the file's final newline
     expected = {p.relative_to(ROOT).as_posix(): p.read_text(encoding="utf-8") for p in (ROOT / "config").rglob("*.yaml")}
-    assert not packed & set(written)
-    assert written == {path: text for path, text in expected.items() if path not in packed}
+    assert shown == expected
+    assert not any(source.startswith("%%") for kind, source in _cells() if kind == "code")  # no config file is a code cell
 
 
 def test_each_payload_cell_opens_folded_under_its_title():
