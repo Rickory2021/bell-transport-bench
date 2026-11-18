@@ -121,7 +121,21 @@
 #
 # **Our submission to the quanTA challenge, UCF IBM Qiskit Fall Fest 2026: a report that remakes every run it reports.**
 #
-# **Abstract.** We built a benchmark that creates the Bell state |Φ+⟩ between two fixed qubits, the ports, on three processor graphs, under one noise model built from IBM's Boston calibration, and measures what error detection with postselection buys and costs. Our protection moves the pair by preparing a GHZ state along the path between the ports and disentangling it with gates, which leaves the path's interior qubits in |0⟩, then reads those qubits at the end of the circuit and discards each shot where any reads 1. Against the organisers' noisy baseline it raised the fidelity F from {{ F(c[2]) }} to {{ F(c[3]) }} keeping {{ pct(c[3].acceptance) }} of shots on the 2016-inspired graph, from {{ F(c[5]) }} to {{ F(c[6]) }} keeping {{ pct(c[6].acceptance) }} on the contemporary graph, and from {{ F(c[8]) }} to {{ F(c[9]) }} keeping {{ pct(c[9].acceptance) }} on the hyperbolic-inspired graph (one standard error each), with {{ c[3].two_qubit_gates }}, {{ c[6].two_qubit_gates }} and {{ c[9].two_qubit_gates }} two-qubit gates against the baseline's {{ c[2].two_qubit_gates }}, {{ c[5].two_qubit_gates }} and {{ c[8].two_qubit_gates }}, and no extra qubit. The read alone added {{ d4(c[3].fidelity - tr.ibm2016.fidelity) }}, {{ d4(c[6].fidelity - tr.contemporary.fidelity) }} and {{ d4(c[9].fidelity - tr.hyperbolic.fidelity) }} to the same transport without it. Every result holds for this one noise model, simulated with {{ "{:,}".format(B.shots) }} shots per basis; appendix A sets each protected case beside the circuits one step from it.{{ chk() }}
+# **Abstract.** Under one simulated noise model, our protection raised the fidelity of a Bell pair between two distant qubits on all three processor graphs, keeping at least {{ pct([c[3], c[6], c[9]] | map(attribute="acceptance") | min) }} of shots and using fewer two-qubit gates than the organisers' baseline.{{ chk() }}
+#
+# - **Task:** create the Bell state |β₀₀⟩ = (|00⟩ + |11⟩)/√2, which the challenge writes |Φ+⟩, between two fixed qubits, the ports, on each graph, and measure what error detection with postselection buys and costs.
+# - **Noise:** one model from IBM's Boston calibration medians, the same on every graph, simulated with {{ "{:,}".format(B.shots) }} shots per basis.
+# - **Transport, GHZ disentangling:** prepare a GHZ state along the path between the ports, then disentangle it with gates, which leaves the path's interior qubits in |0⟩.
+# - **Check, the vacancy read:** read those interior qubits at the end of the circuit and discard each shot where any reads 1. It detects errors and corrects none.
+# - **Result:** F rose on every graph, with no extra qubit; the one added cost is the discarded shots. The last column is what the read added to F of the same transport without it.
+#
+# | Graph | Noisy baseline F | Protected F | Shots kept | Two-qubit gates, baseline → protected | Added by the read |
+# |---|---|---|---|---|---|
+{%- for p in P %}
+# | {{ TITLE[p][0] | upper }}{{ TITLE[p][1:] }} | {{ F(base[p]) }} | {{ F(prot[p]) }} | {{ pct(prot[p].acceptance) }} | {{ base[p].two_qubit_gates }} → {{ prot[p].two_qubit_gates }} | {{ d4(prot[p].fidelity - tr[p].fidelity) }} |
+{%- endfor %}
+#
+# Each ± is one standard error. Every result holds for this one noise model; appendix A sets each protected case beside the circuits one step from it.
 #
 # **To run it:** open it in [Colab](https://colab.research.google.com/github/{{ repo }}/blob/{{ tag }}/notebooks/bp.output.submission.ipynb), or in Jupyter on Python 3.12 or later, and run all cells. It needs no download beyond the pinned Python packages: the code, the recorded runs and the schemas come as four payloads from the repository at its tag, and every other config file is written out where the notebook explains it. The notebook makes every benchmark it reports from those files, which took about four minutes on our machine, and sets each run beside the run the repository recorded.
 #
@@ -140,6 +154,8 @@
 # | [Appendix B. Config files nothing above uses]({{ ref("sB") }}) | 01 |
 
 # %% [markdown]
+# ---
+#
 # ## {{ H["s1"] }}
 #
 # **Run the cells of this section first.** The notebook needs Python 3.12 or later, as the repository does. The first cell checks the version, then installs the packages the repository's `pyproject.toml` pins, into the Python this notebook runs on; pip leaves any already installed at the right version. In Colab, if it upgrades a package Colab has already loaded, restart the runtime when asked and run the cells again. In the repository's own environment, which uv made, everything is installed already and the cell only reports that pip is absent. The next four cells are payloads, each one line, which opens folded under its title in Colab, from the repository [`{{ repo }}`](https://github.com/{{ repo }}/tree/{{ tag }}) at tag `{{ tag }}`:
@@ -223,9 +239,11 @@ display(HTML("".join(
     for path in [*sorted((WORK / "config").glob("bp.schema.*.yaml")), WORK / "config/benchmark/bp.data.benchmark.core.yaml"])))
 
 # %% [markdown]
+# ---
+#
 # ## {{ H["s2"] }}
 #
-# **On each of three processor graphs, create the Bell pair |Φ+⟩ = (|00⟩ + |11⟩)/√2 between two fixed qubits, measure how close it comes, and test one strategy that protects it.** Two qubits share a unit vector in ℂ⁴, and |Φ+⟩ is the vector (1, 0, 0, 1)/√2. A two-qubit gate acts only between neighbours on the graph, so a pair made at one port must be moved, or routed, to the other, and each added gate adds noise.
+# **On each of three processor graphs, create the Bell pair |β₀₀⟩ = (|00⟩ + |11⟩)/√2 between two fixed qubits, measure how close it comes, and test one strategy that protects it.** Two qubits share a unit vector in ℂ⁴, and |β₀₀⟩ is the vector (1, 0, 0, 1)/√2. A two-qubit gate acts only between neighbours on the graph, so a pair made at one port must be moved, or routed, to the other, and each added gate adds noise.
 #
 # We verify the pair by measuring the two ports in three bases and combining the three correlators into the fidelity:
 #
@@ -242,8 +260,8 @@ display(HTML("".join(
 # <details><summary><b>The linear algebra behind the formula</b></summary>
 #
 # - A correlator ⟨BB⟩ is the expectation value of B ⊗ B in the pair's state ρ, Tr(ρ (B ⊗ B)), for B one of the Pauli matrices X = [[0, 1], [1, 0]], Y = [[0, −i], [i, 0]] and Z = [[1, 0], [0, −1]]. From shots it is P(00) + P(11) − P(01) − P(10).
-# - |Φ+⟩⟨Φ+| = (I⊗I + X⊗X − Y⊗Y + Z⊗Z)/4, so F = ⟨Φ+|ρ|Φ+⟩, the overlap of the prepared state with the target.
-# - ZZ sees a bit flip, XX a phase flip, and YY either; all three together tell |Φ+⟩ from the other three Bell states.
+# - |β₀₀⟩⟨β₀₀| = (I⊗I + X⊗X − Y⊗Y + Z⊗Z)/4, so F = ⟨β₀₀|ρ|β₀₀⟩, the overlap of the prepared state with the target.
+# - ZZ sees a bit flip, XX a phase flip, and YY either; all three together tell |β₀₀⟩ from the other three Bell states, |β₀₁⟩, |β₁₀⟩ and |β₁₁⟩.
 # - A state that is not entangled cannot have F above 1/2, so 1/2 is the line a classical correlation cannot cross.
 #
 # The full statement of the task, with its sources, is [CHALLENGE.md]({{ link("docs/CHALLENGE.md") }}).
@@ -251,6 +269,8 @@ display(HTML("".join(
 # </details>
 
 # %% [markdown]
+# ---
+#
 # ## {{ H["s3"] }}
 #
 # ### {{ H["s3-1"] }}
@@ -676,6 +696,8 @@ display(pd.DataFrame(rows).set_index(["graph", "level"]))
 print("GHZ disentangling, pair on the ports every time:", ours)
 
 # %% [markdown]
+# ---
+#
 # ## {{ H["s4"] }}
 #
 # ### {{ H["s4-1"] }}
@@ -848,6 +870,8 @@ beside_record(REPORTED, extra=[(MADE / "transport-alone" / f"ghz-uncompute-{p}",
                                for p, name in {{ "{" }}{% for p in P %}"{{ p }}": "{{ L[p].name }}"{% if not loop.last %}, {% endif %}{% endfor %}{{ "}" }}.items()])
 
 # %% [markdown]
+# ---
+#
 # ## {{ H["s5"] }}
 #
 # **What the results show, against the three things the challenge asks a comparison to explain:**{{ chk() }}
@@ -857,6 +881,8 @@ beside_record(REPORTED, extra=[(MADE / "transport-alone" / f"ghz-uncompute-{p}",
 # - **Connectivity against noise.** Every graph runs under the same profile, so the differences are connectivity's: hops between the ports set the cost of moving the pair, protected or not, and disjoint paths matter only to a check that needs a spare path.
 
 # %% [markdown]
+# ---
+#
 # ## {{ H["s6"] }}
 #
 # **These results describe circuits under one assumed noise model, simulated; they are not a measurement of any device.**{{ chk() }}
@@ -872,6 +898,8 @@ beside_record(REPORTED, extra=[(MADE / "transport-alone" / f"ghz-uncompute-{p}",
 {%- if recommendation %}
 
 # %% [markdown]
+# ---
+#
 # ## {{ H["s7"] }}
 #
 # **{{ recommendation.statement | trim }}**{{ chk() }}
@@ -880,6 +908,8 @@ beside_record(REPORTED, extra=[(MADE / "transport-alone" / f"ghz-uncompute-{p}",
 {%- endif %}
 
 # %% [markdown]
+# ---
+#
 # ## {{ H["sA"] }}
 #
 # **For each graph, one extended benchmark runs the protected case beside the circuits that differ from it by one step, so each comparison shows what one change buys; none fills a case.** Every run shares the nine cases' noise profile, shots and base seed, so the runs the two benchmarks share repeat their numbers exactly. Each section writes out the benchmark file, tables each run against the protected case, shows the circuits section {{ sec("s3-4") }} does not, each with its pictures folded, then makes the benchmark and sets each run beside its record.
@@ -941,6 +971,8 @@ beside_record("{{ L[p].name }}")
 {%- endfor %}
 
 # %% [markdown]
+# ---
+#
 # ## {{ H["sB"] }}
 #
 # **Every config file nothing above writes: the other noise profiles, the earlier benchmarks and their circuits.** They complete the repository's config, so every assumption the benchmark holds is in this notebook. Each circuit is compiled here as section {{ sec("s3-4") }} compiles the nine cases' circuits, with its pictures folded; nothing here is run.

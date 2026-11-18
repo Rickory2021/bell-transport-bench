@@ -216,14 +216,16 @@ def test_the_case_table_in_the_text_is_the_records():
 def test_the_abstract_quotes_the_records():
     cases = _cases(INVOKE["reported"])
     abstract = _markdown().split("**Abstract.**")[1].split("**To run it:**")[0]
+    names = {"ibm2016": "2016-inspired", "contemporary": "Contemporary", "hyperbolic": "Hyperbolic-inspired"}
     for processor, (_, base, protected) in CASES.items():
-        assert f"from {_F(cases[base])} to {_F(cases[protected])} keeping {100 * cases[protected].acceptance:.1f}%" \
-            in abstract
-    gates = lambda case_of: ", ".join(str(cases[c].two_qubit_gates) for c in case_of[:-1]) + \
-        f" and {cases[case_of[-1]].two_qubit_gates}"  # noqa: E731
-    assert f"with {gates((3, 6, 9))} two-qubit gates against the baseline's {gates((2, 5, 8))}" in abstract
-    read = [_extended(p)[f"ghz-uncompute-vacancy-{p}"].fidelity - _extended(p)[f"ghz-uncompute-{p}"].fidelity for p in GRAPHS]
-    assert "The read alone added " + ", ".join(f"{d:+.4f}" for d in read[:-1]) + f" and {read[-1]:+.4f}" in abstract
+        b, q = cases[base], cases[protected]
+        runs = _extended(processor)
+        read = runs[f"ghz-uncompute-vacancy-{processor}"].fidelity - runs[f"ghz-uncompute-{processor}"].fidelity
+        row = f"| {names[processor]} | {_F(b)} | {_F(q)} | {100 * q.acceptance:.1f}% | " \
+              f"{b.two_qubit_gates} → {q.two_qubit_gates} | {read:+.4f} |"
+        assert row in abstract
+    lowest = min(cases[protected].acceptance for _, _, protected in CASES.values())
+    assert f"keeping at least {100 * lowest:.1f}% of shots" in abstract
     assert f"{_shots():,} shots per basis" in abstract
 
 
