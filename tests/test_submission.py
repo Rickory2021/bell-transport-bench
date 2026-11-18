@@ -261,8 +261,10 @@ def test_section_5_quotes_the_fidelity_the_transport_recovers():
     cases = _cases(INVOKE["reported"])
     share = [(_extended(p)[f"ghz-uncompute-{p}"].fidelity - cases[base].fidelity) / (1 - cases[base].fidelity)
              for p, base in (("ibm2016", 2), ("hyperbolic", 8), ("contemporary", 5))]
+    text = _markdown()
+    assert "two-qubit gates on the 2016-inspired graph, " in text and " on the hyperbolic-inspired graph and " in text
     assert f"recover {100 * share[0]:.0f}%, {100 * share[1]:.0f}% and {100 * share[2]:.0f}% of the fidelity the " \
-        "baseline lost, measured against F = 1" in _markdown()
+        "baseline lost on those graphs, in that order, measured against $F = 1$" in text
 
 
 def _shots():
