@@ -148,7 +148,14 @@
 # | What do we recommend for future systems? | [7]({{ ref("s7") }}) |
 {%- endif %}
 #
-# **How the repository works.** The benchmark is a small framework a teammate drives with four commands, drawn below. `make workbench` gives them their own copy of the workbench notebook, where they pick a graph and a noise profile, build a circuit, see it written and compiled, and save it as a circuit file; the circuit views in this notebook are the workbench's own. `make benchmark` makes every run a benchmark file names, and each run records its commit, seeds and package versions. `make run` remakes a recorded run and reports any difference. `make submission` renders this notebook from the recorded runs. Every input is a YAML file checked against a schema, so every result traces to a config file, a seed and pinned package versions, all in the [repository](https://github.com/{{ repo }}/tree/{{ tag }}).
+# **How the repository works.** Four `make` commands drive the benchmark, drawn in the diagram below. Every input is a YAML file checked against a schema, so every result traces to a config file, a seed and pinned package versions, all in the [repository](https://github.com/{{ repo }}/tree/{{ tag }}).
+#
+# | Command | What it does |
+# |---|---|
+# | `make workbench` | Gives a teammate their own workbench notebook: pick a graph and a noise profile, build a circuit, see it written and compiled, and save it as a circuit file. This notebook's circuit views come from it. |
+# | `make benchmark` | Makes every run a benchmark file names; each run records its commit, seeds and package versions. |
+# | `make run` | Remakes a recorded run and reports any difference. |
+# | `make submission` | Renders this notebook from the recorded runs. |
 #
 # <img src="https://raw.githubusercontent.com/{{ repo }}/{{ tag }}/docs/assets/design-flow.png" width="480" alt="The workflow: processor files, noise profiles, circuit files and benchmark files in config/ feed the workbench notebook and make benchmark; both build the processor and its noise with NoiseControl, which feeds CircuitRun to compile, simulate and score each run; runs land in workspace/ or results/runs/, a benchmark's runs in one folder with a comparison table, and the submission notebook reads the deliverable benchmark.">
 #
