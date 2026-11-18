@@ -46,10 +46,18 @@ def _cells(path=NOTEBOOK):
     return [(c["cell_type"], "".join(c["source"])) for c in json.loads(path.read_text(encoding="utf-8"))["cells"]]
 
 
+def _payload_line(source, name):
+    """The `NAME = "..."` line of a payload cell, under its #@title line; None for any other cell."""
+    lines = source.split("\n")
+    if len(lines) == 2 and lines[0].startswith("#@title ") and lines[1].startswith(f'{name} = "'):
+        return lines[1]
+    return None
+
+
 def _payload(name, path=NOTEBOOK):
-    """The files a payload cell, `NAME = "..."`, unpacks to: {path: bytes}."""
-    source = next(s for kind, s in _cells(path) if kind == "code" and s.startswith(f'{name} = "'))
-    with zipfile.ZipFile(io.BytesIO(base64.b64decode(source[len(name) + 4:-1]))) as archive:
+    """The files a payload cell, `NAME = "..."` under its title, unpacks to: {path: bytes}."""
+    line = next(_payload_line(s, name) for kind, s in _cells(path) if kind == "code" and _payload_line(s, name))
+    with zipfile.ZipFile(io.BytesIO(base64.b64decode(line[len(name) + 4:-1]))) as archive:
         return {n: archive.read(n) for n in archive.namelist()}
 
 
@@ -116,7 +124,7 @@ def test_the_committed_notebook_is_a_fresh_render(tmp_path):
         cwd=BLUEPRINT, check=True, capture_output=True,
     )
     fresh = tmp_path / "notebooks" / "bp.output.submission.ipynb"
-    strip = lambda cells: [c for c in cells if not any(c[1].startswith(f'{p} = "') for p in PAYLOADS)]  # noqa: E731
+    strip = lambda cells: [c for c in cells if not any(_payload_line(c[1], p) for p in PAYLOADS)]  # noqa: E731
     assert strip(_cells(fresh)) == strip(_cells()), "run make submission and commit the rendered notebook"
     for name in PAYLOADS:
         assert _payload(name, fresh) == _payload(name), f"the {name} payload differs: run make submission"
@@ -174,6 +182,17 @@ def test_every_other_config_file_is_written_once_exactly_as_the_repository_holds
     expected = {p.relative_to(ROOT).as_posix(): p.read_text(encoding="utf-8") for p in (ROOT / "config").rglob("*.yaml")}
     assert not packed & set(written)
     assert written == {path: text for path, text in expected.items() if path not in packed}
+
+
+def test_each_payload_cell_opens_folded_under_its_title():
+    """Colab shows a cell with cellView "form" folded under its #@title line; Jupyter reads source_hidden."""
+    cells = json.loads(NOTEBOOK.read_text(encoding="utf-8"))["cells"]
+    payloads = [c for c in cells if c["cell_type"] == "code" and any(_payload_line("".join(c["source"]), p) for p in PAYLOADS)]
+    assert len(payloads) == len(PAYLOADS)
+    for cell, name in zip(payloads, PAYLOADS):
+        assert _payload_line("".join(cell["source"]), name)
+        assert cell["metadata"] == {"cellView": "form", "jupyter": {"source_hidden": True}}
+        assert f"{len(_payload(name))} files" in cell["source"][0]
 
 
 def test_the_payloads_say_where_they_come_from():
